@@ -2,7 +2,7 @@
 """BetterTouchTool Touch Bar lyrics widget for Apple Music.
 
 Apple Music supplies track metadata and playback position through AppleScript.
-LRCLIB supplies synchronized LRC lyrics, which are cached locally.
+A token-free Chinese lyrics aggregator (LrcAPI) and LRCLIB supply synchronized LRC lyrics, which are cached locally.
 
 The normal widget path never blocks on the network: a cache miss starts a
 background fetch and immediately returns a status string to BetterTouchTool.
@@ -42,41 +42,46 @@ if OpenCC is not None:
 # ---- User-tunable defaults -------------------------------------------------
 VIEWPORT_WIDTH = int(os.environ.get("BTT_LYRICS_WIDTH", "42"))
 SYNC_OFFSET_SECONDS = float(os.environ.get("BTT_LYRICS_OFFSET", "0.0"))
-SCROLL_LONG_LINES = os.environ.get("BTT_LYRICS_SCROLL", "1") not in {
-    "0",
-    "false",
-    "False",
-}
+SCROLL_LONG_LINES = os.environ.get("BTT_LYRICS_SCROLL", "1") not in {"0", "false", "False"}
 SCROLL_DELAY_SECONDS = float(os.environ.get("BTT_LYRICS_SCROLL_DELAY", "0.8"))
 SCROLL_CELLS_PER_SECOND = float(os.environ.get("BTT_LYRICS_SCROLL_RATE", "5.0"))
 NETWORK_TIMEOUT_SECONDS = float(os.environ.get("BTT_LYRICS_NETWORK_TIMEOUT", "5.0"))
 
 CACHE_DIR = Path.home() / "Library" / "Caches" / "BTTNowPlayingLyrics"
-API_BASE = "https://lrclib.net/api"
-USER_AGENT = "BTT-NowPlaying-Lyrics/1.0 (personal macOS Touch Bar widget)"
+LRCLIB_API_BASE = "https://lrclib.net/api"
+LRCAPI_API_BASE = "https://api.lrc.cx/api/v1/lyrics"
+ENABLE_LRCAPI = os.environ.get("BTT_LYRICS_LRCAPI", "1") not in {"0", "false", "False"}
+LRCAPI_TIMEOUT_SECONDS = float(os.environ.get("BTT_LYRICS_LRCAPI_TIMEOUT", "2.5"))
+LRCAPI_MAX_ADVANCE_QUERIES = int(os.environ.get("BTT_LYRICS_LRCAPI_MAX_ADVANCE", "4"))
+LRCAPI_MAX_SINGLE_QUERIES = int(os.environ.get("BTT_LYRICS_LRCAPI_MAX_SINGLE", "2"))
+USER_AGENT = "BTT-NowPlaying-Lyrics/6.0 (personal macOS Touch Bar widget)"
 LOCK_MAX_AGE_SECONDS = 30
 RETRY_NETWORK_ERROR_SECONDS = 300
-RETRY_NOT_FOUND_SECONDS = 24 * 60 * 60
-MATCHER_VERSION = 2
+RETRY_NOT_FOUND_SECONDS = 6 * 60 * 60
+MATCHER_VERSION = 6
 
 # Metadata aliases commonly used by streaming catalogs and community lyric
 # databases. Add your own groups in lyrics_aliases.json next to this script.
 BUILTIN_ALIAS_GROUPS = [
     ["張懸", "张悬", "Deserts Chang", "安溥", "Anpu"],
+    ["银河快递", "銀河快遞", "Galaxy Express", "银河快递(Galaxy Express)", "銀河快遞(Galaxy Express)"],
 ]
-ALIASES_PATH = Path(
-    os.environ.get(
-        "BTT_LYRICS_ALIASES",
-        str(Path(__file__).resolve().with_name("lyrics_aliases.json")),
-    )
-)
+ALIASES_PATH = Path(os.environ.get(
+    "BTT_LYRICS_ALIASES",
+    str(Path(__file__).resolve().with_name("lyrics_aliases.json")),
+))
+
+LOCAL_LYRICS_DIR = Path(os.environ.get(
+    "BTT_LYRICS_LOCAL_DIR",
+    str(Path(__file__).resolve().with_name("lyrics")),
+))
 
 UNIT_SEPARATOR = "\x1f"
 TIMESTAMP_RE = re.compile(r"\[(\d{1,3}):(\d{2}(?:\.\d{1,3})?)\]")
 ENHANCED_TIMESTAMP_RE = re.compile(r"<\d{1,3}:\d{2}(?:\.\d{1,3})?>")
 OFFSET_RE = re.compile(r"\[offset:([+-]?\d+)\]", re.IGNORECASE)
 
-APPLE_MUSIC_SCRIPT = r"""
+APPLE_MUSIC_SCRIPT = r'''
 tell application "Music"
     set currentState to (player state as text)
     if currentState is "stopped" then return currentState
@@ -116,7 +121,7 @@ tell application "Music"
 
     return currentState & sep & trackName & sep & artistName & sep & albumName & sep & trackDuration & sep & currentPosition
 end tell
-"""
+'''
 
 
 def emit(text: str) -> None:
@@ -141,7 +146,7 @@ def music_is_running() -> bool:
             ["/usr/bin/pgrep", "-x", "Music"],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
-            timeout=1,
+            timeout=0.25,
             check=False,
         )
         return result.returncode == 0
@@ -158,7 +163,7 @@ def read_apple_music() -> dict[str, Any]:
             ["/usr/bin/osascript", "-e", APPLE_MUSIC_SCRIPT],
             capture_output=True,
             text=True,
-            timeout=3,
+            timeout=1.0,
             check=False,
         )
     except subprocess.TimeoutExpired as exc:
@@ -201,34 +206,10 @@ def read_apple_music() -> dict[str, Any]:
 
 
 VERSION_MARKERS = (
-    "remaster",
-    "remastered",
-    "version",
-    "edit",
-    "mix",
-    "live",
-    "acoustic",
-    "demo",
-    "mono",
-    "stereo",
-    "deluxe",
-    "bonus",
-    "radio",
-    "single",
-    "現場",
-    "现场",
-    "演唱會",
-    "演唱会",
-    "錄音室",
-    "录音室",
-    "重製",
-    "重制",
-    "重新錄製",
-    "重新录制",
-    "專輯版",
-    "专辑版",
-    "單曲版",
-    "单曲版",
+    "remaster", "remastered", "version", "edit", "mix", "live", "acoustic",
+    "demo", "mono", "stereo", "deluxe", "bonus", "radio", "single",
+    "現場", "现场", "演唱會", "演唱会", "錄音室", "录音室", "重製", "重制",
+    "重新錄製", "重新录制", "專輯版", "专辑版", "單曲版", "单曲版",
 )
 
 
@@ -237,9 +218,7 @@ def strip_version_annotations(value: str) -> str:
 
     def keep_or_remove(match: re.Match[str]) -> str:
         body = match.group(1).casefold()
-        return (
-            "" if any(marker in body for marker in VERSION_MARKERS) else match.group(0)
-        )
+        return "" if any(marker in body for marker in VERSION_MARKERS) else match.group(0)
 
     value = re.sub(r"\(([^)]*)\)", keep_or_remove, value)
     value = re.sub(r"\[([^]]*)\]", keep_or_remove, value)
@@ -374,19 +353,15 @@ def read_cache(key: str) -> dict[str, Any] | None:
         return None
 
 
-def api_request(endpoint: str, params: dict[str, Any]) -> Any:
-    clean_params = {
-        key: value for key, value in params.items() if value not in {None, ""}
-    }
-    url = f"{API_BASE}/{endpoint}?{urllib.parse.urlencode(clean_params)}"
+def lrclib_api_request(endpoint: str, params: dict[str, Any]) -> Any:
+    clean_params = {key: value for key, value in params.items() if value not in {None, ""}}
+    url = f"{LRCLIB_API_BASE}/{endpoint}?{urllib.parse.urlencode(clean_params)}"
     request = urllib.request.Request(
         url,
         headers={"User-Agent": USER_AGENT, "Accept": "application/json"},
     )
     try:
-        with urllib.request.urlopen(
-            request, timeout=NETWORK_TIMEOUT_SECONDS
-        ) as response:
+        with urllib.request.urlopen(request, timeout=NETWORK_TIMEOUT_SECONDS) as response:
             return json.load(response)
     except urllib.error.HTTPError as exc:
         if exc.code == 404:
@@ -396,22 +371,193 @@ def api_request(endpoint: str, params: dict[str, Any]) -> Any:
         raise RuntimeError(f"Could not reach LRCLIB: {exc.reason}") from exc
 
 
+
+def lrcapi_request(params: dict[str, Any]) -> Any:
+    """Query the public token-free LrcAPI advance endpoint."""
+    clean_params = {key: value for key, value in params.items() if value not in {None, ""}}
+    url = f"{LRCAPI_API_BASE}/advance?{urllib.parse.urlencode(clean_params)}"
+    request = urllib.request.Request(
+        url,
+        headers={"User-Agent": USER_AGENT, "Accept": "application/json"},
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=LRCAPI_TIMEOUT_SECONDS) as response:
+            payload = response.read()
+        if not payload:
+            return []
+        return json.loads(payload.decode("utf-8-sig"))
+    except urllib.error.HTTPError as exc:
+        if exc.code in {404, 422}:
+            return []
+        raise RuntimeError(f"LrcAPI returned HTTP {exc.code}") from exc
+    except urllib.error.URLError as exc:
+        raise RuntimeError(f"Could not reach LrcAPI: {exc.reason}") from exc
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise RuntimeError("LrcAPI returned an invalid response") from exc
+
+
+
+def lrcapi_single_request(params: dict[str, Any]) -> str:
+    """Query LrcAPI's single-result endpoint, which returns raw LRC text."""
+    clean_params = {key: value for key, value in params.items() if value not in {None, ""}}
+    url = f"{LRCAPI_API_BASE}/single?{urllib.parse.urlencode(clean_params)}"
+    request = urllib.request.Request(
+        url,
+        headers={"User-Agent": USER_AGENT, "Accept": "text/plain, text/html"},
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=LRCAPI_TIMEOUT_SECONDS) as response:
+            payload = response.read()
+        return payload.decode("utf-8-sig", errors="replace").strip()
+    except urllib.error.HTTPError as exc:
+        if exc.code in {404, 422}:
+            return ""
+        raise RuntimeError(f"LrcAPI single endpoint returned HTTP {exc.code}") from exc
+    except urllib.error.URLError as exc:
+        raise RuntimeError(f"Could not reach LrcAPI single endpoint: {exc.reason}") from exc
+
+
+def adapt_lrcapi_candidate(item: dict[str, Any]) -> dict[str, Any] | None:
+    lyrics = str(item.get("lyrics") or "")
+    if not TIMESTAMP_RE.search(lyrics):
+        return None
+    provider_id = str(item.get("id") or hashlib.sha256(lyrics.encode("utf-8")).hexdigest()[:20])
+    return {
+        "id": f"lrcapi:{provider_id}",
+        "providerId": provider_id,
+        "source": "lrcapi",
+        "trackName": str(item.get("title") or ""),
+        "artistName": str(item.get("artist") or ""),
+        "albumName": str(item.get("album") or ""),
+        "duration": 0,
+        "instrumental": False,
+        "plainLyrics": None,
+        "syncedLyrics": lyrics,
+    }
+
+
+def collect_lrcapi_candidates(track: dict[str, Any]) -> list[dict[str, Any]]:
+    """Search Chinese providers through LrcAPI without an API token."""
+    if not ENABLE_LRCAPI:
+        return []
+
+    titles = local_title_variants(track.get("title", ""))[:4]
+    artists = metadata_variants(track.get("artist", ""))[:6]
+    album_variants = local_title_variants(track.get("album", ""))[:3]
+    queries: list[dict[str, str]] = []
+    query_signatures: set[tuple[tuple[str, str], ...]] = set()
+
+    def add_query(title: str, artist: str = "", album_name: str = "") -> None:
+        query = {"title": title, "artist": artist, "album": album_name}
+        signature = tuple(query.items())
+        if title and signature not in query_signatures:
+            query_signatures.add(signature)
+            queries.append(query)
+
+    if not titles:
+        return []
+
+    original_title = titles[0]
+    stripped_title = titles[1] if len(titles) > 1 else original_title
+    original_artist = artists[0] if artists else ""
+    chinese_artists = [
+        artist for artist in artists
+        if any("\u3400" <= char <= "\u9fff" for char in artist)
+    ]
+    preferred_chinese_artist = chinese_artists[0] if chinese_artists else original_artist
+    original_album = album_variants[0] if album_variants else ""
+    stripped_album = album_variants[1] if len(album_variants) > 1 else original_album
+
+    # High-value combinations first. In particular, pair a subtitle-free
+    # Chinese title with the Chinese artist alias; v4 did not test this pair.
+    add_query(original_title, original_artist, original_album)
+    add_query(stripped_title, preferred_chinese_artist, stripped_album)
+    add_query(stripped_title, preferred_chinese_artist)
+    add_query(original_title, preferred_chinese_artist)
+    add_query(stripped_title, original_artist)
+    add_query(original_title, original_artist)
+
+    # Add a small title × artist matrix, while keeping network work bounded.
+    for title in titles[:3]:
+        for artist in artists[:4]:
+            add_query(title, artist)
+    add_query(stripped_title)
+
+    attempted = queries[:max(LRCAPI_MAX_ADVANCE_QUERIES, 0)]
+    collected: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    errors: list[str] = []
+
+    for query in attempted:
+        try:
+            payload = lrcapi_request(query)
+        except Exception as exc:
+            errors.append(str(exc))
+            continue
+        if not isinstance(payload, list):
+            continue
+        for raw in payload:
+            if not isinstance(raw, dict):
+                continue
+            candidate = adapt_lrcapi_candidate(raw)
+            if candidate is None:
+                continue
+            candidate["sourceQuery"] = query
+            identity = str(candidate.get("id"))
+            if identity not in seen:
+                seen.add(identity)
+                collected.append(candidate)
+
+    # The documented /single endpoint sometimes succeeds when /advance
+    # returns an empty candidate array. Restrict it to strong title+artist
+    # queries to reduce false matches.
+    if not collected:
+        single_queries = [
+            query for query in queries
+            if query.get("artist")
+        ][:max(LRCAPI_MAX_SINGLE_QUERIES, 0)]
+        for query in single_queries:
+            try:
+                lyrics = lrcapi_single_request(query)
+            except Exception as exc:
+                errors.append(str(exc))
+                continue
+            if not TIMESTAMP_RE.search(lyrics):
+                continue
+            provider_id = hashlib.sha256(
+                (json.dumps(query, ensure_ascii=False, sort_keys=True) + lyrics).encode("utf-8")
+            ).hexdigest()[:20]
+            collected.append({
+                "id": f"lrcapi-single:{provider_id}",
+                "providerId": provider_id,
+                "source": "lrcapi-single",
+                "trackName": query["title"],
+                "artistName": query["artist"],
+                "albumName": query.get("album", ""),
+                "duration": track.get("duration", 0),
+                "instrumental": False,
+                "plainLyrics": None,
+                "syncedLyrics": lyrics,
+                "sourceQuery": query,
+            })
+            break
+
+    if not collected and attempted and len(errors) >= len(attempted):
+        raise RuntimeError(errors[0])
+    return collected
+
+
+def choose_lrcapi_candidate(track: dict[str, Any]) -> dict[str, Any] | None:
+    return choose_candidate(track, collect_lrcapi_candidates(track))
+
 def candidate_score(track: dict[str, Any], candidate: dict[str, Any]) -> float:
-    title_score = best_similarity(
-        track.get("title", ""), candidate.get("trackName", "")
-    )
-    artist_score = best_similarity(
-        track.get("artist", ""), candidate.get("artistName", "")
-    )
-    album_score = best_similarity(
-        track.get("album", ""), candidate.get("albumName", "")
-    )
+    title_score = best_similarity(track.get("title", ""), candidate.get("trackName", ""))
+    artist_score = best_similarity(track.get("artist", ""), candidate.get("artistName", ""))
+    album_score = best_similarity(track.get("album", ""), candidate.get("albumName", ""))
 
     duration = float(track.get("duration", 0) or 0)
     candidate_duration = float(candidate.get("duration", 0) or 0)
-    duration_error = (
-        abs(duration - candidate_duration) if duration and candidate_duration else None
-    )
+    duration_error = abs(duration - candidate_duration) if duration and candidate_duration else None
     if duration_error is not None:
         duration_score = max(0.0, 1.0 - duration_error / 30.0)
     else:
@@ -437,14 +583,11 @@ def candidate_score(track: dict[str, Any], candidate: dict[str, Any]) -> float:
     )
 
 
-def choose_candidate(
-    track: dict[str, Any], candidates: list[dict[str, Any]]
-) -> dict[str, Any] | None:
+def choose_candidate(track: dict[str, Any], candidates: list[dict[str, Any]]) -> dict[str, Any] | None:
     usable = [
         item
         for item in candidates
-        if isinstance(item, dict)
-        and (item.get("syncedLyrics") or item.get("instrumental"))
+        if isinstance(item, dict) and (item.get("syncedLyrics") or item.get("instrumental"))
     ]
     if not usable:
         return None
@@ -470,14 +613,11 @@ def collect_search_candidates(track: dict[str, Any]) -> list[dict[str, Any]]:
         for item in results:
             if not isinstance(item, dict):
                 continue
-            identity = str(
-                item.get("id")
-                or (
-                    normalized(item.get("trackName", "")),
-                    normalized(item.get("artistName", "")),
-                    round(float(item.get("duration", 0) or 0)),
-                )
-            )
+            identity = str(item.get("id") or (
+                normalized(item.get("trackName", "")),
+                normalized(item.get("artistName", "")),
+                round(float(item.get("duration", 0) or 0)),
+            ))
             if identity not in seen:
                 seen.add(identity)
                 collected.append(item)
@@ -488,7 +628,7 @@ def collect_search_candidates(track: dict[str, Any]) -> list[dict[str, Any]]:
         original_title = title_variants[0]
         original_artist = artist_variants[0] if artist_variants else ""
         add_results(
-            api_request(
+            lrclib_api_request(
                 "search",
                 {"track_name": original_title, "artist_name": original_artist},
             )
@@ -497,48 +637,139 @@ def collect_search_candidates(track: dict[str, Any]) -> list[dict[str, Any]]:
     # Title-only searches are essential when catalogs disagree on artist
     # aliases, album names, or simplified/traditional metadata.
     for title in title_variants[:3]:
-        add_results(api_request("search", {"track_name": title}))
+        add_results(lrclib_api_request("search", {"track_name": title}))
 
     # Broad keyword searches recover transliterated artist names.
     if title_variants:
         title = title_variants[0]
-        add_results(api_request("search", {"q": title}))
+        add_results(lrclib_api_request("search", {"q": title}))
         for artist in artist_variants[1:5]:
-            add_results(api_request("search", {"q": f"{title} {artist}".strip()}))
+            add_results(lrclib_api_request("search", {"q": f"{title} {artist}".strip()}))
 
     # Artist-only searches can recover short Chinese titles whose simplified
     # and traditional forms differ too much for exact title search.
     for artist in artist_variants[:4]:
-        add_results(api_request("search", {"q": artist}))
+        add_results(lrclib_api_request("search", {"q": artist}))
 
     return collected
 
 
+
+def local_title_variants(value: str) -> list[str]:
+    """Return filename-friendly title variants, including subtitle-free forms."""
+    variants = set(metadata_variants(value))
+    for item in list(variants):
+        # Also accept trailing subtitles such as "(Chill)" / "（Chill）".
+        stripped = re.sub(r"\s*[\(（][^\(\)（）]+[\)）]\s*$", "", item).strip()
+        if stripped:
+            variants.add(stripped)
+    return sorted(variants, key=lambda item: (item != value.strip(), len(item), item.casefold()))
+
+
+def local_lyrics_record(track: dict[str, Any]) -> dict[str, Any] | None:
+    """Load a synchronized .lrc from the local lyrics directory when available."""
+    if not LOCAL_LYRICS_DIR.is_dir():
+        return None
+
+    titles = local_title_variants(track.get("title", ""))
+    artists = metadata_variants(track.get("artist", ""))
+    candidate_paths: list[Path] = []
+    seen: set[Path] = set()
+
+    # Prefer deterministic names: "Artist - Title.lrc" or "Title.lrc".
+    for title in titles:
+        for filename in (f"{title}.lrc",):
+            path = LOCAL_LYRICS_DIR / filename
+            if path not in seen:
+                seen.add(path)
+                candidate_paths.append(path)
+        for artist in artists:
+            for separator in (" - ", " — "):
+                path = LOCAL_LYRICS_DIR / f"{artist}{separator}{title}.lrc"
+                if path not in seen:
+                    seen.add(path)
+                    candidate_paths.append(path)
+
+    # Then scan the small local directory for equivalent simplified/traditional
+    # metadata or slightly different punctuation.
+    title_forms = {normalized(item) for item in titles if normalized(item)}
+    artist_forms = {normalized(item) for item in artists if normalized(item)}
+    try:
+        for path in LOCAL_LYRICS_DIR.glob("*.lrc"):
+            stem = normalized(path.stem)
+            title_match = any(form and form in stem for form in title_forms)
+            artist_match = not artist_forms or any(form and form in stem for form in artist_forms)
+            if title_match and artist_match and path not in seen:
+                seen.add(path)
+                candidate_paths.append(path)
+    except OSError as exc:
+        log_error(f"Could not scan local lyrics directory {LOCAL_LYRICS_DIR}: {exc}")
+
+    for path in candidate_paths:
+        try:
+            synced = path.read_text(encoding="utf-8-sig")
+        except FileNotFoundError:
+            continue
+        except OSError as exc:
+            log_error(f"Could not read local LRC {path}: {exc}")
+            continue
+
+        if not TIMESTAMP_RE.search(synced):
+            log_error(f"Local lyrics file has no LRC timestamps: {path}")
+            continue
+
+        return {
+            "id": f"local:{path.name}",
+            "trackName": track.get("title", ""),
+            "artistName": track.get("artist", ""),
+            "albumName": track.get("album", ""),
+            "duration": track.get("duration", 0),
+            "instrumental": False,
+            "plainLyrics": None,
+            "syncedLyrics": synced,
+            "source": "local",
+            "localPath": str(path),
+        }
+
+    return None
+
 def fetch_lyrics_record(track: dict[str, Any]) -> dict[str, Any] | None:
+    # Provider order: user-maintained local LRC, token-free Chinese sources,
+    # then the open LRCLIB database.
+    local = local_lyrics_record(track)
+    if local is not None:
+        return local
+
+    lrcapi = choose_lrcapi_candidate(track)
+    if lrcapi is not None:
+        return lrcapi
+
     title_variants = metadata_variants(track.get("title", ""))[:3]
     artist_variants = metadata_variants(track.get("artist", ""))[:5]
     duration = round(float(track.get("duration", 0))) or None
 
     # Try the original catalog metadata once; flexible searches handle aliases.
-    exact = api_request(
+    exact = lrclib_api_request(
         "get",
         {
-            "track_name": title_variants[0]
-            if title_variants
-            else track.get("title", ""),
-            "artist_name": artist_variants[0]
-            if artist_variants
-            else track.get("artist", ""),
+            "track_name": title_variants[0] if title_variants else track.get("title", ""),
+            "artist_name": artist_variants[0] if artist_variants else track.get("artist", ""),
             "album_name": track.get("album", ""),
             "duration": duration,
         },
     )
-    if isinstance(exact, dict) and (
-        exact.get("syncedLyrics") or exact.get("instrumental")
-    ):
+    if isinstance(exact, dict) and (exact.get("syncedLyrics") or exact.get("instrumental")):
+        exact = dict(exact)
+        exact.setdefault("source", "lrclib")
+        exact.setdefault("providerId", exact.get("id"))
         return exact
 
-    return choose_candidate(track, collect_search_candidates(track))
+    selected = choose_candidate(track, collect_search_candidates(track))
+    if selected is not None:
+        selected = dict(selected)
+        selected.setdefault("source", "lrclib")
+        selected.setdefault("providerId", selected.get("id"))
+    return selected
 
 
 def background_fetch(key: str, track: dict[str, Any]) -> None:
@@ -551,7 +782,6 @@ def background_fetch(key: str, track: dict[str, Any]) -> None:
                 payload = {
                     "status": "not_found",
                     "fetched_at": now,
-                    "state": track.get("state"),
                     "retry_after": now + RETRY_NOT_FOUND_SECONDS,
                 }
             elif record.get("instrumental"):
@@ -570,9 +800,7 @@ def background_fetch(key: str, track: dict[str, Any]) -> None:
             atomic_write_json(cache_path(key), payload)
         except Exception as exc:
             now = time.time()
-            log_error(
-                f"Lyrics fetch failed for {track.get('artist')} — {track.get('title')}: {exc}"
-            )
+            log_error(f"Lyrics fetch failed for {track.get('artist')} — {track.get('title')}: {exc}")
             atomic_write_json(
                 cache_path(key),
                 {
@@ -752,11 +980,9 @@ def widget_main() -> int:
         return 0
 
     state = track.get("state")
-
-    # Match BTT's native Now Playing widget:
-    # hide the lyrics widget when no player/track is active.
+    # Empty stdout hides the BTT Script Widget when Music/Now Playing is inactive.
     if state in {"not_running", "stopped"} or not track.get("title"):
-        print()
+        print("")
         return 0
 
     key = track_cache_key(track)
@@ -793,9 +1019,7 @@ def fetch_mode(arguments: list[str]) -> int:
         return 2
     key, encoded_payload = arguments
     try:
-        track = json.loads(
-            base64.urlsafe_b64decode(encoded_payload.encode("ascii")).decode("utf-8")
-        )
+        track = json.loads(base64.urlsafe_b64decode(encoded_payload.encode("ascii")).decode("utf-8"))
         background_fetch(key, track)
         return 0
     except Exception as exc:
@@ -822,6 +1046,53 @@ def diagnose_current() -> int:
     print(f"cache key: {track_cache_key(track)}")
     print(f"title variants: {metadata_variants(track.get('title', ''))}")
     print(f"artist variants: {metadata_variants(track.get('artist', ''))}")
+    print(f"local lyrics directory: {LOCAL_LYRICS_DIR}")
+    local = local_lyrics_record(track)
+    if local is not None:
+        print(f"LOCAL LRC: {local.get('localPath')}")
+        return 0
+    print("No matching local synchronized LRC.")
+    print(f"LrcAPI enabled: {ENABLE_LRCAPI}")
+    if ENABLE_LRCAPI:
+        diagnostic_titles = local_title_variants(track.get("title", ""))[:4]
+        diagnostic_artists = metadata_variants(track.get("artist", ""))[:6]
+        print(f"LrcAPI title variants: {diagnostic_titles}")
+        print(f"LrcAPI artist variants: {diagnostic_artists}")
+        print(
+            "LrcAPI limits: "
+            f"{LRCAPI_MAX_ADVANCE_QUERIES} advance + "
+            f"{LRCAPI_MAX_SINGLE_QUERIES} single, "
+            f"{LRCAPI_TIMEOUT_SECONDS:g}s timeout each"
+        )
+        print("Searching token-free Chinese providers through LrcAPI …")
+        try:
+            lrcapi_candidates = collect_lrcapi_candidates(track)
+            if lrcapi_candidates:
+                ranked_lrcapi = sorted(
+                    ((candidate_score(track, item), item) for item in lrcapi_candidates),
+                    key=lambda pair: pair[0],
+                    reverse=True,
+                )
+                for score, item in ranked_lrcapi[:10]:
+                    print(
+                        f"{score:.3f}  lrcapi  "
+                        f"{item.get('artistName')} — {item.get('trackName')} "
+                        f"[source={item.get('source')}, id={item.get('providerId')}, "
+                        f"query={item.get('sourceQuery')}]"
+                    )
+                selected_lrcapi = choose_candidate(track, lrcapi_candidates)
+                if selected_lrcapi is not None:
+                    print(
+                        "SELECTED LRCAPI: "
+                        f"{selected_lrcapi.get('artistName')} — "
+                        f"{selected_lrcapi.get('trackName')}"
+                    )
+                    return 0
+            else:
+                print("No synchronized LrcAPI candidates.")
+        except Exception as exc:
+            print(f"LrcAPI error: {exc}")
+
     print("Searching LRCLIB synchronously …")
 
     try:
@@ -838,6 +1109,7 @@ def diagnose_current() -> int:
     if not ranked:
         print("No LRCLIB candidates returned.")
         return 2
+
 
     for score, item in ranked[:10]:
         synced = "synced" if item.get("syncedLyrics") else "plain-only"
