@@ -27,6 +27,18 @@ import urllib.request
 from pathlib import Path
 from typing import Any
 
+try:
+    from opencc import OpenCC  # type: ignore
+except ImportError:
+    OpenCC = None  # type: ignore
+
+_OPENCC_CONVERTERS: list[Any] = []
+if OpenCC is not None:
+    try:
+        _OPENCC_CONVERTERS = [OpenCC("t2s"), OpenCC("s2t")]
+    except Exception:
+        _OPENCC_CONVERTERS = []
+
 # ---- User-tunable defaults -------------------------------------------------
 VIEWPORT_WIDTH = int(os.environ.get("BTT_LYRICS_WIDTH", "42"))
 SYNC_OFFSET_SECONDS = float(os.environ.get("BTT_LYRICS_OFFSET", "0.0"))
@@ -41,6 +53,17 @@ USER_AGENT = "BTT-NowPlaying-Lyrics/1.0 (personal macOS Touch Bar widget)"
 LOCK_MAX_AGE_SECONDS = 30
 RETRY_NETWORK_ERROR_SECONDS = 300
 RETRY_NOT_FOUND_SECONDS = 24 * 60 * 60
+MATCHER_VERSION = 2
+
+# Metadata aliases commonly used by streaming catalogs and community lyric
+# databases. Add your own groups in lyrics_aliases.json next to this script.
+BUILTIN_ALIAS_GROUPS = [
+    ["張懸", "张悬", "Deserts Chang", "安溥", "Anpu"],
+]
+ALIASES_PATH = Path(os.environ.get(
+    "BTT_LYRICS_ALIASES",
+    str(Path(__file__).resolve().with_name("lyrics_aliases.json")),
+))
 
 UNIT_SEPARATOR = "\x1f"
 TIMESTAMP_RE = re.compile(r"\[(\d{1,3}):(\d{2}(?:\.\d{1,3})?)\]")
@@ -171,17 +194,108 @@ def read_apple_music() -> dict[str, Any]:
     }
 
 
+VERSION_MARKERS = (
+    "remaster", "remastered", "version", "edit", "mix", "live", "acoustic",
+    "demo", "mono", "stereo", "deluxe", "bonus", "radio", "single",
+    "現場", "现场", "演唱會", "演唱会", "錄音室", "录音室", "重製", "重制",
+    "重新錄製", "重新录制", "專輯版", "专辑版", "單曲版", "单曲版",
+)
+
+
+def strip_version_annotations(value: str) -> str:
+    value = unicodedata.normalize("NFKC", value).strip()
+
+    def keep_or_remove(match: re.Match[str]) -> str:
+        body = match.group(1).casefold()
+        return "" if any(marker in body for marker in VERSION_MARKERS) else match.group(0)
+
+    value = re.sub(r"\(([^)]*)\)", keep_or_remove, value)
+    value = re.sub(r"\[([^]]*)\]", keep_or_remove, value)
+    value = re.sub(r"\b(?:feat|featuring|ft)\.?\s+.*$", "", value, flags=re.IGNORECASE)
+    return " ".join(value.split())
+
+
 def normalized(value: str) -> str:
-    value = unicodedata.normalize("NFKC", value).casefold()
-    value = re.sub(r"\b(?:feat|ft)\.?\s+.*$", "", value)
-    value = re.sub(r"\((?:[^)]*remaster[^)]*|[^)]*version[^)]*)\)", "", value)
-    value = re.sub(r"\[(?:[^]]*remaster[^]]*|[^]]*version[^]]*)\]", "", value)
+    value = strip_version_annotations(value).casefold()
     value = re.sub(r"[^\w]+", " ", value, flags=re.UNICODE)
     return " ".join(value.split())
 
 
+def load_alias_groups() -> list[list[str]]:
+    groups = [list(group) for group in BUILTIN_ALIAS_GROUPS]
+    try:
+        with ALIASES_PATH.open("r", encoding="utf-8") as handle:
+            payload = json.load(handle)
+        if isinstance(payload, dict):
+            for key, values in payload.items():
+                if isinstance(values, str):
+                    values = [values]
+                if isinstance(values, list):
+                    groups.append([str(key), *(str(item) for item in values)])
+        elif isinstance(payload, list):
+            for values in payload:
+                if isinstance(values, list):
+                    groups.append([str(item) for item in values])
+    except FileNotFoundError:
+        pass
+    except Exception as exc:
+        log_error(f"Could not read aliases from {ALIASES_PATH}: {exc}")
+    return groups
+
+
+def basic_metadata_variants(value: str) -> list[str]:
+    base = value.strip()
+    stripped = strip_version_annotations(base)
+    variants = {item for item in (base, stripped) if item}
+    for converter in _OPENCC_CONVERTERS:
+        for item in list(variants):
+            try:
+                converted = converter.convert(item).strip()
+                if converted:
+                    variants.add(converted)
+            except Exception:
+                pass
+    return sorted(variants, key=lambda item: (item != base, len(item), item.casefold()))
+
+
+def metadata_variants(value: str) -> list[str]:
+    base_variants = basic_metadata_variants(value)
+    variants = set(base_variants)
+    needles = {normalized(item) for item in base_variants}
+    for group in load_alias_groups():
+        normalized_group = {normalized(item) for item in group}
+        if needles & normalized_group:
+            variants.update(item for item in group if item)
+    base = value.strip()
+    return sorted(variants, key=lambda item: (item != base, len(item), item.casefold()))
+
+
+def aliases_equivalent(left: str, right: str) -> bool:
+    left_forms = {normalized(item) for item in basic_metadata_variants(left)}
+    right_forms = {normalized(item) for item in basic_metadata_variants(right)}
+    if left_forms & right_forms:
+        return True
+    for group in load_alias_groups():
+        normalized_group = {normalized(item) for item in group}
+        if left_forms & normalized_group and right_forms & normalized_group:
+            return True
+    return False
+
+
 def similarity(left: str, right: str) -> float:
     return difflib.SequenceMatcher(None, normalized(left), normalized(right)).ratio()
+
+
+def best_similarity(left: str, right: str) -> float:
+    if not left.strip() or not right.strip():
+        return 0.0
+    if aliases_equivalent(left, right):
+        return 1.0
+    return max(
+        similarity(left_variant, right_variant)
+        for left_variant in basic_metadata_variants(left)
+        for right_variant in basic_metadata_variants(right)
+    )
 
 
 def track_cache_key(track: dict[str, Any]) -> str:
@@ -190,6 +304,7 @@ def track_cache_key(track: dict[str, Any]) -> str:
         "artist": normalized(track.get("artist", "")),
         "album": normalized(track.get("album", "")),
         "duration": round(float(track.get("duration", 0))),
+        "matcher_version": MATCHER_VERSION,
     }
     payload = json.dumps(identity, ensure_ascii=False, sort_keys=True).encode("utf-8")
     return hashlib.sha256(payload).hexdigest()[:24]
@@ -246,20 +361,36 @@ def api_request(endpoint: str, params: dict[str, Any]) -> Any:
 
 
 def candidate_score(track: dict[str, Any], candidate: dict[str, Any]) -> float:
-    title_score = similarity(track.get("title", ""), candidate.get("trackName", ""))
-    artist_score = similarity(track.get("artist", ""), candidate.get("artistName", ""))
-    album_score = similarity(track.get("album", ""), candidate.get("albumName", ""))
+    title_score = best_similarity(track.get("title", ""), candidate.get("trackName", ""))
+    artist_score = best_similarity(track.get("artist", ""), candidate.get("artistName", ""))
+    album_score = best_similarity(track.get("album", ""), candidate.get("albumName", ""))
 
     duration = float(track.get("duration", 0) or 0)
     candidate_duration = float(candidate.get("duration", 0) or 0)
-    if duration and candidate_duration:
-        duration_score = max(0.0, 1.0 - abs(duration - candidate_duration) / 20.0)
+    duration_error = abs(duration - candidate_duration) if duration and candidate_duration else None
+    if duration_error is not None:
+        duration_score = max(0.0, 1.0 - duration_error / 30.0)
     else:
-        duration_score = 0.5
+        duration_score = 0.45
 
-    if title_score < 0.45 or artist_score < 0.35:
+    # Title is the strongest identity signal. Permit catalog/community artist
+    # aliases when the title is an excellent match and duration is close.
+    if title_score < 0.45:
         return -1.0
-    return 0.55 * title_score + 0.30 * artist_score + 0.10 * album_score + 0.05 * duration_score
+    duration_close = duration_error is not None and duration_error <= 10.0
+    artist_alias_safe = artist_score >= 0.75 and duration_close
+    title_alias_safe = title_score >= 0.88 and duration_close
+    if title_score < 0.55 and not artist_alias_safe:
+        return -1.0
+    if artist_score < 0.18 and not title_alias_safe:
+        return -1.0
+
+    return (
+        0.62 * title_score
+        + 0.18 * artist_score
+        + 0.05 * album_score
+        + 0.15 * duration_score
+    )
 
 
 def choose_candidate(track: dict[str, Any], candidates: list[dict[str, Any]]) -> dict[str, Any] | None:
@@ -276,38 +407,82 @@ def choose_candidate(track: dict[str, Any], candidates: list[dict[str, Any]]) ->
         reverse=True,
     )
     best_score, best = ranked[0]
-    return best if best_score >= 0.58 else None
+    return best if best_score >= 0.60 else None
+
+
+def collect_search_candidates(track: dict[str, Any]) -> list[dict[str, Any]]:
+    title_variants = metadata_variants(track.get("title", ""))[:4]
+    artist_variants = metadata_variants(track.get("artist", ""))[:6]
+    album = track.get("album", "")
+    collected: list[dict[str, Any]] = []
+    seen: set[str] = set()
+
+    def add_results(results: Any) -> None:
+        if not isinstance(results, list):
+            return
+        for item in results:
+            if not isinstance(item, dict):
+                continue
+            identity = str(item.get("id") or (
+                normalized(item.get("trackName", "")),
+                normalized(item.get("artistName", "")),
+                round(float(item.get("duration", 0) or 0)),
+            ))
+            if identity not in seen:
+                seen.add(identity)
+                collected.append(item)
+
+    # Keep the request count bounded: this runs only on track changes, but a
+    # community API should still be queried conservatively.
+    if title_variants:
+        original_title = title_variants[0]
+        original_artist = artist_variants[0] if artist_variants else ""
+        add_results(
+            api_request(
+                "search",
+                {"track_name": original_title, "artist_name": original_artist},
+            )
+        )
+
+    # Title-only searches are essential when catalogs disagree on artist
+    # aliases, album names, or simplified/traditional metadata.
+    for title in title_variants[:3]:
+        add_results(api_request("search", {"track_name": title}))
+
+    # Broad keyword searches recover transliterated artist names.
+    if title_variants:
+        title = title_variants[0]
+        add_results(api_request("search", {"q": title}))
+        for artist in artist_variants[1:5]:
+            add_results(api_request("search", {"q": f"{title} {artist}".strip()}))
+
+    # Artist-only searches can recover short Chinese titles whose simplified
+    # and traditional forms differ too much for exact title search.
+    for artist in artist_variants[:4]:
+        add_results(api_request("search", {"q": artist}))
+
+    return collected
 
 
 def fetch_lyrics_record(track: dict[str, Any]) -> dict[str, Any] | None:
-    exact_params = {
-        "track_name": track.get("title", ""),
-        "artist_name": track.get("artist", ""),
-        "album_name": track.get("album", ""),
-        "duration": round(float(track.get("duration", 0))) or None,
-    }
-    exact = api_request("get", exact_params)
+    title_variants = metadata_variants(track.get("title", ""))[:3]
+    artist_variants = metadata_variants(track.get("artist", ""))[:5]
+    duration = round(float(track.get("duration", 0))) or None
+
+    # Try the original catalog metadata once; flexible searches handle aliases.
+    exact = api_request(
+        "get",
+        {
+            "track_name": title_variants[0] if title_variants else track.get("title", ""),
+            "artist_name": artist_variants[0] if artist_variants else track.get("artist", ""),
+            "album_name": track.get("album", ""),
+            "duration": duration,
+        },
+    )
     if isinstance(exact, dict) and (exact.get("syncedLyrics") or exact.get("instrumental")):
         return exact
 
-    search_params = {
-        "track_name": track.get("title", ""),
-        "artist_name": track.get("artist", ""),
-        "album_name": track.get("album", ""),
-    }
-    results = api_request("search", search_params)
-    if isinstance(results, list):
-        selected = choose_candidate(track, results)
-        if selected:
-            return selected
-
-    broad_results = api_request(
-        "search",
-        {"q": f"{track.get('title', '')} {track.get('artist', '')}".strip()},
-    )
-    if isinstance(broad_results, list):
-        return choose_candidate(track, broad_results)
-    return None
+    return choose_candidate(track, collect_search_candidates(track))
 
 
 def background_fetch(key: str, track: dict[str, Any]) -> None:
@@ -574,9 +749,81 @@ def fetch_mode(arguments: list[str]) -> int:
         return 1
 
 
+def diagnose_current() -> int:
+    try:
+        track = read_apple_music()
+    except Exception as exc:
+        print(f"Apple Music error: {exc}")
+        return 1
+
+    if track.get("state") in {"not_running", "stopped"}:
+        print(f"Music state: {track.get('state')}")
+        return 1
+
+    print(json.dumps(track, ensure_ascii=False, indent=2))
+    print(f"cache key: {track_cache_key(track)}")
+    print(f"title variants: {metadata_variants(track.get('title', ''))}")
+    print(f"artist variants: {metadata_variants(track.get('artist', ''))}")
+    print("Searching LRCLIB synchronously …")
+
+    try:
+        candidates = collect_search_candidates(track)
+    except Exception as exc:
+        print(f"LRCLIB search error: {exc}")
+        return 1
+
+    ranked = sorted(
+        ((candidate_score(track, item), item) for item in candidates),
+        key=lambda pair: pair[0],
+        reverse=True,
+    )
+    if not ranked:
+        print("No LRCLIB candidates returned.")
+        return 2
+
+
+    for score, item in ranked[:10]:
+        synced = "synced" if item.get("syncedLyrics") else "plain-only"
+        print(
+            f"{score:6.3f}  {synced:10}  "
+            f"{item.get('artistName', '')} — {item.get('trackName', '')}  "
+            f"[{float(item.get('duration', 0) or 0):.1f}s]"
+        )
+
+    selected = choose_candidate(track, candidates)
+    if selected:
+        print(
+            "SELECTED: "
+            f"{selected.get('artistName', '')} — {selected.get('trackName', '')}"
+        )
+        return 0
+    print("Candidates existed, but none passed synchronized-lyrics matching.")
+    return 2
+
+
+def clear_current_cache() -> int:
+    try:
+        track = read_apple_music()
+        key = track_cache_key(track)
+        for path in (cache_path(key), lock_path(key)):
+            try:
+                path.unlink()
+            except FileNotFoundError:
+                pass
+        print(f"Cleared current track cache: {key}")
+        return 0
+    except Exception as exc:
+        print(f"Could not clear current cache: {exc}")
+        return 1
+
+
 def main() -> int:
     if len(sys.argv) >= 2 and sys.argv[1] == "--fetch":
         return fetch_mode(sys.argv[2:])
+    if len(sys.argv) >= 2 and sys.argv[1] == "--diagnose":
+        return diagnose_current()
+    if len(sys.argv) >= 2 and sys.argv[1] == "--clear-current":
+        return clear_current_cache()
     return widget_main()
 
 
