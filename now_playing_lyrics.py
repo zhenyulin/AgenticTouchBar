@@ -42,7 +42,11 @@ if OpenCC is not None:
 # ---- User-tunable defaults -------------------------------------------------
 VIEWPORT_WIDTH = int(os.environ.get("BTT_LYRICS_WIDTH", "42"))
 SYNC_OFFSET_SECONDS = float(os.environ.get("BTT_LYRICS_OFFSET", "0.0"))
-SCROLL_LONG_LINES = os.environ.get("BTT_LYRICS_SCROLL", "1") not in {"0", "false", "False"}
+SCROLL_LONG_LINES = os.environ.get("BTT_LYRICS_SCROLL", "1") not in {
+    "0",
+    "false",
+    "False",
+}
 SCROLL_DELAY_SECONDS = float(os.environ.get("BTT_LYRICS_SCROLL_DELAY", "0.8"))
 SCROLL_CELLS_PER_SECOND = float(os.environ.get("BTT_LYRICS_SCROLL_RATE", "5.0"))
 NETWORK_TIMEOUT_SECONDS = float(os.environ.get("BTT_LYRICS_NETWORK_TIMEOUT", "5.0"))
@@ -60,17 +64,19 @@ MATCHER_VERSION = 2
 BUILTIN_ALIAS_GROUPS = [
     ["張懸", "张悬", "Deserts Chang", "安溥", "Anpu"],
 ]
-ALIASES_PATH = Path(os.environ.get(
-    "BTT_LYRICS_ALIASES",
-    str(Path(__file__).resolve().with_name("lyrics_aliases.json")),
-))
+ALIASES_PATH = Path(
+    os.environ.get(
+        "BTT_LYRICS_ALIASES",
+        str(Path(__file__).resolve().with_name("lyrics_aliases.json")),
+    )
+)
 
 UNIT_SEPARATOR = "\x1f"
 TIMESTAMP_RE = re.compile(r"\[(\d{1,3}):(\d{2}(?:\.\d{1,3})?)\]")
 ENHANCED_TIMESTAMP_RE = re.compile(r"<\d{1,3}:\d{2}(?:\.\d{1,3})?>")
 OFFSET_RE = re.compile(r"\[offset:([+-]?\d+)\]", re.IGNORECASE)
 
-APPLE_MUSIC_SCRIPT = r'''
+APPLE_MUSIC_SCRIPT = r"""
 tell application "Music"
     set currentState to (player state as text)
     if currentState is "stopped" then return currentState
@@ -110,7 +116,7 @@ tell application "Music"
 
     return currentState & sep & trackName & sep & artistName & sep & albumName & sep & trackDuration & sep & currentPosition
 end tell
-'''
+"""
 
 
 def emit(text: str) -> None:
@@ -195,10 +201,34 @@ def read_apple_music() -> dict[str, Any]:
 
 
 VERSION_MARKERS = (
-    "remaster", "remastered", "version", "edit", "mix", "live", "acoustic",
-    "demo", "mono", "stereo", "deluxe", "bonus", "radio", "single",
-    "現場", "现场", "演唱會", "演唱会", "錄音室", "录音室", "重製", "重制",
-    "重新錄製", "重新录制", "專輯版", "专辑版", "單曲版", "单曲版",
+    "remaster",
+    "remastered",
+    "version",
+    "edit",
+    "mix",
+    "live",
+    "acoustic",
+    "demo",
+    "mono",
+    "stereo",
+    "deluxe",
+    "bonus",
+    "radio",
+    "single",
+    "現場",
+    "现场",
+    "演唱會",
+    "演唱会",
+    "錄音室",
+    "录音室",
+    "重製",
+    "重制",
+    "重新錄製",
+    "重新录制",
+    "專輯版",
+    "专辑版",
+    "單曲版",
+    "单曲版",
 )
 
 
@@ -207,7 +237,9 @@ def strip_version_annotations(value: str) -> str:
 
     def keep_or_remove(match: re.Match[str]) -> str:
         body = match.group(1).casefold()
-        return "" if any(marker in body for marker in VERSION_MARKERS) else match.group(0)
+        return (
+            "" if any(marker in body for marker in VERSION_MARKERS) else match.group(0)
+        )
 
     value = re.sub(r"\(([^)]*)\)", keep_or_remove, value)
     value = re.sub(r"\[([^]]*)\]", keep_or_remove, value)
@@ -343,14 +375,18 @@ def read_cache(key: str) -> dict[str, Any] | None:
 
 
 def api_request(endpoint: str, params: dict[str, Any]) -> Any:
-    clean_params = {key: value for key, value in params.items() if value not in {None, ""}}
+    clean_params = {
+        key: value for key, value in params.items() if value not in {None, ""}
+    }
     url = f"{API_BASE}/{endpoint}?{urllib.parse.urlencode(clean_params)}"
     request = urllib.request.Request(
         url,
         headers={"User-Agent": USER_AGENT, "Accept": "application/json"},
     )
     try:
-        with urllib.request.urlopen(request, timeout=NETWORK_TIMEOUT_SECONDS) as response:
+        with urllib.request.urlopen(
+            request, timeout=NETWORK_TIMEOUT_SECONDS
+        ) as response:
             return json.load(response)
     except urllib.error.HTTPError as exc:
         if exc.code == 404:
@@ -361,13 +397,21 @@ def api_request(endpoint: str, params: dict[str, Any]) -> Any:
 
 
 def candidate_score(track: dict[str, Any], candidate: dict[str, Any]) -> float:
-    title_score = best_similarity(track.get("title", ""), candidate.get("trackName", ""))
-    artist_score = best_similarity(track.get("artist", ""), candidate.get("artistName", ""))
-    album_score = best_similarity(track.get("album", ""), candidate.get("albumName", ""))
+    title_score = best_similarity(
+        track.get("title", ""), candidate.get("trackName", "")
+    )
+    artist_score = best_similarity(
+        track.get("artist", ""), candidate.get("artistName", "")
+    )
+    album_score = best_similarity(
+        track.get("album", ""), candidate.get("albumName", "")
+    )
 
     duration = float(track.get("duration", 0) or 0)
     candidate_duration = float(candidate.get("duration", 0) or 0)
-    duration_error = abs(duration - candidate_duration) if duration and candidate_duration else None
+    duration_error = (
+        abs(duration - candidate_duration) if duration and candidate_duration else None
+    )
     if duration_error is not None:
         duration_score = max(0.0, 1.0 - duration_error / 30.0)
     else:
@@ -393,11 +437,14 @@ def candidate_score(track: dict[str, Any], candidate: dict[str, Any]) -> float:
     )
 
 
-def choose_candidate(track: dict[str, Any], candidates: list[dict[str, Any]]) -> dict[str, Any] | None:
+def choose_candidate(
+    track: dict[str, Any], candidates: list[dict[str, Any]]
+) -> dict[str, Any] | None:
     usable = [
         item
         for item in candidates
-        if isinstance(item, dict) and (item.get("syncedLyrics") or item.get("instrumental"))
+        if isinstance(item, dict)
+        and (item.get("syncedLyrics") or item.get("instrumental"))
     ]
     if not usable:
         return None
@@ -423,11 +470,14 @@ def collect_search_candidates(track: dict[str, Any]) -> list[dict[str, Any]]:
         for item in results:
             if not isinstance(item, dict):
                 continue
-            identity = str(item.get("id") or (
-                normalized(item.get("trackName", "")),
-                normalized(item.get("artistName", "")),
-                round(float(item.get("duration", 0) or 0)),
-            ))
+            identity = str(
+                item.get("id")
+                or (
+                    normalized(item.get("trackName", "")),
+                    normalized(item.get("artistName", "")),
+                    round(float(item.get("duration", 0) or 0)),
+                )
+            )
             if identity not in seen:
                 seen.add(identity)
                 collected.append(item)
@@ -473,13 +523,19 @@ def fetch_lyrics_record(track: dict[str, Any]) -> dict[str, Any] | None:
     exact = api_request(
         "get",
         {
-            "track_name": title_variants[0] if title_variants else track.get("title", ""),
-            "artist_name": artist_variants[0] if artist_variants else track.get("artist", ""),
+            "track_name": title_variants[0]
+            if title_variants
+            else track.get("title", ""),
+            "artist_name": artist_variants[0]
+            if artist_variants
+            else track.get("artist", ""),
             "album_name": track.get("album", ""),
             "duration": duration,
         },
     )
-    if isinstance(exact, dict) and (exact.get("syncedLyrics") or exact.get("instrumental")):
+    if isinstance(exact, dict) and (
+        exact.get("syncedLyrics") or exact.get("instrumental")
+    ):
         return exact
 
     return choose_candidate(track, collect_search_candidates(track))
@@ -495,6 +551,7 @@ def background_fetch(key: str, track: dict[str, Any]) -> None:
                 payload = {
                     "status": "not_found",
                     "fetched_at": now,
+                    "state": track.get("state"),
                     "retry_after": now + RETRY_NOT_FOUND_SECONDS,
                 }
             elif record.get("instrumental"):
@@ -513,7 +570,9 @@ def background_fetch(key: str, track: dict[str, Any]) -> None:
             atomic_write_json(cache_path(key), payload)
         except Exception as exc:
             now = time.time()
-            log_error(f"Lyrics fetch failed for {track.get('artist')} — {track.get('title')}: {exc}")
+            log_error(
+                f"Lyrics fetch failed for {track.get('artist')} — {track.get('title')}: {exc}"
+            )
             atomic_write_json(
                 cache_path(key),
                 {
@@ -693,14 +752,11 @@ def widget_main() -> int:
         return 0
 
     state = track.get("state")
-    if state == "not_running":
-        emit("♪ Music closed")
-        return 0
-    if state == "stopped":
-        emit("♪ Not playing")
-        return 0
-    if not track.get("title"):
-        emit("♪ No track")
+
+    # Match BTT's native Now Playing widget:
+    # hide the lyrics widget when no player/track is active.
+    if state in {"not_running", "stopped"} or not track.get("title"):
+        print()
         return 0
 
     key = track_cache_key(track)
@@ -737,7 +793,9 @@ def fetch_mode(arguments: list[str]) -> int:
         return 2
     key, encoded_payload = arguments
     try:
-        track = json.loads(base64.urlsafe_b64decode(encoded_payload.encode("ascii")).decode("utf-8"))
+        track = json.loads(
+            base64.urlsafe_b64decode(encoded_payload.encode("ascii")).decode("utf-8")
+        )
         background_fetch(key, track)
         return 0
     except Exception as exc:
@@ -780,7 +838,6 @@ def diagnose_current() -> int:
     if not ranked:
         print("No LRCLIB candidates returned.")
         return 2
-
 
     for score, item in ranked[:10]:
         synced = "synced" if item.get("syncedLyrics") else "plain-only"
