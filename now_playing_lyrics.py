@@ -51,17 +51,23 @@ SCROLL_LONG_LINES = os.environ.get("BTT_LYRICS_SCROLL", "1") not in {
 SCROLL_DELAY_SECONDS = float(os.environ.get("BTT_LYRICS_SCROLL_DELAY", "0.8"))
 SCROLL_CELLS_PER_SECOND = float(os.environ.get("BTT_LYRICS_SCROLL_RATE", "5.0"))
 NETWORK_TIMEOUT_SECONDS = float(os.environ.get("BTT_LYRICS_NETWORK_TIMEOUT", "5.0"))
+APPLE_MUSIC_TIMEOUT_SECONDS = float(
+    os.environ.get("BTT_LYRICS_APPLE_MUSIC_TIMEOUT", "1.5")
+)
 
 CACHE_DIR = Path.home() / "Library" / "Caches" / "BTTNowPlayingLyrics"
+WIDGET_LOCK_PATH = CACHE_DIR / "widget.lock"
 LRCLIB_API_BASE = "https://lrclib.net/api"
 LRCAPI_API_BASE = "https://api.lrc.cx/api/v1/lyrics"
 ENABLE_LRCAPI = os.environ.get("BTT_LYRICS_LRCAPI", "1") not in {"0", "false", "False"}
 LRCAPI_TIMEOUT_SECONDS = float(os.environ.get("BTT_LYRICS_LRCAPI_TIMEOUT", "2.5"))
 LRCAPI_MAX_ADVANCE_QUERIES = int(os.environ.get("BTT_LYRICS_LRCAPI_MAX_ADVANCE", "4"))
 LRCAPI_MAX_SINGLE_QUERIES = int(os.environ.get("BTT_LYRICS_LRCAPI_MAX_SINGLE", "2"))
+LRCLIB_MAX_SEARCH_QUERIES = int(os.environ.get("BTT_LYRICS_LRCLIB_MAX_SEARCH", "7"))
 FETCH_TIMEOUT_SECONDS = float(os.environ.get("BTT_LYRICS_FETCH_TIMEOUT", "45"))
 USER_AGENT = "BTT-NowPlaying-Lyrics/6.0 (personal macOS Touch Bar widget)"
 LOCK_MAX_AGE_SECONDS = max(FETCH_TIMEOUT_SECONDS + 15.0, 30.0)
+WIDGET_LOCK_MAX_AGE_SECONDS = max(APPLE_MUSIC_TIMEOUT_SECONDS * 4.0, 3.0)
 RETRY_NETWORK_ERROR_SECONDS = 300
 RETRY_NOT_FOUND_SECONDS = 6 * 60 * 60
 MATCHER_VERSION = 6
@@ -179,7 +185,7 @@ def read_apple_music() -> dict[str, Any]:
             ["/usr/bin/osascript", "-e", APPLE_MUSIC_SCRIPT],
             capture_output=True,
             text=True,
-            timeout=1.0,
+            timeout=APPLE_MUSIC_TIMEOUT_SECONDS,
             check=False,
         )
     except subprocess.TimeoutExpired as exc:
@@ -677,7 +683,6 @@ def choose_candidate(
 def collect_search_candidates(track: dict[str, Any]) -> list[dict[str, Any]]:
     title_variants = metadata_variants(track.get("title", ""))[:4]
     artist_variants = metadata_variants(track.get("artist", ""))[:6]
-    album = track.get("album", "")
     collected: list[dict[str, Any]] = []
     seen: set[str] = set()
 
@@ -699,36 +704,28 @@ def collect_search_candidates(track: dict[str, Any]) -> list[dict[str, Any]]:
                 seen.add(identity)
                 collected.append(item)
 
-    # Keep the request count bounded: this runs only on track changes, but a
-    # community API should still be queried conservatively.
+    queries: list[dict[str, str]] = []
+
+    def add_query(query: dict[str, str]) -> None:
+        if query.get("track_name") or query.get("q"):
+            queries.append(query)
+
     if title_variants:
         original_title = title_variants[0]
         original_artist = artist_variants[0] if artist_variants else ""
-        add_results(
-            lrclib_api_request(
-                "search",
-                {"track_name": original_title, "artist_name": original_artist},
-            )
-        )
+        add_query({"track_name": original_title, "artist_name": original_artist})
 
-    # Title-only searches are essential when catalogs disagree on artist
-    # aliases, album names, or simplified/traditional metadata.
     for title in title_variants[:3]:
-        add_results(lrclib_api_request("search", {"track_name": title}))
+        add_query({"track_name": title})
 
-    # Broad keyword searches recover transliterated artist names.
     if title_variants:
         title = title_variants[0]
-        add_results(lrclib_api_request("search", {"q": title}))
+        add_query({"q": title})
         for artist in artist_variants[1:5]:
-            add_results(
-                lrclib_api_request("search", {"q": f"{title} {artist}".strip()})
-            )
+            add_query({"q": f"{title} {artist}".strip()})
 
-    # Artist-only searches can recover short Chinese titles whose simplified
-    # and traditional forms differ too much for exact title search.
-    for artist in artist_variants[:4]:
-        add_results(lrclib_api_request("search", {"q": artist}))
+    for query in queries[: max(LRCLIB_MAX_SEARCH_QUERIES, 0)]:
+        add_results(lrclib_api_request("search", query))
 
     return collected
 
@@ -823,7 +820,11 @@ def fetch_lyrics_record(track: dict[str, Any]) -> dict[str, Any] | None:
     if local is not None:
         return local
 
-    lrcapi = choose_lrcapi_candidate(track)
+    try:
+        lrcapi = choose_lrcapi_candidate(track)
+    except Exception as exc:
+        log_error(f"LrcAPI lookup failed; trying LRCLIB: {exc}")
+        lrcapi = None
     if lrcapi is not None:
         return lrcapi
 
@@ -881,6 +882,8 @@ def background_fetch(key: str, track: dict[str, Any]) -> None:
                     "record": record,
                 }
             else:
+                record = dict(record)
+                record["parsedLines"] = parse_lrc(record.get("syncedLyrics") or "")
                 payload = {
                     "status": "ok",
                     "fetched_at": now,
@@ -944,6 +947,37 @@ def start_background_fetch(key: str, track: dict[str, Any]) -> bool:
         except OSError:
             pass
         raise
+
+
+def acquire_widget_lock() -> bool:
+    CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    try:
+        if (
+            WIDGET_LOCK_PATH.exists()
+            and time.time() - WIDGET_LOCK_PATH.stat().st_mtime
+            > WIDGET_LOCK_MAX_AGE_SECONDS
+        ):
+            WIDGET_LOCK_PATH.unlink()
+    except OSError:
+        pass
+
+    try:
+        descriptor = os.open(
+            WIDGET_LOCK_PATH, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600
+        )
+        with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+            handle.write(str(os.getpid()))
+        return True
+    except FileExistsError:
+        return False
+
+
+def release_widget_lock() -> None:
+    try:
+        if WIDGET_LOCK_PATH.read_text(encoding="utf-8") == str(os.getpid()):
+            WIDGET_LOCK_PATH.unlink()
+    except (FileNotFoundError, OSError):
+        pass
 
 
 def parse_lrc(synced_lyrics: str) -> list[tuple[float, str]]:
@@ -1048,7 +1082,7 @@ def render_widget(track: dict[str, Any], cached: dict[str, Any] | None) -> str:
 
     record = cached.get("record") or {}
     synced_lyrics = record.get("syncedLyrics") or ""
-    lines = parse_lrc(synced_lyrics)
+    lines = record.get("parsedLines") or parse_lrc(synced_lyrics)
     position = float(track.get("position", 0.0)) + SYNC_OFFSET_SECONDS
     lyric, elapsed = current_lyric_line(lines, position)
 
@@ -1060,49 +1094,55 @@ def render_widget(track: dict[str, Any], cached: dict[str, Any] | None) -> str:
 
 
 def widget_main() -> int:
+    if not acquire_widget_lock():
+        emit("♪")
+        return 0
+
     try:
-        track = read_apple_music()
-    except PermissionError:
-        emit("⚠ Allow BTT → Music")
-        return 0
-    except Exception as exc:
-        log_error(str(exc))
-        emit("⚠ Apple Music error")
-        return 0
-
-    state = track.get("state")
-    # Empty stdout hides the BTT Script Widget when Music/Now Playing is inactive.
-    if state in {"not_running", "stopped"} or not track.get("title"):
-        print()
-        return 0
-
-    key = track_cache_key(track)
-    cached = read_cache(key)
-    now = time.time()
-
-    if cached is None:
         try:
-            start_background_fetch(key, track)
+            track = read_apple_music()
+        except PermissionError:
+            emit("⚠ Allow BTT → Music")
+            return 0
         except Exception as exc:
-            log_error(f"Could not start background fetch: {exc}")
-        emit(render_widget(track, None))
-        return 0
+            log_error(str(exc))
+            emit("⚠ Apple Music error")
+            return 0
 
-    retry_after = float(cached.get("retry_after", 0) or 0)
-    if retry_after and now >= retry_after:
-        try:
-            cache_path(key).unlink()
-        except OSError:
-            pass
-        try:
-            start_background_fetch(key, track)
-        except Exception as exc:
-            log_error(f"Could not retry background fetch: {exc}")
-        emit(render_widget(track, None))
-        return 0
+        state = track.get("state")
+        if state in {"not_running", "stopped"} or not track.get("title"):
+            emit("♪")
+            return 0
 
-    emit(render_widget(track, cached))
-    return 0
+        key = track_cache_key(track)
+        cached = read_cache(key)
+        now = time.time()
+
+        if cached is None:
+            try:
+                start_background_fetch(key, track)
+            except Exception as exc:
+                log_error(f"Could not start background fetch: {exc}")
+            emit(render_widget(track, None))
+            return 0
+
+        retry_after = float(cached.get("retry_after", 0) or 0)
+        if retry_after and now >= retry_after:
+            try:
+                cache_path(key).unlink()
+            except OSError:
+                pass
+            try:
+                start_background_fetch(key, track)
+            except Exception as exc:
+                log_error(f"Could not retry background fetch: {exc}")
+            emit(render_widget(track, None))
+            return 0
+
+        emit(render_widget(track, cached))
+        return 0
+    finally:
+        release_widget_lock()
 
 
 def fetch_mode(arguments: list[str]) -> int:
