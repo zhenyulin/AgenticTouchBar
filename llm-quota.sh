@@ -3,6 +3,20 @@
 export PATH="/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin"
 export HOME="${HOME:-/Users/zhenyulin}"
 
+# Optional first argument: BTT widget UUID.
+if [[ -n "${1:-}" ]]; then
+    BTT_WIDGET_UUID="$1"
+    shift
+else
+    BTT_WIDGET_UUID="${BTT_WIDGET_UUID:-}"
+fi
+
+source "$HOME/Documents/BTT/lib/btt-widget.sh"
+
+if btt_refresh_gate "$0" "$@"; then
+    exit 0
+fi
+
 cd "$HOME" || {
     echo "HOME ERR"
     exit 0
@@ -78,4 +92,4 @@ if (( STATUS != 0 )) || [[ -z "$TEXT" ]]; then
     exit 0
 fi
 
-printf '%s\n' "$TEXT"
+btt_publish "$TEXT"

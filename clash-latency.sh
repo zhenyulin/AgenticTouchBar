@@ -10,6 +10,20 @@ set -o pipefail
 # BTT does not necessarily inherit your interactive shell's PATH.
 PATH="/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin"
 
+# Optional first argument: BTT widget UUID.
+if [[ -n "${1:-}" ]]; then
+    BTT_WIDGET_UUID="$1"
+    shift
+else
+    BTT_WIDGET_UUID="${BTT_WIDGET_UUID:-}"
+fi
+
+source "$HOME/Documents/BTT/lib/btt-widget.sh"
+
+if btt_refresh_gate "$0" "$@"; then
+    exit 0
+fi
+
 # Clash Verge / Mihomo configuration.
 API="${CLASH_API:-http://127.0.0.1:9097}"
 SECRET="${CLASH_SECRET:-}"
@@ -27,7 +41,7 @@ TIMEOUT_MS="${CLASH_TIMEOUT_MS:-3000}"
 LABEL_MODE="${CLASH_LABEL_MODE:-full}"
 
 emit_widget() {
-  printf '%s\n' "$1"
+  btt_publish "$1"
 }
 
 fail() {
