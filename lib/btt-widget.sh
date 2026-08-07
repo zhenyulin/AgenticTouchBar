@@ -5,11 +5,19 @@
 #
 # Public functions:
 #
-#   btt_refresh_gate "$0" "$@"
-#       Call near the beginning of a widget script.
+#   btt_dim_gate
+#       Call near the top of a widget script:
+#
+#           if btt_dim_gate; then
+#               exit 0
+#           fi
 #
 #   btt_publish "$result"
-#       Call instead of echo/printf for the final widget result.
+#       Record and emit the final widget result.
+#       Call instead of echo/printf.
+#
+#   btt_remember "$result"
+#       Record only, for a widget that emits its own JSON.
 #
 #
 # BTT mode:
@@ -19,6 +27,49 @@
 #   BTT_WIDGET_UUID may be unset.
 #   The script behaves like an ordinary shell script.
 #
+#
+# Why the grey-out works this way
+# ------------------------------------------------------------------
+# A widget's font color can only be set by the JSON the widget script
+# itself prints. BTT's update_touch_bar_widget AppleScript command takes
+# text, icon_path, sf_symbol_* , icon_data and background_color -- there is
+# no font_color and no font_size parameter, so an external process cannot
+# grey a widget out directly.
+#
+# So actions/tap-refresh.sh only drops a flag file and asks BTT to re-run
+# the widget. That run hits btt_dim_gate, which reprints the previous value
+# in grey and exits immediately; the refresh that follows repaints it in the
+# normal color. The flag is a file rather than a BTT variable so that the
+# common case -- an ordinary scheduled tick -- costs a stat() instead of an
+# osascript round trip.
+#
+
+BTT_WIDGET_CACHE_DIR="${BTT_WIDGET_CACHE_DIR:-$HOME/Library/Caches/btt-widgets}"
+
+# The normal, undimmed label color.
+BTT_WIDGET_COLOR="${BTT_WIDGET_COLOR:-255,255,255,255}"
+
+# The color used while a manual refresh is in flight.
+BTT_WIDGET_DIM_COLOR="${BTT_WIDGET_DIM_COLOR:-130,130,130,255}"
+
+# A dim flag older than this belongs to a refresh that never arrived.
+BTT_WIDGET_DIM_MAX_AGE="${BTT_WIDGET_DIM_MAX_AGE:-10}"
+
+# Optional icon, so that a dimmed frame keeps the widget's icon.
+BTT_WIDGET_ICON="${BTT_WIDGET_ICON:-}"
+
+
+# ---------------------------------------------------------------------------
+# Internal: per-widget state files
+# ---------------------------------------------------------------------------
+
+btt__cache_file() {
+    printf '%s/%s.text' "$BTT_WIDGET_CACHE_DIR" "$BTT_WIDGET_UUID"
+}
+
+btt__dim_file() {
+    printf '%s/%s.dim' "$BTT_WIDGET_CACHE_DIR" "$BTT_WIDGET_UUID"
+}
 
 
 # ---------------------------------------------------------------------------
@@ -27,7 +78,17 @@
 
 btt__emit_json() {
     local text="${1-}"
-    local color="${2:-255,255,255,255}"
+    local color="${2:-$BTT_WIDGET_COLOR}"
+    local icon="${BTT_WIDGET_ICON:-}"
+
+    if [[ -n "$icon" && -f "$icon" ]] && command -v jq >/dev/null 2>&1; then
+        jq -cn \
+            --arg text "$text" \
+            --arg color "$color" \
+            --arg icon "$icon" \
+            '{text: $text, font_color: $color, icon_path: $icon}'
+        return
+    fi
 
     /usr/bin/osascript -l JavaScript - "$text" "$color" <<'JXA'
 function run(argv) {
@@ -41,265 +102,67 @@ JXA
 
 
 # ---------------------------------------------------------------------------
-# Internal: retrieve last successfully published text
-# ---------------------------------------------------------------------------
-
-btt__get_last_result() {
-    /usr/bin/osascript -l JavaScript - "$BTT_WIDGET_UUID" <<'JXA'
-function run(argv) {
-    const uuid = argv[0];
-    const btt = Application("BetterTouchTool");
-
-    const value = btt.get_string_variable(
-        `btt.widget.${uuid}.last_result`
-    );
-
-    return value || "—";
-}
-JXA
-}
-
-
-# ---------------------------------------------------------------------------
-# Internal: make script path absolute so it can spawn itself
-# ---------------------------------------------------------------------------
-
-btt__absolute_path() {
-    local path="$1"
-
-    if [[ "$path" = /* ]]; then
-        printf '%s\n' "$path"
-        return
-    fi
-
-    local dir
-    local base
-
-    dir="$(dirname "$path")"
-    base="$(basename "$path")"
-
-    (
-        cd "$dir" 2>/dev/null || exit 1
-        printf '%s/%s\n' "$PWD" "$base"
-    )
-}
-
-
-# ---------------------------------------------------------------------------
-# Internal: recover if a background refresh crashes before btt_publish()
-# ---------------------------------------------------------------------------
-
-btt__worker_cleanup() {
-    local status="${1:-1}"
-
-    if [[ "${BTT_PUBLISHED:-0}" == "1" ]]; then
-        return
-    fi
-
-    [[ -z "${BTT_WIDGET_UUID:-}" ]] && return
-
-    /usr/bin/osascript -l JavaScript - \
-        "$BTT_WIDGET_UUID" <<'JXA' >/dev/null 2>&1
-function run(argv) {
-    const uuid = argv[0];
-    const btt = Application("BetterTouchTool");
-    const prefix = `btt.widget.${uuid}.`;
-
-    btt.set_string_variable(
-        prefix + "refreshing",
-        {to: "0"}
-    );
-
-    btt.set_string_variable(
-        prefix + "worker_running",
-        {to: "0"}
-    );
-
-    btt.set_string_variable(
-        prefix + "refresh_started_ms",
-        {to: "0"}
-    );
-
-    // Re-render the old cached result in white.
-    btt.set_string_variable(
-        prefix + "ready",
-        {to: "1"}
-    );
-
-    btt.refresh_widget(uuid);
-}
-JXA
-
-    return "$status"
-}
-
-
-# ---------------------------------------------------------------------------
-# Public: intercept manual refresh states
+# Public: remember the text a widget is displaying
 #
-# Usage:
-#
-#   if btt_refresh_gate "$0" "$@"; then
-#       exit 0
-#   fi
+# actions/tap-refresh.sh cannot know what a widget shows, so every widget
+# records its own last value here.
+# ---------------------------------------------------------------------------
+
+btt_remember() {
+    local result="${1-}"
+
+    [[ -z "${BTT_WIDGET_UUID:-}" ]] && return 0
+
+    mkdir -p "$BTT_WIDGET_CACHE_DIR" 2>/dev/null || return 0
+
+    printf '%s' "$result" > "$(btt__cache_file)" 2>/dev/null || true
+
+    return 0
+}
+
+
+# ---------------------------------------------------------------------------
+# Public: serve a manual refresh's "in flight" frame
 #
 # Return:
-#   0 -> library handled this invocation; caller should exit
-#   1 -> caller should perform its normal computation
+#   0 -> this run was the dim frame; the caller must exit without working
+#   1 -> ordinary run; the caller should compute its value as usual
 # ---------------------------------------------------------------------------
 
-btt_refresh_gate() {
-    local script_path="${1-}"
-    shift || true
+btt_dim_gate() {
+    [[ -z "${BTT_WIDGET_UUID:-}" ]] && return 1
+
+    local flag
+    flag="$(btt__dim_file)"
+
+    [[ -f "$flag" ]] || return 1
 
     #
-    # Terminal mode:
-    # just run the script normally.
+    # Consume the flag first: whatever happens next, this widget must not
+    # come up grey again on the following tick.
     #
-    if [[ -z "${BTT_WIDGET_UUID:-}" ]]; then
-        return 1
-    fi
-
-    #
-    # Background worker:
-    # bypass the display gate and perform the actual computation.
-    #
-    if [[ "${BTT_REFRESH_WORKER:-0}" == "1" ]]; then
-        BTT_PUBLISHED=0
-        trap 'btt__worker_cleanup "$?"' EXIT
-        return 1
-    fi
-
-    #
-    # Ask BTT which state this widget is currently in.
-    #
-    local mode
-
-    mode="$(
-        /usr/bin/osascript -l JavaScript - \
-            "$BTT_WIDGET_UUID" <<'JXA'
-function run(argv) {
-    const uuid = argv[0];
-    const btt = Application("BetterTouchTool");
-    const prefix = `btt.widget.${uuid}.`;
-
-    const refreshing =
-        btt.get_string_variable(prefix + "refreshing") || "0";
-
-    const ready =
-        btt.get_string_variable(prefix + "ready") || "0";
-
-    const workerRunning =
-        btt.get_string_variable(prefix + "worker_running") || "0";
-
-
-    // A background refresh has completed.
-    // Consume the ready state exactly once.
-    if (ready === "1") {
-        btt.set_string_variable(
-            prefix + "ready",
-            {to: "0"}
-        );
-
-        return "ready";
-    }
-
-
-    // Manual refresh is currently active.
-    if (refreshing === "1") {
-
-        // Only one invocation is allowed to launch the worker.
-        if (workerRunning !== "1") {
-            btt.set_string_variable(
-                prefix + "worker_running",
-                {to: "1"}
-            );
-
-            return "refresh-start";
-        }
-
-        return "refresh-wait";
-    }
-
-
-    return "normal";
-}
-JXA
+    local age
+    age="$(
+        /usr/bin/find "$flag" -mtime -"${BTT_WIDGET_DIM_MAX_AGE}"s 2>/dev/null
     )"
 
-    case "$mode" in
+    rm -f "$flag" 2>/dev/null
 
-        ready)
-            #
-            # Worker has produced a new cached value.
-            # Display it immediately in white.
-            #
-            local last
-            last="$(btt__get_last_result)"
+    # Flag left behind by a refresh that never ran.
+    [[ -n "$age" ]] || return 1
 
-            btt__emit_json "$last" "255,255,255,255"
+    local last=""
+    local cache
+    cache="$(btt__cache_file)"
 
-            return 0
-            ;;
+    [[ -f "$cache" ]] && last="$(cat "$cache" 2>/dev/null)"
 
+    # Nothing published yet: there is no value to grey out.
+    [[ -n "$last" ]] || return 1
 
-        refresh-start)
-            #
-            # Display OLD cached result in grey,
-            # while the same widget script runs independently.
-            #
+    btt__emit_json "$last" "$BTT_WIDGET_DIM_COLOR"
 
-            local last
-            last="$(btt__get_last_result)"
-
-            local absolute_script
-            absolute_script="$(btt__absolute_path "$script_path")" || {
-                btt__emit_json "$last" "255,255,255,255"
-                return 0
-            }
-
-            #
-            # Run THIS SAME SCRIPT as the worker.
-            #
-            # All existing environment variables are inherited.
-            #
-            nohup /usr/bin/env \
-                BTT_REFRESH_WORKER=1 \
-                BTT_WIDGET_UUID="$BTT_WIDGET_UUID" \
-                "$absolute_script" "$@" \
-                >/dev/null 2>&1 &
-
-            #
-            # Current BTT invocation finishes immediately.
-            #
-            btt__emit_json "$last" "130,130,130,255"
-
-            return 0
-            ;;
-
-
-        refresh-wait)
-            #
-            # Another periodic refresh happened while the worker
-            # was already running. Do NOT launch another one.
-            #
-            local last
-            last="$(btt__get_last_result)"
-
-            btt__emit_json "$last" "130,130,130,255"
-
-            return 0
-            ;;
-
-
-        *)
-            #
-            # Ordinary scheduled/initial BTT execution.
-            #
-            return 1
-            ;;
-
-    esac
+    return 0
 }
 
 
@@ -309,101 +172,20 @@ JXA
 # Terminal:
 #   prints plain text.
 #
-# Normal BTT invocation:
-#   caches result and returns white widget JSON.
-#
-# Refresh worker:
-#   caches result, switches state to ready and refreshes BTT.
+# BTT:
+#   remembers the result and emits widget JSON in the normal color.
+#   The color is always stated explicitly, so that the grey frame from a
+#   manual refresh is cleared when the real value arrives.
 # ---------------------------------------------------------------------------
 
 btt_publish() {
     local result="${1-}"
 
-    #
-    # Terminal mode.
-    #
     if [[ -z "${BTT_WIDGET_UUID:-}" ]]; then
         printf '%s\n' "$result"
         return 0
     fi
 
-
-    #
-    # Background manual-refresh worker.
-    #
-    if [[ "${BTT_REFRESH_WORKER:-0}" == "1" ]]; then
-
-        /usr/bin/osascript -l JavaScript - \
-            "$BTT_WIDGET_UUID" \
-            "$result" <<'JXA' >/dev/null
-function run(argv) {
-    const uuid = argv[0];
-    const result = argv[1];
-
-    const btt = Application("BetterTouchTool");
-    const prefix = `btt.widget.${uuid}.`;
-
-    // Store last successful display value persistently.
-    btt.set_persistent_string_variable(
-        prefix + "last_result",
-        {to: result}
-    );
-
-    // Worker is finished.
-    btt.set_string_variable(
-        prefix + "refreshing",
-        {to: "0"}
-    );
-
-    btt.set_string_variable(
-        prefix + "worker_running",
-        {to: "0"}
-    );
-
-    btt.set_string_variable(
-        prefix + "refresh_started_ms",
-        {to: "0"}
-    );
-
-    // Next widget invocation should only render this result,
-    // not calculate it a second time.
-    btt.set_string_variable(
-        prefix + "ready",
-        {to: "1"}
-    );
-
-    btt.refresh_widget(uuid);
-}
-JXA
-
-        BTT_PUBLISHED=1
-        return 0
-    fi
-
-
-    #
-    # Ordinary scheduled/initial BTT execution.
-    #
-    # Cache and return white JSON in one call.
-    #
-    /usr/bin/osascript -l JavaScript - \
-        "$BTT_WIDGET_UUID" \
-        "$result" <<'JXA'
-function run(argv) {
-    const uuid = argv[0];
-    const result = argv[1];
-
-    const btt = Application("BetterTouchTool");
-
-    btt.set_persistent_string_variable(
-        `btt.widget.${uuid}.last_result`,
-        {to: result}
-    );
-
-    return JSON.stringify({
-        text: result,
-        font_color: "255,255,255,255"
-    });
-}
-JXA
+    btt_remember "$result"
+    btt__emit_json "$result" "$BTT_WIDGET_COLOR"
 }

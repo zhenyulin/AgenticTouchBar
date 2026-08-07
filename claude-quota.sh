@@ -13,12 +13,13 @@ fi
 
 source "$HOME/Documents/BTT/lib/btt-widget.sh"
 
-if btt_refresh_gate "$0" "$@"; then
+# A tap asked for this widget to grey out while it refreshes.
+if btt_dim_gate; then
     exit 0
 fi
 
 cd "$HOME" || {
-    echo "HOME ERR"
+    btt_publish "HOME ERR"
     exit 0
 }
 
@@ -29,12 +30,12 @@ LOG="$HOME/Library/Logs/btt-codexbar.log"
 mkdir -p "$HOME/Library/Logs"
 
 if [[ ! -x "$CODEXBAR" ]]; then
-    echo "NO CODEXBAR"
+    btt_publish "NO CODEXBAR"
     exit 0
 fi
 
 if [[ -z "$JQ" || ! -x "$JQ" ]]; then
-    echo "NO JQ"
+    btt_publish "NO JQ"
     exit 0
 fi
 
@@ -47,7 +48,7 @@ JSON="$(
 )"
 
 if [[ -z "$JSON" ]]; then
-    echo "EMPTY JSON"
+    btt_publish "EMPTY JSON"
     exit 0
 fi
 
@@ -91,7 +92,7 @@ TEXT="$(
 STATUS=$?
 
 if (( STATUS != 0 )) || [[ -z "$TEXT" ]]; then
-    echo "JSON ERR"
+    btt_publish "JSON ERR"
     exit 0
 fi
 
