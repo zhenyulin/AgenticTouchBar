@@ -98,7 +98,10 @@ def render_tick() -> str:
         emit("⚠ Allow BTT → Music")
         return "denied"
     if state in {"not_running", "stopped"} or not track.get("title"):
-        emit("♪")
+        # BetterTouchTool hides script widgets whose text is empty. Match the
+        # native Now Playing widget when Music has been quit instead of
+        # leaving a stray music-note button behind.
+        emit("")
         return "idle"
 
     if is_placeholder_track(track):

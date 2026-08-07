@@ -74,7 +74,7 @@ MAX_LYRIC_ROWS = int(os.environ.get("BTT_LYRICS_MAX_ROWS", "2"))
 # Wider than the prefix's character count on purpose: the Touch Bar's
 # proportional font renders a symbol like "♪ " wider than two plain spaces,
 # so matching character-for-character still looks left-shifted in practice.
-CONTINUATION_INDENT = os.environ.get("BTT_LYRICS_INDENT", "     ")
+CONTINUATION_INDENT = os.environ.get("BTT_LYRICS_INDENT", "         ")
 NETWORK_TIMEOUT_SECONDS = float(os.environ.get("BTT_LYRICS_NETWORK_TIMEOUT", "4.0"))
 APPLE_MUSIC_TIMEOUT_SECONDS = float(
     os.environ.get("BTT_LYRICS_APPLE_MUSIC_TIMEOUT", "1.5")
@@ -90,9 +90,14 @@ WATCH_PATH = CACHE_DIR / "watch.tsv"
 # Where the shell widgets trace, via lib/btt-widget.sh. --report reads both,
 # because "did every widget stop at once, or just this one?" is the question
 # that separates a BetterTouchTool problem from a script problem.
-SHELL_TRACE_PATH = Path(
-    os.environ.get("BTT_WIDGET_CACHE_DIR", str(Path.home() / "Library/Caches/btt-widgets"))
-) / "trace.tsv"
+SHELL_TRACE_PATH = (
+    Path(
+        os.environ.get(
+            "BTT_WIDGET_CACHE_DIR", str(Path.home() / "Library/Caches/btt-widgets")
+        )
+    )
+    / "trace.tsv"
+)
 # One line per run at a one second interval is roughly 5 MB a day, so the cap
 # holds several hours -- long enough to still cover a freeze noticed later.
 TRACE_MAX_BYTES = int(os.environ.get("BTT_LYRICS_TRACE_MAX_BYTES", "4000000"))

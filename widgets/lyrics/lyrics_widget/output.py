@@ -21,7 +21,11 @@ def emit(text: str) -> None:
         body = " ".join(raw_row.split())
         if body:
             rows.append(indent + body)
-    output = "\n".join(rows) or "♪"
+    # An empty result is meaningful: BetterTouchTool removes a script widget
+    # from the Touch Bar when its text is empty. Keep that distinction from a
+    # genuinely rendered fallback value so Lyrics follows Now Playing when
+    # Music quits.
+    output = "\n".join(rows)
     print(output)
     remember_output(output)
 
