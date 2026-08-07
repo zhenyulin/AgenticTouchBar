@@ -234,45 +234,49 @@ btt_refresh_detached() {
 
     local uuid="${BTT_WIDGET_UUID:-}"
 
-    # The redirections are on the subshell, not on the command inside it.
-    # A background child that keeps the widget's stdout open holds the pipe
-    # open too, and whoever is reading that pipe -- BTT -- waits for it, which
-    # is the very blocking this function exists to avoid.
+    # `& disown` only drops the job from the shell's job table -- in a
+    # non-interactive shell (which every BTT script widget is), job control
+    # can't be turned on to give the job a process group of its own;
+    # `setopt monitor` fails outright without a controlling terminal. So a
+    # "detached" background child stays in the very process group BTT
+    # launched for this script. If BTT's single script-runner XPC service
+    # ever waits on or signals by process group rather than just the one pid
+    # it started, a slow child can wedge every widget behind it -- for
+    # however long after the visible script already returned.
+    #
+    # A launchd job would dodge that, but was tried and rejected: it runs as
+    # a separately-authorized process, and macOS's TCC then blocks it from
+    # this repo's files under ~/Documents ("operation not permitted"), even
+    # though the very same script runs fine spawned directly. So instead a
+    # tiny Python double-fork calls setsid() on the child, which moves it
+    # into a session and process group of its own while keeping it in the
+    # same BTT -> zsh -> python -> zsh process lineage BTT already has file
+    # access for.
     #
     # The lock is dropped BEFORE the redraw is requested. The redraw runs the
     # widget, and the widget colors itself by whether the lock is held: asking
     # first would paint the new value grey and leave it grey until the next
     # tick.
     (
-        trap '' HUP
-        "$@"
-        rmdir "$lock" 2>/dev/null
-        btt_request_refresh "$uuid"
+        /usr/bin/python3 -c '
+import os, sys
+if os.fork() != 0:
+    os._exit(0)
+os.setsid()
+os.execvp(sys.argv[1], sys.argv[1:])
+' /bin/zsh -c '
+            trap "" HUP
+            lock="$1"; uuid="$2"; shift 2
+            "$@"
+            rmdir "$lock" 2>/dev/null
+            if [[ -n "$uuid" ]]; then
+                /usr/bin/osascript -e "tell application \"BetterTouchTool\" to refresh_widget \"$uuid\"" >/dev/null 2>&1
+            fi
+        ' refresh-wrapper "$lock" "$uuid" "$@"
     ) </dev/null >/dev/null 2>&1 &
     disown 2>/dev/null || true
 
     return 0
-}
-
-
-# ---------------------------------------------------------------------------
-# Public: ask BTT to redraw a widget now
-#
-# Called after a detached refresh so a new value appears immediately instead
-# of at the widget's next scheduled tick. That is what lets a slow widget be
-# given a long refresh interval without feeling stale.
-# ---------------------------------------------------------------------------
-
-btt_request_refresh() {
-    local uuid="${1-}"
-
-    [[ -z "$uuid" ]] && return 0
-
-    /usr/bin/osascript -l JavaScript - "$uuid" >/dev/null 2>&1 <<'JXA' || true
-function run(argv) {
-    Application("BetterTouchTool").refresh_widget(argv[0]);
-}
-JXA
 }
 
 

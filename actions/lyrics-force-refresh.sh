@@ -1,19 +1,21 @@
 #!/usr/bin/env zsh
 #
-# BetterTouchTool action: the track just changed, so catch the lyrics up.
+# BetterTouchTool action: tap-to-refresh for the Lyrics widget.
 #
 # Usage:
-#   track-changed.sh [lyrics-widget-uuid]
+#   lyrics-force-refresh.sh [lyrics-widget-uuid]
 #
-# Attach this as a second action on the swipe triggers that send Next and
-# Previous. BTT's own media-key action changes the track; this one makes the
-# Lyrics widget follow it immediately instead of at its next tick.
+# Attach this as the tap action on the Lyrics widget. It drops the cached
+# lyrics for whatever track is currently known, asks for a fresh Apple Music
+# sample, and asks BTT to repaint -- the same "clear it and let the next tick
+# refetch" idea as clear_current_cache(), but reading the last sample instead
+# of querying Music directly, since a query can stall for seconds.
 #
 # Nothing is done here directly. BTT runs shell actions through the same
 # single BetterTouchToolShellScriptRunner XPC service as the widgets, so a
 # second spent waiting in this script is a second in which no widget on the
-# Touch Bar updates and no tap-refresh is answered. The work is handed to a
-# detached process and this returns at once.
+# Touch Bar updates and no other tap-refresh is answered. The work is handed
+# to a detached process and this returns at once.
 #
 
 set -u
@@ -26,7 +28,7 @@ UUID="${1:-${BTT_LYRICS_WIDGET_UUID:-}}"
 # this script's stdout keeps the pipe open, and BTT waits on that pipe -- which
 # would reintroduce exactly the blocking this file exists to avoid.
 nohup /usr/bin/env python3 \
-    "$HOME/Documents/BTT/widgets/lyrics/now_playing_lyrics.py" --track-changed "$UUID" \
+    "$HOME/Documents/BTT/widgets/lyrics/now_playing_lyrics.py" --force-refresh "$UUID" \
     </dev/null >/dev/null 2>&1 &
 
 disown 2>/dev/null || true

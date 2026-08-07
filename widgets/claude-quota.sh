@@ -25,7 +25,7 @@ fi
 # and BTT may well have started it by a relative path.
 SELF="${0:A}"
 
-source "$HOME/Documents/BTT/lib/btt-widget.sh"
+source "$HOME/Documents/BTT/widgets/lib/btt-widget.sh"
 
 STARTED="$(btt_now)"
 

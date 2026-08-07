@@ -13,7 +13,7 @@
 # That run starts the widget's refresh even if its cached value is still
 # fresh, and greys itself out because the refresh is now in flight. The grey
 # lasts as long as the refresh does, and the redraw that follows it restores
-# the normal color -- see lib/btt-widget.sh.
+# the normal color -- see widgets/lib/btt-widget.sh.
 #
 # Nothing is painted from here. BTT's update_touch_bar_widget command only
 # accepts text, icon_path, sf_symbol_*, icon_data and background_color: there
