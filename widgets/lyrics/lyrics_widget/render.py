@@ -37,9 +37,9 @@ def render_widget(
 
     status = cached.get("status")
     if status == "instrumental":
-        return "♪ Instrumental"
+        return "♪"
     if status == "not_found":
-        return "♪ No synced lyrics"
+        return "♪"
     if status == "network_error":
         return "⚠ Lyrics network error"
     if status != "ok":
@@ -56,7 +56,9 @@ def render_widget(
         return prefix + title
 
     first_width = max(config.VIEWPORT_WIDTH - display_width(prefix), 8)
-    other_width = max(config.VIEWPORT_WIDTH - display_width(config.CONTINUATION_INDENT), 8)
+    other_width = max(
+        config.VIEWPORT_WIDTH - display_width(config.CONTINUATION_INDENT), 8
+    )
     rows = wrap_lyric(lyric, [first_width, other_width], config.MAX_LYRIC_ROWS)
 
     # A short current line leaves a spare row rather than wrapping into it.

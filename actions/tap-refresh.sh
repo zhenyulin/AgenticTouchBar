@@ -3,11 +3,11 @@
 # BetterTouchTool Touch Bar manual refresh helper.
 #
 # Usage:
-#   tap-refresh.sh <widget-uuid>
+#   tap-refresh.sh <widget-uuid> [<widget-uuid> ...]
 #
 # Behaviour:
-#   1. Raise the widget's force flag.
-#   2. Ask BTT to re-run the widget.
+#   1. Raise each widget's force flag.
+#   2. Ask BTT to re-run each widget.
 #   3. Exit immediately.
 #
 # That run starts the widget's refresh even if its cached value is still
@@ -30,9 +30,15 @@ set -u
 
 PATH="/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin"
 
-UUID="${1:-${BTT_WIDGET_UUID:-}}"
+if (( $# > 0 )); then
+    UUIDS=("$@")
+elif [[ -n "${BTT_WIDGET_UUID:-}" ]]; then
+    UUIDS=("$BTT_WIDGET_UUID")
+else
+    UUIDS=()
+fi
 
-if [[ -z "$UUID" ]]; then
+if (( ${#UUIDS[@]} == 0 )); then
     exit 1
 fi
 
@@ -41,17 +47,20 @@ CACHE_DIR="${BTT_WIDGET_CACHE_DIR:-$HOME/Library/Caches/btt-widgets}"
 # Failure to raise the flag must NOT prevent the refresh request: a refresh
 # that only picks up a stale value still beats no refresh at all.
 if mkdir -p "$CACHE_DIR" 2>/dev/null; then
-    : > "$CACHE_DIR/$UUID.force" 2>/dev/null || true
+    for uuid in "${UUIDS[@]}"; do
+        : > "$CACHE_DIR/$uuid.force" 2>/dev/null || true
+    done
 fi
 
 # Fire-and-forget: refresh_widget blocks until the widget script has
 # finished, and this BTT shell action must return immediately.
-nohup /usr/bin/osascript -l JavaScript - "$UUID" <<'JXA' >/dev/null 2>&1 &
+nohup /usr/bin/osascript -l JavaScript - "${UUIDS[@]}" <<'JXA' >/dev/null 2>&1 &
 function run(argv) {
-    const uuid = argv[0];
     const btt = Application("BetterTouchTool");
 
-    btt.refresh_widget(uuid);
+    for (const uuid of argv) {
+        btt.refresh_widget(uuid);
+    }
 }
 JXA
 
