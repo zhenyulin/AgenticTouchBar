@@ -26,6 +26,8 @@ SELF="${0:A}"
 
 source "$HOME/Documents/BTT/lib/btt-widget.sh"
 
+STARTED="$(btt_now)"
+
 BTT_WIDGET_NAME="codex-quota"
 
 VALUE_MAX_AGE="${CODEX_QUOTA_MAX_AGE:-300}"
@@ -117,7 +119,19 @@ compute_value() {
 }
 
 if (( REFRESH_MODE )); then
-    btt_cache_put "$BTT_WIDGET_NAME" "$(compute_value)"
+    REFRESHED="$(compute_value)"
+    btt_cache_put "$BTT_WIDGET_NAME" "$REFRESHED"
+
+    # A small vocabulary in the outcome column, with the value itself kept
+    # alongside: these widgets report failures as text ("JSON ERR",
+    # "NO CODEXBAR"), and using that text as the outcome would give every
+    # distinct reading its own bucket in --report's tally.
+    case "$REFRESHED" in
+        "")            REFRESH_OUTCOME=empty ;;
+        *ERR*|NO\ *)   REFRESH_OUTCOME=error ;;
+        *)             REFRESH_OUTCOME=ok ;;
+    esac
+    btt_trace refresh "$STARTED" "$REFRESH_OUTCOME" "value=$REFRESHED"
     exit 0
 fi
 
@@ -137,4 +151,9 @@ if (( FRESH != 0 || FORCE )); then
         "$SELF" --refresh "$BTT_WIDGET_UUID"
 fi
 
+OUTCOME=cached
+(( FRESH != 0 )) && OUTCOME=stale
+(( FORCE )) && OUTCOME=forced
+[[ -n "$VALUE" ]] || OUTCOME=empty
+btt_trace widget "$STARTED" "$OUTCOME"
 btt_publish "${VALUE:-…}"

@@ -64,6 +64,16 @@ BTT_WIDGET_FORCE_MAX_AGE="${BTT_WIDGET_FORCE_MAX_AGE:-10}"
 # Optional icon, so that a dimmed frame keeps the widget's icon.
 BTT_WIDGET_ICON="${BTT_WIDGET_ICON:-}"
 
+# Trace file shared by every widget, read by
+# `now_playing_lyrics.py --report`. Set to 0 to turn tracing off.
+BTT_WIDGET_TRACE="${BTT_WIDGET_TRACE:-1}"
+BTT_WIDGET_TRACE_MAX_BYTES="${BTT_WIDGET_TRACE_MAX_BYTES:-2000000}"
+
+# EPOCHREALTIME gives sub-second timestamps without forking `date`.
+if [[ -n "${ZSH_VERSION:-}" ]]; then
+    zmodload zsh/datetime 2>/dev/null || true
+fi
+
 
 # ---------------------------------------------------------------------------
 # Internal: per-widget state files
@@ -84,6 +94,68 @@ btt__refresh_lock() {
 # Younger than max_age?
 btt__is_fresh() {
     [[ -n "$(/usr/bin/find "$1" -maxdepth 0 -mtime -"${2}"s 2>/dev/null)" ]]
+}
+
+
+# ---------------------------------------------------------------------------
+# Public: leave a record of this run
+#
+# A frozen Touch Bar looks the same whatever caused it, and by the time
+# anyone looks the evidence is gone. So every widget records that it ran, how
+# long it took and what it decided. The gaps between records are the useful
+# part: they are the runs BTT did not make. Whether every widget stopped at
+# once, or only one did, is what separates a BTT problem from a script one --
+# which is why all of them share a single file.
+#
+#   btt_now                            -> seconds, as a float
+#   btt_trace <mode> <started> <outcome> [extra]
+#
+# Columns match the ones now_playing_lyrics.py writes, so a single
+# `now_playing_lyrics.py --report` covers every widget.
+# ---------------------------------------------------------------------------
+
+btt_now() {
+    if [[ -n "${EPOCHREALTIME:-}" ]]; then
+        printf '%s' "$EPOCHREALTIME"
+    else
+        printf '%s' "$(/bin/date +%s)"
+    fi
+}
+
+btt_trace() {
+    [[ "$BTT_WIDGET_TRACE" == "0" ]] && return 0
+
+    local mode="${1-}"
+    local started="${2:-0}"
+    local outcome="${3-}"
+    local extra="${4-}"
+
+    local now
+    now="$(btt_now)"
+
+    # One record is one line: a widget value can be multi-line (the quota
+    # widgets stack two rows), and pasting one into a column unsanitised
+    # would silently corrupt every later reader.
+    outcome="${outcome//[$'\t\n\r']/ }"
+    extra="${extra//[$'\t\n\r']/ }"
+
+    local file="$BTT_WIDGET_CACHE_DIR/trace.tsv"
+    mkdir -p "$BTT_WIDGET_CACHE_DIR" 2>/dev/null || return 0
+
+    printf '%s\t%s\t%s\t%.0f\t%s\t%s\n' \
+        "$now" "${BTT_WIDGET_NAME:-unnamed}" "$mode" \
+        "$(( (now - started) * 1000 ))" "$outcome" "$extra" \
+        >> "$file" 2>/dev/null || return 0
+
+    # These widgets tick every 30-60s, so checking the size each time costs
+    # nothing worth avoiding. One generation is kept, as for the lyrics trace.
+    local size
+    size="$(/usr/bin/stat -f%z "$file" 2>/dev/null || printf '0')"
+    if (( size > BTT_WIDGET_TRACE_MAX_BYTES )); then
+        mv -f "$file" "$file.1" 2>/dev/null || true
+    fi
+
+    return 0
 }
 
 

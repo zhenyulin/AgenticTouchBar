@@ -26,11 +26,19 @@ import sys
 import time
 import unicodedata
 from pathlib import Path
-from typing import Any
+from typing import Any, NamedTuple
 
 # urllib and concurrent.futures cost about 50 ms to import — a quarter of a
 # widget tick, and BetterTouchTool is blocked for every millisecond of it.
 # Only the background fetch needs them, so it imports them itself.
+
+# A widget run is timed from here rather than from widget_main, because what
+# matters is how long BetterTouchTool was blocked, not how long the render
+# took. Interpreter startup and the imports above cost a further ~65 ms that
+# nothing inside the script can measure; treat traced widget times as that
+# much short of the true figure. The constant does not matter for spotting a
+# freeze, which shows up as a gap between runs or as one run taking seconds.
+_LOADED_AT = time.monotonic()
 
 try:
     from opencc import OpenCC  # type: ignore
@@ -92,6 +100,18 @@ WIDGET_LOCK_PATH = CACHE_DIR / "widget.lock"
 SAMPLER_LOCK_PATH = CACHE_DIR / "sampler.lock"
 STATE_PATH = CACHE_DIR / "state.json"
 LAST_TEXT_PATH = CACHE_DIR / "last.txt"
+TRACE_PATH = CACHE_DIR / "trace.tsv"
+WATCH_PATH = CACHE_DIR / "watch.tsv"
+# Where the shell widgets trace, via lib/btt-widget.sh. --report reads both,
+# because "did every widget stop at once, or just this one?" is the question
+# that separates a BetterTouchTool problem from a script problem.
+SHELL_TRACE_PATH = Path(
+    os.environ.get("BTT_WIDGET_CACHE_DIR", str(Path.home() / "Library/Caches/btt-widgets"))
+) / "trace.tsv"
+# One line per run at a one second interval is roughly 5 MB a day, so the cap
+# holds several hours -- long enough to still cover a freeze noticed later.
+TRACE_MAX_BYTES = int(os.environ.get("BTT_LYRICS_TRACE_MAX_BYTES", "4000000"))
+TRACE_ENABLED = os.environ.get("BTT_LYRICS_TRACE", "1") not in {"0", "false", "False"}
 LRCLIB_API_BASE = "https://lrclib.net/api"
 LRCAPI_API_BASE = "https://api.lrc.cx/api/v1/lyrics"
 ENABLE_LRCAPI = os.environ.get("BTT_LYRICS_LRCAPI", "1") not in {"0", "false", "False"}
@@ -115,6 +135,12 @@ STATE_MAX_AGE_SECONDS = float(os.environ.get("BTT_LYRICS_STATE_MAX_AGE", "8.0"))
 # An hourglass is only honest for as long as a fetch plausibly takes. After
 # that the track title is the more useful thing to look at.
 PENDING_HOURGLASS_SECONDS = float(os.environ.get("BTT_LYRICS_PENDING_WAIT", "1.5"))
+# How long a swipe's next/previous-track command is followed while Apple Music
+# settles on the new track, and how often it is checked meanwhile.
+TRACK_FOLLOW_SECONDS = float(os.environ.get("BTT_LYRICS_TRACK_FOLLOW", "3.0"))
+TRACK_FOLLOW_INTERVAL = float(os.environ.get("BTT_LYRICS_TRACK_FOLLOW_STEP", "0.15"))
+# The Lyrics widget's BTT UUID, so a track change can repaint it at once.
+LYRICS_WIDGET_UUID = os.environ.get("BTT_LYRICS_WIDGET_UUID", "")
 RETRY_NETWORK_ERROR_SECONDS = 90
 LRCLIB_RETRY_ATTEMPTS = int(os.environ.get("BTT_LYRICS_LRCLIB_RETRIES", "2"))
 LRCLIB_RETRY_BACKOFF_SECONDS = 0.5
@@ -256,6 +282,49 @@ def emit_last_output() -> None:
         pass
 
 
+def trace(mode: str, started: float, outcome: str, **fields: Any) -> None:
+    """Append one line describing a run, for --report to reconstruct later.
+
+    A frozen Touch Bar looks the same whatever caused it, and the evidence is
+    gone by the time anyone looks. So every run records that it happened, how
+    long it took and which path it took. The gaps between lines are the most
+    valuable part: they are the runs BetterTouchTool did not make.
+
+    This must stay cheap. It is on the widget path, which runs every second
+    and exists precisely so that nothing blocks there: one buffered append,
+    no stat, no flush of anything else.
+    """
+    if not TRACE_ENABLED:
+        return
+
+    elapsed_ms = (time.monotonic() - started) * 1000.0
+    extra = " ".join(f"{key}={value}" for key, value in fields.items())
+    # Same columns as lib/btt-widget.sh writes, so one --report covers every
+    # widget: a freeze is a property of BetterTouchTool, not of one script,
+    # and it is only diagnosable with all of them side by side.
+    line = (
+        f"{time.time():.3f}\tlyrics\t{mode}\t{elapsed_ms:.0f}\t{outcome}\t{extra}\n"
+    )
+
+    oversized = False
+    try:
+        CACHE_DIR.mkdir(parents=True, exist_ok=True)
+        with TRACE_PATH.open("a", encoding="utf-8") as handle:
+            handle.write(line)
+            # tell() after the write gives the size without a second syscall.
+            oversized = handle.tell() > TRACE_MAX_BYTES
+    except OSError:
+        return
+
+    if oversized:
+        # One generation kept, so the trace costs at most twice the cap and a
+        # freeze is still inspectable just after a rotation.
+        try:
+            os.replace(TRACE_PATH, TRACE_PATH.with_name(TRACE_PATH.name + ".1"))
+        except OSError:
+            pass
+
+
 def log_error(message: str) -> None:
     try:
         CACHE_DIR.mkdir(parents=True, exist_ok=True)
@@ -390,7 +459,10 @@ def current_track() -> dict[str, Any] | None:
     finds nothing fresh reprints the last frame and waits for the next
     sample. Recovery costs nothing: a sampler is asked for on every tick.
     """
+    global _SAMPLE_AGE
+
     track, age = read_state()
+    _SAMPLE_AGE = age
 
     if age >= STATE_REFRESH_SECONDS:
         try:
@@ -401,6 +473,17 @@ def current_track() -> dict[str, Any] | None:
     if track is not None and age <= STATE_MAX_AGE_SECONDS:
         return project_playback(track, age)
     return None
+
+
+# How stale the sample this tick rendered from was. Kept for the trace, so
+# that recording it costs nothing rather than a second read of the state.
+_SAMPLE_AGE: float = float("inf")
+
+
+def _last_sample_age_ms() -> str:
+    if _SAMPLE_AGE == float("inf"):
+        return "none"
+    return f"{_SAMPLE_AGE * 1000:.0f}"
 
 
 def is_placeholder_track(track: dict[str, Any]) -> bool:
@@ -1186,6 +1269,7 @@ def background_fetch(key: str, track: dict[str, Any]) -> None:
     global _FETCH_DEADLINE
 
     lock = lock_path(key)
+    started = time.monotonic()
     # Keep a small margin so retries and pending queries stop before SIGALRM.
     _FETCH_DEADLINE = time.monotonic() + max(FETCH_TIMEOUT_SECONDS - 3.0, 1.0)
     try:
@@ -1214,6 +1298,12 @@ def background_fetch(key: str, track: dict[str, Any]) -> None:
                     "record": record,
                 }
             atomic_write_json(cache_path(key), payload)
+            trace(
+                "fetch",
+                started,
+                str(payload["status"]),
+                source=str((record or {}).get("source", "-")),
+            )
         except Exception as exc:
             now = time.time()
             log_error(
@@ -1227,6 +1317,9 @@ def background_fetch(key: str, track: dict[str, Any]) -> None:
                     "fetched_at": now,
                     "retry_after": now + RETRY_NETWORK_ERROR_SECONDS,
                 },
+            )
+            trace(
+                "fetch", started, "network_error", reason=str(exc).split(":")[0][:40]
             )
     finally:
         try:
@@ -1554,63 +1647,77 @@ def render_widget(
     )
 
 
-def widget_main() -> int:
-    if not acquire_widget_lock():
+def render_tick() -> str:
+    """Render one widget frame. Returns the path taken, for the trace."""
+    track = current_track()
+
+    if track is None:
+        # Nothing fresh to render: a sampler is already on its way, so
+        # hold the last frame rather than blanking the widget for a tick.
         emit_last_output()
+        return "no_sample"
+
+    state = track.get("state")
+    if state == "denied":
+        emit("⚠ Allow BTT → Music")
+        return "denied"
+    if state in {"not_running", "stopped"} or not track.get("title"):
+        emit("♪")
+        return "idle"
+
+    if is_placeholder_track(track):
+        # Apple Music has not settled on the real track yet, and its
+        # placeholder is not something any lyrics provider knows.
+        emit(f"♪ {track.get('title', '')}")
+        return "placeholder"
+
+    key = track_cache_key(track)
+    cached = read_cache(key)
+    now = time.time()
+
+    if cached is None:
+        try:
+            start_background_fetch(key, track)
+        except Exception as exc:
+            log_error(f"Could not start background fetch: {exc}")
+        emit(render_widget(track, None, fetch_waiting_seconds(key)))
+        return "pending"
+
+    retry_after = float(cached.get("retry_after", 0) or 0)
+    if retry_after and now >= retry_after:
+        try:
+            cache_path(key).unlink()
+        except OSError:
+            pass
+        try:
+            start_background_fetch(key, track)
+        except Exception as exc:
+            log_error(f"Could not retry background fetch: {exc}")
+        emit(render_widget(track, None, fetch_waiting_seconds(key)))
+        return "retrying"
+
+    emit(render_widget(track, cached))
+    return cached.get("status") or "ok"
+
+
+def widget_main() -> int:
+    started = _LOADED_AT
+
+    if not acquire_widget_lock():
+        # Two runs overlapping means ticks are taking longer than the widget's
+        # interval. That is the shape of a freeze building, so it is worth a
+        # line of its own rather than being lost inside the normal path.
+        emit_last_output()
+        trace("widget", started, "locked")
         return 0
 
+    outcome = "crashed"
     try:
-        track = current_track()
-
-        if track is None:
-            # Nothing fresh to render: a sampler is already on its way, so
-            # hold the last frame rather than blanking the widget for a tick.
-            emit_last_output()
-            return 0
-
-        state = track.get("state")
-        if state == "denied":
-            emit("⚠ Allow BTT → Music")
-            return 0
-        if state in {"not_running", "stopped"} or not track.get("title"):
-            emit("♪")
-            return 0
-
-        if is_placeholder_track(track):
-            # Apple Music has not settled on the real track yet, and its
-            # placeholder is not something any lyrics provider knows.
-            emit(f"♪ {track.get('title', '')}")
-            return 0
-
-        key = track_cache_key(track)
-        cached = read_cache(key)
-        now = time.time()
-
-        if cached is None:
-            try:
-                start_background_fetch(key, track)
-            except Exception as exc:
-                log_error(f"Could not start background fetch: {exc}")
-            emit(render_widget(track, None, fetch_waiting_seconds(key)))
-            return 0
-
-        retry_after = float(cached.get("retry_after", 0) or 0)
-        if retry_after and now >= retry_after:
-            try:
-                cache_path(key).unlink()
-            except OSError:
-                pass
-            try:
-                start_background_fetch(key, track)
-            except Exception as exc:
-                log_error(f"Could not retry background fetch: {exc}")
-            emit(render_widget(track, None, fetch_waiting_seconds(key)))
-            return 0
-
-        emit(render_widget(track, cached))
+        outcome = render_tick()
         return 0
     finally:
         release_widget_lock()
+        trace("widget", started, outcome, sample_age_ms=_last_sample_age_ms())
 
 
 def fetch_mode(arguments: list[str]) -> int:
@@ -1641,25 +1748,376 @@ def fetch_mode(arguments: list[str]) -> int:
         return 1
 
 
+def request_widget_refresh(uuid: str) -> None:
+    """Ask BTT to repaint the widget now, instead of at its next tick."""
+    if not uuid:
+        return
+    try:
+        subprocess.run(
+            [
+                "/usr/bin/osascript",
+                "-e",
+                f'tell application "BetterTouchTool" to refresh_widget "{uuid}"',
+            ],
+            capture_output=True,
+            timeout=5,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        log_error(f"Could not refresh widget {uuid}: {exc}")
+
+
+def track_changed_mode(arguments: list[str]) -> int:
+    """Follow a next/previous-track command until Music settles on the track.
+
+    A swipe sends a media key, which is asynchronous: for a moment afterwards
+    Music still reports the old track, then often a placeholder, then the new
+    one. So this follows Music until the title actually changes rather than
+    sampling once and catching the wrong track.
+
+    It is worth being precise about what this buys, because it is less than it
+    looks. Measured, the ordinary half-second sampler already notices a swipe
+    within 0.25-0.7s, so this does not make the new track known much sooner.
+    What it adds is the repaint -- the widget would otherwise sit on the old
+    frame until BTT's next tick, up to a second later -- and starting the
+    lyrics fetch that much earlier. A song whose lyrics are not cached still
+    shows its title for a second or two while the fetch runs; no amount of
+    prompting here removes that.
+
+    Always run detached -- see actions/track-changed.sh. BetterTouchTool runs
+    shell actions on the same single XPC service as the widgets, so blocking
+    here for a second would freeze the whole Touch Bar.
+    """
+    started = time.monotonic()
+    uuid = arguments[0] if arguments else LYRICS_WIDGET_UUID
+    previous_track, _ = read_state()
+    previous_title = (previous_track or {}).get("title", "")
+
+    deadline = time.monotonic() + TRACK_FOLLOW_SECONDS
+    settled: dict[str, Any] | None = None
+
+    while time.monotonic() < deadline:
+        try:
+            track = read_apple_music()
+        except Exception as exc:
+            log_error(f"Track-change sample failed: {exc}")
+            time.sleep(TRACK_FOLLOW_INTERVAL)
+            continue
+
+        write_state(track)
+        title = track.get("title", "")
+        if title and title != previous_title and not is_placeholder_track(track):
+            settled = track
+            break
+
+        # Repaint as we go: the position and the paused/playing marker are
+        # already worth updating even before the new title lands.
+        time.sleep(TRACK_FOLLOW_INTERVAL)
+
+    if settled is not None:
+        key = track_cache_key(settled)
+        if read_cache(key) is None:
+            try:
+                start_background_fetch(key, settled)
+            except Exception as exc:
+                log_error(f"Could not pre-warm lyrics for the new track: {exc}")
+
+    request_widget_refresh(uuid)
+    trace(
+        "track_change",
+        started,
+        "settled" if settled is not None else "timeout",
+        title=(settled or {}).get("title", "-")[:30],
+    )
+    return 0
+
+
 def sample_mode() -> int:
     """Refresh the Apple Music sample the widget renders from."""
+    started = time.monotonic()
     try:
-        write_state(read_apple_music())
+        track = read_apple_music()
+        write_state(track)
+        trace("sample", started, track.get("state", "?"))
         return 0
     except PermissionError:
         # The widget no longer talks to Apple Music at all, so this is the
         # only place the automation prompt can be discovered. Record it as a
         # state rather than logging it, or the widget has no way to say so.
         write_state({"state": "denied"})
+        trace("sample", started, "denied")
         return 1
     except Exception as exc:
         # Leave the previous sample in place. Apple Music briefly refuses to
         # answer while a track changes, and rendering a slightly old sample
         # beats blanking the widget for the length of the hiccup.
         log_error(f"Apple Music sample failed: {exc}")
+        # A slow or failing sampler is what makes the widget hold a stale
+        # frame, so the reason belongs next to the widget's own timings.
+        trace("sample", started, "failed", reason=str(exc).split(":")[0][:40])
         return 1
     finally:
         clear_lock(SAMPLER_LOCK_PATH)
+
+
+def watch_mode(arguments: list[str]) -> int:
+    """Record whether BetterTouchTool itself is alive, alongside the trace.
+
+    The trace can show that no widget run happened, but not why. Three causes
+    look identical from the Touch Bar and are told apart only by pairing a gap
+    in the trace with what BTT was doing at that moment:
+
+      BTT answers, runner idle  -> BTT stopped scheduling the widget
+      BTT does not answer       -> BTT itself is wedged
+      no gap at all             -> the widget ran; only the paint is stuck
+
+    Run this in a terminal and leave it; --report folds it in. It is opt-in
+    because it costs an AppleEvent every couple of seconds, which is far too
+    expensive to put on the widget's own path.
+    """
+    try:
+        interval = float(arguments[0]) if arguments else 2.0
+    except ValueError:
+        print("usage: --watch [seconds]")
+        return 2
+
+    probe = ['/usr/bin/osascript', '-e',
+             'tell application "BetterTouchTool" to get_string_variable "__probe__"']
+    print(f"Watching BTT every {interval:g}s → {WATCH_PATH}\nCtrl-C to stop.")
+
+    try:
+        while True:
+            started = time.monotonic()
+            try:
+                completed = subprocess.run(
+                    probe, capture_output=True, timeout=8, check=False
+                )
+                answer = "ok" if completed.returncode == 0 else "err"
+            except subprocess.TimeoutExpired:
+                answer = "TIMEOUT"
+            except OSError:
+                answer = "fail"
+            took = (time.monotonic() - started) * 1000.0
+
+            try:
+                with WATCH_PATH.open("a", encoding="utf-8") as handle:
+                    handle.write(f"{time.time():.3f}\t{answer}\t{took:.0f}\n")
+            except OSError:
+                pass
+
+            if answer != "ok" or took > 2000:
+                print(f"  {time.strftime('%H:%M:%S')}  BTT {answer} after {took:.0f} ms")
+            time.sleep(interval)
+    except KeyboardInterrupt:
+        print("\nstopped")
+        return 0
+
+
+def read_watch(minutes: float) -> list[tuple[float, str, float]]:
+    cutoff = time.time() - minutes * 60.0
+    rows: list[tuple[float, str, float]] = []
+    try:
+        content = WATCH_PATH.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return rows
+    for line in content.splitlines():
+        parts = line.split("\t")
+        if len(parts) < 3:
+            continue
+        try:
+            stamp, took = float(parts[0]), float(parts[2])
+        except ValueError:
+            continue
+        if stamp >= cutoff:
+            rows.append((stamp, parts[1], took))
+    return rows
+
+
+def freeze_verdict(
+    watched: list[tuple[float, str, float]], start: float, end: float
+) -> str:
+    """Name the cause of one gap, from what BTT was doing during it."""
+    during = [row for row in watched if start <= row[0] <= end]
+    if not during:
+        return "(not watched)"
+    unanswered = [row for row in during if row[1] != "ok"]
+    slow = [row for row in during if row[2] > 2000]
+    if unanswered:
+        return f"→ BTT ITSELF WEDGED ({len(unanswered)}/{len(during)} probes unanswered)"
+    if slow:
+        return f"→ BTT struggling ({len(slow)} probes over 2s)"
+    return "→ BTT healthy, it simply stopped scheduling the widget"
+
+
+class Row(NamedTuple):
+    at: float
+    widget: str
+    mode: str
+    elapsed_ms: float
+    outcome: str
+    extra: str
+
+
+def read_trace(minutes: float) -> list[Row]:
+    """Trace rows from the last `minutes`, oldest first, every widget."""
+    cutoff = time.time() - minutes * 60.0
+    rows: list[Row] = []
+
+    sources = [
+        TRACE_PATH.with_name(TRACE_PATH.name + ".1"),
+        TRACE_PATH,
+        SHELL_TRACE_PATH.with_name(SHELL_TRACE_PATH.name + ".1"),
+        SHELL_TRACE_PATH,
+    ]
+    for path in sources:
+        try:
+            content = path.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        for line in content.splitlines():
+            parts = line.split("\t")
+            if len(parts) < 5:
+                continue
+            try:
+                stamp, elapsed = float(parts[0]), float(parts[3])
+            except ValueError:
+                continue
+            if stamp >= cutoff:
+                rows.append(
+                    Row(
+                        stamp,
+                        parts[1],
+                        parts[2],
+                        elapsed,
+                        parts[4],
+                        parts[5] if len(parts) > 5 else "",
+                    )
+                )
+
+    rows.sort(key=lambda row: row.at)
+    return rows
+
+
+def stamp_of(value: float) -> str:
+    return time.strftime("%H:%M:%S", time.localtime(value))
+
+
+def tally(rows: list[Row]) -> str:
+    counts: dict[str, int] = {}
+    for row in rows:
+        counts[row.outcome] = counts.get(row.outcome, 0) + 1
+    return "  ".join(
+        f"{name} {count}"
+        for name, count in sorted(counts.items(), key=lambda pair: -pair[1])
+    )
+
+
+def report_widget(name: str, rows: list[Row], watched: list[tuple[float, str, float]]) -> None:
+    """One widget's ticks: how long they took, and where they stopped."""
+    ticks = [row for row in rows if row.mode == "widget"]
+    if not ticks:
+        return
+
+    elapsed = sorted(row.elapsed_ms for row in ticks)
+    interval = median_interval(ticks)
+    print(f"\n=== {name} ===")
+    print(
+        f"  {len(ticks)} runs, median {elapsed[len(elapsed) // 2]:.0f} ms, "
+        f"slowest {elapsed[-1]:.0f} ms, about every {interval:.1f}s"
+    )
+    print(f"  outcomes: {tally(ticks)}")
+
+    overlapped = sum(1 for row in ticks if row.outcome == "locked")
+    if overlapped:
+        print(
+            f"  !! {overlapped} runs overlapped the previous one — this widget's "
+            "ticks are outlasting its interval, which is how a freeze starts"
+        )
+
+    # A gap only means a freeze relative to how often this widget normally
+    # runs. The threshold comes off the tail of its own intervals rather than
+    # the median, so that a burst of manual runs -- which drags the median far
+    # below the configured interval -- cannot make ordinary ticks look like
+    # freezes.
+    threshold = max(percentile_interval(ticks, 0.9) * 2.0, 3.0)
+    gaps = [
+        (previous.at, current.at - previous.at)
+        for previous, current in zip(ticks, ticks[1:])
+        if current.at - previous.at > threshold
+    ]
+    print(f"  gaps over {threshold:.0f}s: {len(gaps)}")
+    for at, length in gaps[:10]:
+        print(
+            f"    {stamp_of(at)}  not run for {length:5.1f}s   "
+            f"{freeze_verdict(watched, at, at + length)}"
+        )
+
+    slowest = sorted(ticks, key=lambda row: row.elapsed_ms, reverse=True)[:3]
+    for row in slowest:
+        if row.elapsed_ms > 200:
+            print(f"    slow: {stamp_of(row.at)}  {row.elapsed_ms:.0f} ms  {row.outcome} {row.extra}")
+
+
+def percentile_interval(ticks: list[Row], fraction: float) -> float:
+    if len(ticks) < 2:
+        return 1.0
+    deltas = sorted(b.at - a.at for a, b in zip(ticks, ticks[1:]))
+    index = min(int(len(deltas) * fraction), len(deltas) - 1)
+    return max(deltas[index], 0.1)
+
+
+def median_interval(ticks: list[Row]) -> float:
+    return percentile_interval(ticks, 0.5)
+
+
+def report_mode(arguments: list[str]) -> int:
+    """Summarise every widget's trace: what froze, for how long, and why.
+
+    Gaps matter most. A gap is time BetterTouchTool did not run a widget, and
+    the shape across widgets is the diagnosis: all of them stopping together
+    is BTT, one of them stopping alone is that widget.
+    """
+    try:
+        minutes = float(arguments[0]) if arguments else 60.0
+    except ValueError:
+        print("usage: --report [minutes]")
+        return 2
+
+    rows = read_trace(minutes)
+    if not rows:
+        print(f"No trace entries in the last {minutes:g} min.")
+        print(f"  lyrics: {TRACE_PATH}\n  others: {SHELL_TRACE_PATH}")
+        return 1
+
+    span = (rows[-1].at - rows[0].at) / 60.0
+    print(
+        f"Trace {stamp_of(rows[0].at)} → {stamp_of(rows[-1].at)} "
+        f"({span:.1f} min, {len(rows)} entries)"
+    )
+
+    watched = read_watch(minutes)
+    if not watched:
+        print("  (no --watch data: gaps cannot be attributed to BTT vs the widget)")
+
+    widgets = sorted({row.widget for row in rows if row.mode == "widget"})
+    for name in widgets:
+        report_widget(name, [row for row in rows if row.widget == name], watched)
+
+    helpers = [row for row in rows if row.mode in {"sample", "fetch", "refresh"}]
+    if helpers:
+        print("\n=== background work ===")
+        for mode in sorted({row.mode for row in helpers}):
+            entries = [row for row in helpers if row.mode == mode]
+            slowest = max(entries, key=lambda row: row.elapsed_ms)
+            print(
+                f"  {mode}: {len(entries)} runs, slowest {slowest.elapsed_ms:.0f} ms "
+                f"at {stamp_of(slowest.at)}   [{tally(entries)}]"
+            )
+            for row in entries:
+                if row.outcome in {"failed", "network_error", "denied", "error"}:
+                    print(f"    {stamp_of(row.at)}  {row.widget} {row.outcome}  {row.extra}")
+
+    return 0
 
 
 def diagnose_current() -> int:
@@ -1784,6 +2242,12 @@ def main() -> int:
         return fetch_mode(sys.argv[2:])
     if len(sys.argv) >= 2 and sys.argv[1] == "--sample":
         return sample_mode()
+    if len(sys.argv) >= 2 and sys.argv[1] == "--report":
+        return report_mode(sys.argv[2:])
+    if len(sys.argv) >= 2 and sys.argv[1] == "--watch":
+        return watch_mode(sys.argv[2:])
+    if len(sys.argv) >= 2 and sys.argv[1] == "--track-changed":
+        return track_changed_mode(sys.argv[2:])
     if len(sys.argv) >= 2 and sys.argv[1] == "--diagnose":
         return diagnose_current()
     if len(sys.argv) >= 2 and sys.argv[1] == "--clear-current":
