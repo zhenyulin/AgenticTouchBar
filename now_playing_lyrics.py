@@ -4,8 +4,11 @@
 Apple Music supplies track metadata and playback position through AppleScript.
 A token-free Chinese lyrics aggregator (LrcAPI) and LRCLIB supply synchronized LRC lyrics, which are cached locally.
 
-The normal widget path never blocks on the network: a cache miss starts a
-background fetch and immediately returns a status string to BetterTouchTool.
+The widget path never blocks. BetterTouchTool runs widget scripts one at a
+time and its refresh_widget command waits for them, so a slow run freezes
+every other widget's tap-refresh too. Neither of the two slow things happens
+inline: a cache miss starts a background lyrics fetch, and Apple Music is
+sampled by a detached helper whose last sample the widget reads from disk.
 """
 
 from __future__ import annotations
@@ -22,11 +25,12 @@ import subprocess
 import sys
 import time
 import unicodedata
-import urllib.error
-import urllib.parse
-import urllib.request
 from pathlib import Path
 from typing import Any
+
+# urllib and concurrent.futures cost about 50 ms to import — a quarter of a
+# widget tick, and BetterTouchTool is blocked for every millisecond of it.
+# Only the background fetch needs them, so it imports them itself.
 
 try:
     from opencc import OpenCC  # type: ignore
@@ -50,13 +54,28 @@ SCROLL_LONG_LINES = os.environ.get("BTT_LYRICS_SCROLL", "1") not in {
 }
 SCROLL_DELAY_SECONDS = float(os.environ.get("BTT_LYRICS_SCROLL_DELAY", "0.8"))
 SCROLL_CELLS_PER_SECOND = float(os.environ.get("BTT_LYRICS_SCROLL_RATE", "5.0"))
-NETWORK_TIMEOUT_SECONDS = float(os.environ.get("BTT_LYRICS_NETWORK_TIMEOUT", "5.0"))
+# An over-wide lyric line is wrapped onto extra rows at these punctuation
+# marks before falling back to scrolling. The mark stays on the row it ends.
+# Spaces are a second choice, used only when punctuation alone cannot make the
+# rows fit, because many LRC files separate phrases with spaces and no commas.
+LINE_BREAK_PUNCTUATION = os.environ.get("BTT_LYRICS_BREAK_CHARS", "，,、")
+BREAK_ON_SPACE = os.environ.get("BTT_LYRICS_BREAK_ON_SPACE", "1") not in {
+    "0",
+    "false",
+    "False",
+}
+MAX_LYRIC_ROWS = int(os.environ.get("BTT_LYRICS_MAX_ROWS", "2"))
+CONTINUATION_INDENT = os.environ.get("BTT_LYRICS_INDENT", "  ")
+NETWORK_TIMEOUT_SECONDS = float(os.environ.get("BTT_LYRICS_NETWORK_TIMEOUT", "4.0"))
 APPLE_MUSIC_TIMEOUT_SECONDS = float(
     os.environ.get("BTT_LYRICS_APPLE_MUSIC_TIMEOUT", "1.5")
 )
 
 CACHE_DIR = Path.home() / "Library" / "Caches" / "BTTNowPlayingLyrics"
 WIDGET_LOCK_PATH = CACHE_DIR / "widget.lock"
+SAMPLER_LOCK_PATH = CACHE_DIR / "sampler.lock"
+STATE_PATH = CACHE_DIR / "state.json"
+LAST_TEXT_PATH = CACHE_DIR / "last.txt"
 LRCLIB_API_BASE = "https://lrclib.net/api"
 LRCAPI_API_BASE = "https://api.lrc.cx/api/v1/lyrics"
 ENABLE_LRCAPI = os.environ.get("BTT_LYRICS_LRCAPI", "1") not in {"0", "false", "False"}
@@ -64,11 +83,27 @@ LRCAPI_TIMEOUT_SECONDS = float(os.environ.get("BTT_LYRICS_LRCAPI_TIMEOUT", "2.5"
 LRCAPI_MAX_ADVANCE_QUERIES = int(os.environ.get("BTT_LYRICS_LRCAPI_MAX_ADVANCE", "4"))
 LRCAPI_MAX_SINGLE_QUERIES = int(os.environ.get("BTT_LYRICS_LRCAPI_MAX_SINGLE", "2"))
 LRCLIB_MAX_SEARCH_QUERIES = int(os.environ.get("BTT_LYRICS_LRCLIB_MAX_SEARCH", "7"))
-FETCH_TIMEOUT_SECONDS = float(os.environ.get("BTT_LYRICS_FETCH_TIMEOUT", "45"))
+FETCH_TIMEOUT_SECONDS = float(os.environ.get("BTT_LYRICS_FETCH_TIMEOUT", "20"))
+# Providers and their individual queries run concurrently: LrcAPI's public
+# endpoint regularly needs several seconds per query, and run one after the
+# other those seconds are exactly how long the widget shows an hourglass.
+FETCH_WORKERS = max(int(os.environ.get("BTT_LYRICS_FETCH_WORKERS", "6")), 1)
 USER_AGENT = "BTT-NowPlaying-Lyrics/6.0 (personal macOS Touch Bar widget)"
 LOCK_MAX_AGE_SECONDS = max(FETCH_TIMEOUT_SECONDS + 15.0, 30.0)
 WIDGET_LOCK_MAX_AGE_SECONDS = max(APPLE_MUSIC_TIMEOUT_SECONDS * 4.0, 3.0)
-RETRY_NETWORK_ERROR_SECONDS = 300
+SAMPLER_LOCK_MAX_AGE_SECONDS = max(APPLE_MUSIC_TIMEOUT_SECONDS * 2.0, 3.0)
+# How old the newest Apple Music sample may get before the widget asks for a
+# fresh one, and before it stops trusting the sample it has.
+STATE_REFRESH_SECONDS = float(os.environ.get("BTT_LYRICS_STATE_REFRESH", "0.5"))
+STATE_MAX_AGE_SECONDS = float(os.environ.get("BTT_LYRICS_STATE_MAX_AGE", "8.0"))
+# An hourglass is only honest for as long as a fetch plausibly takes. After
+# that the track title is the more useful thing to look at.
+PENDING_HOURGLASS_SECONDS = float(os.environ.get("BTT_LYRICS_PENDING_WAIT", "1.5"))
+RETRY_NETWORK_ERROR_SECONDS = 90
+LRCLIB_RETRY_ATTEMPTS = int(os.environ.get("BTT_LYRICS_LRCLIB_RETRIES", "2"))
+LRCLIB_RETRY_BACKOFF_SECONDS = 0.5
+# Upstream hiccups worth a second attempt rather than a cached failure.
+TRANSIENT_HTTP_STATUS = {408, 425, 429, 500, 502, 503, 504}
 RETRY_NOT_FOUND_SECONDS = 6 * 60 * 60
 MATCHER_VERSION = 6
 
@@ -97,6 +132,16 @@ LOCAL_LYRICS_DIR = Path(
         str(Path(__file__).resolve().with_name("lyrics")),
     )
 )
+
+# While a stream starts, Apple Music reports a placeholder track with no
+# artist. Looking those up wastes a fetch and caches a miss under a key the
+# real track will never use again.
+PLACEHOLDER_TITLES = {
+    "loading",
+    "connecting",
+    "buffering",
+    "",
+}
 
 UNIT_SEPARATOR = "\x1f"
 TIMESTAMP_RE = re.compile(r"\[(\d{1,3}):(\d{2}(?:\.\d{1,3})?)\]")
@@ -147,9 +192,41 @@ end tell
 
 
 def emit(text: str) -> None:
-    """Print exactly one compact line for BetterTouchTool."""
-    text = " ".join(str(text).replace("\r", " ").replace("\n", " ").split())
-    print(text or "♪")
+    """Print the widget text for BetterTouchTool, one row per line.
+
+    Each row is whitespace-compacted independently so a wrapped lyric keeps its
+    leading indent; every other message is still a single row.
+    """
+    rows: list[str] = []
+    for raw_row in str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n"):
+        indent = raw_row[: len(raw_row) - len(raw_row.lstrip(" "))]
+        body = " ".join(raw_row.split())
+        if body:
+            rows.append(indent + body)
+    output = "\n".join(rows) or "♪"
+    print(output)
+    remember_output(output)
+
+
+def remember_output(text: str) -> None:
+    """Keep the last printed value, so a skipped run can reprint it.
+
+    A run that cannot take the widget lock has nothing of its own to show;
+    printing this beats blanking the widget for a tick.
+    """
+    try:
+        CACHE_DIR.mkdir(parents=True, exist_ok=True)
+        LAST_TEXT_PATH.write_text(text, encoding="utf-8")
+    except OSError:
+        pass
+
+
+def emit_last_output() -> None:
+    try:
+        previous = LAST_TEXT_PATH.read_text(encoding="utf-8").strip()
+    except (OSError, ValueError):
+        previous = ""
+    print(previous or "♪")
 
 
 def log_error(message: str) -> None:
@@ -225,6 +302,86 @@ def read_apple_music() -> dict[str, Any]:
         "duration": max(duration_value, 0.0),
         "position": max(position_value, 0.0),
     }
+
+
+def write_state(track: dict[str, Any]) -> None:
+    atomic_write_json(STATE_PATH, {"sampled_at": time.time(), "track": track})
+
+
+def read_state() -> tuple[dict[str, Any] | None, float]:
+    """The newest Apple Music sample and how many seconds old it is."""
+    try:
+        with STATE_PATH.open("r", encoding="utf-8") as handle:
+            payload = json.load(handle)
+    except FileNotFoundError:
+        return None, float("inf")
+    except (OSError, json.JSONDecodeError):
+        return None, float("inf")
+
+    track = payload.get("track")
+    if not isinstance(track, dict):
+        return None, float("inf")
+    try:
+        age = time.time() - float(payload.get("sampled_at", 0.0))
+    except (TypeError, ValueError):
+        return None, float("inf")
+    return track, max(age, 0.0)
+
+
+def project_playback(track: dict[str, Any], age: float) -> dict[str, Any]:
+    """Carry a sample's playback position forward by the sample's own age.
+
+    A sample is always slightly stale, so this is not just a workaround for
+    reading Apple Music off the widget's path: advancing the position by the
+    wall clock puts the lyric closer to the music than the raw sample does.
+    """
+    if track.get("state") != "playing" or age <= 0:
+        return track
+
+    position = float(track.get("position", 0.0) or 0.0) + age
+    duration = float(track.get("duration", 0.0) or 0.0)
+    if duration:
+        position = min(position, duration)
+
+    projected = dict(track)
+    projected["position"] = position
+    return projected
+
+
+def current_track() -> dict[str, Any]:
+    """Apple Music's state, without waiting on Apple Music.
+
+    An osascript round trip costs a few hundred milliseconds and stalls for
+    seconds while a track changes, which BetterTouchTool serialises against
+    every other widget. So the widget reads the newest sample and asks a
+    detached helper for the next one, and only queries Apple Music itself
+    when there is no usable sample at all — at startup, or if sampling has
+    been failing long enough that a stale lyric would be worse.
+    """
+    track, age = read_state()
+
+    if track is not None and age <= STATE_MAX_AGE_SECONDS:
+        if age >= STATE_REFRESH_SECONDS:
+            try:
+                start_sampler()
+            except Exception as exc:
+                log_error(f"Could not start Apple Music sampler: {exc}")
+        return project_playback(track, age)
+
+    # Nothing usable to render from: this is the first run, or sampling has
+    # been failing for long enough that a stale lyric would be worse than the
+    # wait. Reading here also reseeds the sample, so the next tick is cheap
+    # again as soon as Apple Music answers at all.
+    track = read_apple_music()
+    write_state(track)
+    return track
+
+
+def is_placeholder_track(track: dict[str, Any]) -> bool:
+    title = track.get("title", "").strip()
+    if track.get("artist", "").strip():
+        return False
+    return title.casefold().rstrip(".…") in PLACEHOLDER_TITLES
 
 
 VERSION_MARKERS = (
@@ -401,7 +558,53 @@ def read_cache(key: str) -> dict[str, Any] | None:
         return None
 
 
-def lrclib_api_request(endpoint: str, params: dict[str, Any]) -> Any:
+_FETCH_DEADLINE: float | None = None
+
+
+def fetch_seconds_remaining() -> float:
+    """Seconds left in the current background fetch, or infinity outside one."""
+    if _FETCH_DEADLINE is None:
+        return float("inf")
+    return _FETCH_DEADLINE - time.monotonic()
+
+
+def map_concurrently(
+    function: Any, items: list[Any]
+) -> list[tuple[Any, Exception | None]]:
+    """Apply function to every item at once, keeping the input order.
+
+    Results come back as (value, error) pairs, so one failing query cannot
+    discard the results of the others, and ranking still sees the queries in
+    the order they were composed.
+    """
+    from concurrent.futures import ThreadPoolExecutor
+
+    if not items:
+        return []
+    if len(items) == 1:
+        try:
+            return [(function(items[0]), None)]
+        except Exception as exc:
+            return [(None, exc)]
+
+    with ThreadPoolExecutor(max_workers=min(len(items), FETCH_WORKERS)) as pool:
+        futures = [pool.submit(function, item) for item in items]
+        collected: list[tuple[Any, Exception | None]] = []
+        for future in futures:
+            try:
+                collected.append((future.result(), None))
+            except Exception as exc:
+                collected.append((None, exc))
+        return collected
+
+
+def lrclib_api_request(
+    endpoint: str, params: dict[str, Any], attempts: int = LRCLIB_RETRY_ATTEMPTS
+) -> Any:
+    import urllib.error
+    import urllib.parse
+    import urllib.request
+
     clean_params = {
         key: value for key, value in params.items() if value not in {None, ""}
     }
@@ -410,21 +613,41 @@ def lrclib_api_request(endpoint: str, params: dict[str, Any]) -> Any:
         url,
         headers={"User-Agent": USER_AGENT, "Accept": "application/json"},
     )
-    try:
-        with urllib.request.urlopen(
-            request, timeout=NETWORK_TIMEOUT_SECONDS
-        ) as response:
-            return json.load(response)
-    except urllib.error.HTTPError as exc:
-        if exc.code == 404:
-            return None
-        raise RuntimeError(f"LRCLIB returned HTTP {exc.code}") from exc
-    except urllib.error.URLError as exc:
-        raise RuntimeError(f"Could not reach LRCLIB: {exc.reason}") from exc
+
+    # A single 5xx or timed-out read is usually a momentary upstream hiccup, so
+    # retry briefly instead of caching a failure for the whole track.
+    last_error: Exception | None = None
+    for attempt in range(max(attempts, 1)):
+        if attempt:
+            backoff = LRCLIB_RETRY_BACKOFF_SECONDS * attempt
+            if fetch_seconds_remaining() < backoff + NETWORK_TIMEOUT_SECONDS:
+                break
+            time.sleep(backoff)
+        try:
+            with urllib.request.urlopen(
+                request, timeout=NETWORK_TIMEOUT_SECONDS
+            ) as response:
+                return json.load(response)
+        except urllib.error.HTTPError as exc:
+            if exc.code == 404:
+                return None
+            last_error = RuntimeError(f"LRCLIB returned HTTP {exc.code}")
+            if exc.code not in TRANSIENT_HTTP_STATUS:
+                break
+        except urllib.error.URLError as exc:
+            last_error = RuntimeError(f"Could not reach LRCLIB: {exc.reason}")
+        except (TimeoutError, OSError) as exc:
+            last_error = RuntimeError(f"Could not reach LRCLIB: {exc}")
+
+    raise last_error or RuntimeError("LRCLIB request failed")
 
 
 def lrcapi_request(params: dict[str, Any]) -> Any:
     """Query the public token-free LrcAPI advance endpoint."""
+    import urllib.error
+    import urllib.parse
+    import urllib.request
+
     clean_params = {
         key: value for key, value in params.items() if value not in {None, ""}
     }
@@ -453,6 +676,10 @@ def lrcapi_request(params: dict[str, Any]) -> Any:
 
 def lrcapi_single_request(params: dict[str, Any]) -> str:
     """Query LrcAPI's single-result endpoint, which returns raw LRC text."""
+    import urllib.error
+    import urllib.parse
+    import urllib.request
+
     clean_params = {
         key: value for key, value in params.items() if value not in {None, ""}
     }
@@ -553,11 +780,11 @@ def collect_lrcapi_candidates(track: dict[str, Any]) -> list[dict[str, Any]]:
     seen: set[str] = set()
     errors: list[str] = []
 
-    for query in attempted:
-        try:
-            payload = lrcapi_request(query)
-        except Exception as exc:
-            errors.append(str(exc))
+    for query, (payload, error) in zip(
+        attempted, map_concurrently(lrcapi_request, attempted)
+    ):
+        if error is not None:
+            errors.append(str(error))
             continue
         if not isinstance(payload, list):
             continue
@@ -580,13 +807,13 @@ def collect_lrcapi_candidates(track: dict[str, Any]) -> list[dict[str, Any]]:
         single_queries = [query for query in queries if query.get("artist")][
             : max(LRCAPI_MAX_SINGLE_QUERIES, 0)
         ]
-        for query in single_queries:
-            try:
-                lyrics = lrcapi_single_request(query)
-            except Exception as exc:
-                errors.append(str(exc))
+        for query, (lyrics, error) in zip(
+            single_queries, map_concurrently(lrcapi_single_request, single_queries)
+        ):
+            if error is not None:
+                errors.append(str(error))
                 continue
-            if not TIMESTAMP_RE.search(lyrics):
+            if not lyrics or not TIMESTAMP_RE.search(lyrics):
                 continue
             provider_id = hashlib.sha256(
                 (json.dumps(query, ensure_ascii=False, sort_keys=True) + lyrics).encode(
@@ -724,9 +951,22 @@ def collect_search_candidates(track: dict[str, Any]) -> list[dict[str, Any]]:
         for artist in artist_variants[1:5]:
             add_query({"q": f"{title} {artist}".strip()})
 
-    for query in queries[: max(LRCLIB_MAX_SEARCH_QUERIES, 0)]:
-        add_results(lrclib_api_request("search", query))
+    attempted = queries[: max(LRCLIB_MAX_SEARCH_QUERIES, 0)]
+    if fetch_seconds_remaining() < NETWORK_TIMEOUT_SECONDS:
+        attempted = []
 
+    errors: list[Exception] = []
+    for results, error in map_concurrently(
+        lambda query: lrclib_api_request("search", query), attempted
+    ):
+        # One failing query should not discard the others' results.
+        if error is not None:
+            errors.append(error)
+        else:
+            add_results(results)
+
+    if not collected and errors:
+        raise errors[0]
     return collected
 
 
@@ -813,26 +1053,16 @@ def local_lyrics_record(track: dict[str, Any]) -> dict[str, Any] | None:
     return None
 
 
-def fetch_lyrics_record(track: dict[str, Any]) -> dict[str, Any] | None:
-    # Provider order: user-maintained local LRC, token-free Chinese sources,
-    # then the open LRCLIB database.
-    local = local_lyrics_record(track)
-    if local is not None:
-        return local
+def lrclib_exact_record(track: dict[str, Any]) -> dict[str, Any] | None:
+    """Look the track up under its original catalog metadata.
 
-    try:
-        lrcapi = choose_lrcapi_candidate(track)
-    except Exception as exc:
-        log_error(f"LrcAPI lookup failed; trying LRCLIB: {exc}")
-        lrcapi = None
-    if lrcapi is not None:
-        return lrcapi
-
+    One attempt only: the search below is a better use of the next few
+    seconds than retrying the narrowest possible query.
+    """
     title_variants = metadata_variants(track.get("title", ""))[:3]
     artist_variants = metadata_variants(track.get("artist", ""))[:5]
     duration = round(float(track.get("duration", 0))) or None
 
-    # Try the original catalog metadata once; flexible searches handle aliases.
     exact = lrclib_api_request(
         "get",
         {
@@ -845,25 +1075,93 @@ def fetch_lyrics_record(track: dict[str, Any]) -> dict[str, Any] | None:
             "album_name": track.get("album", ""),
             "duration": duration,
         },
+        attempts=1,
     )
     if isinstance(exact, dict) and (
         exact.get("syncedLyrics") or exact.get("instrumental")
     ):
-        exact = dict(exact)
-        exact.setdefault("source", "lrclib")
-        exact.setdefault("providerId", exact.get("id"))
-        return exact
+        return dict(exact)
+    return None
 
-    selected = choose_candidate(track, collect_search_candidates(track))
-    if selected is not None:
-        selected = dict(selected)
-        selected.setdefault("source", "lrclib")
-        selected.setdefault("providerId", selected.get("id"))
-    return selected
+
+def as_lrclib_record(record: dict[str, Any]) -> dict[str, Any]:
+    record = dict(record)
+    record.setdefault("source", "lrclib")
+    record.setdefault("providerId", record.get("id"))
+    return record
+
+
+def lrclib_record(track: dict[str, Any]) -> dict[str, Any] | None:
+    """LRCLIB's best synchronized match for the track.
+
+    The exact lookup usually is the whole answer, so it runs on its own and
+    the seven-query search stays unsent. A failure here must not skip that
+    search: a transient upstream error on the narrowest query says nothing
+    about whether the track has lyrics.
+    """
+    exact_error: Exception | None = None
+    try:
+        exact = lrclib_exact_record(track)
+    except Exception as exc:
+        log_error(f"LRCLIB exact lookup failed; trying search: {exc}")
+        exact_error, exact = exc, None
+
+    if exact is not None:
+        return as_lrclib_record(exact)
+
+    try:
+        selected = choose_candidate(track, collect_search_candidates(track))
+    except Exception as exc:
+        # Both LRCLIB paths failed; surface the original error so the cache
+        # records a short-lived network failure rather than "not found".
+        raise exact_error or exc
+
+    if selected is None:
+        if exact_error is not None:
+            raise exact_error
+        return None
+    return as_lrclib_record(selected)
+
+
+def fetch_lyrics_record(track: dict[str, Any]) -> dict[str, Any] | None:
+    # Provider order: user-maintained local LRC, token-free Chinese sources,
+    # then the open LRCLIB database.
+    from concurrent.futures import ThreadPoolExecutor
+
+    local = local_lyrics_record(track)
+    if local is not None:
+        return local
+
+    # LrcAPI's public endpoint routinely needs several seconds per query and
+    # LRCLIB has its own bad minutes; waiting out one before starting the
+    # other is most of what keeps a new track on the hourglass. They run
+    # together, and LrcAPI still wins whenever it has an answer.
+    pool = ThreadPoolExecutor(max_workers=2)
+    try:
+        lrcapi_lookup = pool.submit(choose_lrcapi_candidate, track)
+        lrclib_lookup = pool.submit(lrclib_record, track)
+
+        try:
+            lrcapi = lrcapi_lookup.result()
+        except Exception as exc:
+            log_error(f"LrcAPI lookup failed; using LRCLIB: {exc}")
+            lrcapi = None
+        if lrcapi is not None:
+            return lrcapi
+
+        return lrclib_lookup.result()
+    finally:
+        # Never wait on the provider whose answer is no longer wanted: the
+        # cache write that ends the hourglass happens as soon as this returns.
+        pool.shutdown(wait=False)
 
 
 def background_fetch(key: str, track: dict[str, Any]) -> None:
+    global _FETCH_DEADLINE
+
     lock = lock_path(key)
+    # Keep a small margin so retries and pending queries stop before SIGALRM.
+    _FETCH_DEADLINE = time.monotonic() + max(FETCH_TIMEOUT_SECONDS - 3.0, 1.0)
     try:
         try:
             record = fetch_lyrics_record(track)
@@ -911,65 +1209,78 @@ def background_fetch(key: str, track: dict[str, Any]) -> None:
             pass
 
 
-def start_background_fetch(key: str, track: dict[str, Any]) -> bool:
+def acquire_lock(path: Path, max_age_seconds: float) -> bool:
+    """Take an exclusive lock file, dropping one left behind by a dead run."""
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
-    lock = lock_path(key)
 
     try:
-        if lock.exists() and time.time() - lock.stat().st_mtime > LOCK_MAX_AGE_SECONDS:
-            lock.unlink()
+        if path.exists() and time.time() - path.stat().st_mtime > max_age_seconds:
+            path.unlink()
     except OSError:
         pass
 
     try:
-        descriptor = os.open(lock, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+        descriptor = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
         with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
             handle.write(str(os.getpid()))
+        return True
     except FileExistsError:
+        return False
+
+
+def clear_lock(path: Path) -> None:
+    try:
+        path.unlink()
+    except OSError:
+        pass
+
+
+def spawn_helper(arguments: list[str]) -> None:
+    subprocess.Popen(
+        [sys.executable, str(Path(__file__).resolve()), *arguments],
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        close_fds=True,
+        start_new_session=True,
+    )
+
+
+def start_background_fetch(key: str, track: dict[str, Any]) -> bool:
+    lock = lock_path(key)
+    if not acquire_lock(lock, LOCK_MAX_AGE_SECONDS):
         return False
 
     payload = base64.urlsafe_b64encode(
         json.dumps(track, ensure_ascii=False).encode("utf-8")
     ).decode("ascii")
     try:
-        subprocess.Popen(
-            [sys.executable, str(Path(__file__).resolve()), "--fetch", key, payload],
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            close_fds=True,
-            start_new_session=True,
-        )
+        spawn_helper(["--fetch", key, payload])
         return True
     except Exception:
-        try:
-            lock.unlink()
-        except OSError:
-            pass
+        clear_lock(lock)
+        raise
+
+
+def start_sampler() -> bool:
+    """Ask a detached helper for a fresh Apple Music sample.
+
+    The lock keeps one sample in flight at a time, so a run of quick widget
+    ticks cannot pile up osascript processes behind an unresponsive Music.
+    """
+    if not acquire_lock(SAMPLER_LOCK_PATH, SAMPLER_LOCK_MAX_AGE_SECONDS):
+        return False
+
+    try:
+        spawn_helper(["--sample"])
+        return True
+    except Exception:
+        clear_lock(SAMPLER_LOCK_PATH)
         raise
 
 
 def acquire_widget_lock() -> bool:
-    CACHE_DIR.mkdir(parents=True, exist_ok=True)
-    try:
-        if (
-            WIDGET_LOCK_PATH.exists()
-            and time.time() - WIDGET_LOCK_PATH.stat().st_mtime
-            > WIDGET_LOCK_MAX_AGE_SECONDS
-        ):
-            WIDGET_LOCK_PATH.unlink()
-    except OSError:
-        pass
-
-    try:
-        descriptor = os.open(
-            WIDGET_LOCK_PATH, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600
-        )
-        with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
-            handle.write(str(os.getpid()))
-        return True
-    except FileExistsError:
-        return False
+    return acquire_lock(WIDGET_LOCK_PATH, WIDGET_LOCK_MAX_AGE_SECONDS)
 
 
 def release_widget_lock() -> None:
@@ -1038,6 +1349,91 @@ def crop_cells(text: str, start: int, width: int) -> str:
     return "".join(output).strip()
 
 
+def break_positions(text: str, break_chars: str) -> list[int]:
+    """Offsets just past each delimiter, i.e. the places a row may end."""
+    return [
+        index + 1 for index, character in enumerate(text) if character in break_chars
+    ]
+
+
+def row_width(widths: list[int], index: int) -> int:
+    return widths[min(index, len(widths) - 1)]
+
+
+def rows_overflow(rows: list[str], widths: list[int]) -> int:
+    """Cells by which the worst row exceeds its budget; <= 0 means all fit."""
+    return max(
+        display_width(row) - row_width(widths, index) for index, row in enumerate(rows)
+    )
+
+
+def wrap_at_breaks(
+    text: str, widths: list[int], max_rows: int, break_chars: str
+) -> list[str]:
+    """Wrap an over-wide line onto at most max_rows rows at break_chars.
+
+    Returns a single row when the text already fits or has no delimiter, so
+    such lines keep the previous scrolling behaviour.
+    """
+    breaks = break_positions(text, break_chars)
+    if not breaks or max_rows <= 1:
+        return [text]
+
+    rows: list[str] = []
+    start = 0
+    while start < len(text):
+        width = row_width(widths, len(rows))
+        remainder = text[start:].strip()
+        if not remainder:
+            break
+        # Last permitted row, or the rest already fits: take it whole.
+        if len(rows) == max_rows - 1 or display_width(remainder) <= width:
+            rows.append(remainder)
+            break
+        usable = [position for position in breaks if position > start]
+        if not usable:
+            rows.append(remainder)
+            break
+        # Prefer the latest comma that still fits; otherwise break at the
+        # first one and let the row scroll.
+        fitting = [
+            position
+            for position in usable
+            if display_width(text[start:position].strip()) <= width
+        ]
+        cut = fitting[-1] if fitting else usable[0]
+        rows.append(text[start:cut].strip())
+        start = cut
+
+    return [row for row in rows if row] or [text]
+
+
+def wrap_lyric(text: str, widths: list[int], max_rows: int) -> list[str]:
+    """Wrap at punctuation, falling back to spaces only when that is not enough.
+
+    Punctuation marks phrase ends, so it is the better break when it fits.
+    Spaces rescue the many LRC files that separate phrases without commas.
+    """
+    if display_width(text) <= row_width(widths, 0):
+        return [text]
+
+    tiers = [LINE_BREAK_PUNCTUATION]
+    if BREAK_ON_SPACE and " " not in LINE_BREAK_PUNCTUATION:
+        tiers.append(LINE_BREAK_PUNCTUATION + " ")
+
+    best: list[str] | None = None
+    best_overflow = 0
+    for break_chars in tiers:
+        rows = wrap_at_breaks(text, widths, max_rows, break_chars)
+        overflow = rows_overflow(rows, widths)
+        if overflow <= 0:
+            return rows
+        # Keep the earliest tier that comes closest; ties favour punctuation.
+        if best is None or overflow < best_overflow:
+            best, best_overflow = rows, overflow
+    return best or [text]
+
+
 def marquee(text: str, elapsed: float, width: int) -> str:
     if width <= 0 or display_width(text) <= width:
         return text
@@ -1063,12 +1459,28 @@ def current_lyric_line(
     return text, max(position - timestamp, 0.0)
 
 
-def render_widget(track: dict[str, Any], cached: dict[str, Any] | None) -> str:
+def fetch_waiting_seconds(key: str) -> float:
+    """How long the in-flight fetch for this track has been running."""
+    try:
+        return max(time.time() - lock_path(key).stat().st_mtime, 0.0)
+    except OSError:
+        return float("inf")
+
+
+def render_widget(
+    track: dict[str, Any],
+    cached: dict[str, Any] | None,
+    waiting_seconds: float = 0.0,
+) -> str:
     state = track.get("state", "")
     title = track.get("title", "") or "Apple Music"
 
     if cached is None:
-        return f"⌛ {title}"
+        # An hourglass is only honest while a fetch could plausibly still
+        # land. Past that it reads as a stuck widget, and the track title is
+        # the more useful thing to leave on screen.
+        marker = "⌛" if waiting_seconds <= PENDING_HOURGLASS_SECONDS else "♪"
+        return f"{marker} {title}"
 
     status = cached.get("status")
     if status == "instrumental":
@@ -1089,18 +1501,25 @@ def render_widget(track: dict[str, Any], cached: dict[str, Any] | None) -> str:
     prefix = "Ⅱ " if state == "paused" else "♪ "
     if lyric is None:
         return prefix + title
-    available_width = max(VIEWPORT_WIDTH - display_width(prefix), 8)
-    return prefix + marquee(lyric, elapsed, available_width)
+
+    first_width = max(VIEWPORT_WIDTH - display_width(prefix), 8)
+    other_width = max(VIEWPORT_WIDTH - display_width(CONTINUATION_INDENT), 8)
+    rows = wrap_lyric(lyric, [first_width, other_width], MAX_LYRIC_ROWS)
+    return "\n".join(
+        (prefix if index == 0 else CONTINUATION_INDENT)
+        + marquee(row, elapsed, first_width if index == 0 else other_width)
+        for index, row in enumerate(rows)
+    )
 
 
 def widget_main() -> int:
     if not acquire_widget_lock():
-        emit("♪")
+        emit_last_output()
         return 0
 
     try:
         try:
-            track = read_apple_music()
+            track = current_track()
         except PermissionError:
             emit("⚠ Allow BTT → Music")
             return 0
@@ -1114,6 +1533,12 @@ def widget_main() -> int:
             emit("♪")
             return 0
 
+        if is_placeholder_track(track):
+            # Apple Music has not settled on the real track yet, and its
+            # placeholder is not something any lyrics provider knows.
+            emit(f"♪ {track.get('title', '')}")
+            return 0
+
         key = track_cache_key(track)
         cached = read_cache(key)
         now = time.time()
@@ -1123,7 +1548,7 @@ def widget_main() -> int:
                 start_background_fetch(key, track)
             except Exception as exc:
                 log_error(f"Could not start background fetch: {exc}")
-            emit(render_widget(track, None))
+            emit(render_widget(track, None, fetch_waiting_seconds(key)))
             return 0
 
         retry_after = float(cached.get("retry_after", 0) or 0)
@@ -1136,7 +1561,7 @@ def widget_main() -> int:
                 start_background_fetch(key, track)
             except Exception as exc:
                 log_error(f"Could not retry background fetch: {exc}")
-            emit(render_widget(track, None))
+            emit(render_widget(track, None, fetch_waiting_seconds(key)))
             return 0
 
         emit(render_widget(track, cached))
@@ -1171,6 +1596,21 @@ def fetch_mode(arguments: list[str]) -> int:
         except OSError:
             pass
         return 1
+
+
+def sample_mode() -> int:
+    """Refresh the Apple Music sample the widget renders from."""
+    try:
+        write_state(read_apple_music())
+        return 0
+    except Exception as exc:
+        # Leave the previous sample in place. Apple Music briefly refuses to
+        # answer while a track changes, and rendering a slightly old sample
+        # beats blanking the widget for the length of the hiccup.
+        log_error(f"Apple Music sample failed: {exc}")
+        return 1
+    finally:
+        clear_lock(SAMPLER_LOCK_PATH)
 
 
 def diagnose_current() -> int:
@@ -1293,6 +1733,8 @@ def clear_current_cache() -> int:
 def main() -> int:
     if len(sys.argv) >= 2 and sys.argv[1] == "--fetch":
         return fetch_mode(sys.argv[2:])
+    if len(sys.argv) >= 2 and sys.argv[1] == "--sample":
+        return sample_mode()
     if len(sys.argv) >= 2 and sys.argv[1] == "--diagnose":
         return diagnose_current()
     if len(sys.argv) >= 2 and sys.argv[1] == "--clear-current":
