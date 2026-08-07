@@ -27,6 +27,7 @@ function run(argv) {
         );
 
     const now = Date.now();
+    const ageMs = now - startedMs;
 
     /*
      * If a refresh is genuinely still running, ignore duplicate taps.
@@ -37,8 +38,10 @@ function run(argv) {
      */
     if (
         refreshing === "1" &&
+        btt.get_string_variable(p + "worker_running") === "1" &&
         startedMs > 0 &&
-        (now - startedMs) < staleAfterMs
+        ageMs >= 0 &&
+        ageMs < staleAfterMs
     ) {
         return "already-refreshing";
     }

@@ -115,6 +115,11 @@ function run(argv) {
         {to: "0"}
     );
 
+    btt.set_string_variable(
+        prefix + "refresh_started_ms",
+        {to: "0"}
+    );
+
     // Re-render the old cached result in white.
     btt.set_string_variable(
         prefix + "ready",
@@ -352,6 +357,11 @@ function run(argv) {
 
     btt.set_string_variable(
         prefix + "worker_running",
+        {to: "0"}
+    );
+
+    btt.set_string_variable(
+        prefix + "refresh_started_ms",
         {to: "0"}
     );
 
