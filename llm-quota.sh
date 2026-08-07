@@ -40,13 +40,31 @@ if [[ -z "$JQ" || ! -x "$JQ" ]]; then
     exit 0
 fi
 
-# Let CodexBar honor its app-managed provider credentials and source settings.
-JSON="$(
+# Fetch providers concurrently so a slow Claude CLI lookup does not delay Codex.
+TMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/btt-codexbar.XXXXXX")"
+trap 'rm -rf "$TMP_DIR"' EXIT
+
+for PROVIDER in codex claude; do
     "$CODEXBAR" \
-        --provider both \
+        --provider "$PROVIDER" \
         --source auto \
         --format json \
-        2>"$LOG"
+        >"$TMP_DIR/$PROVIDER.json" \
+        2>"$TMP_DIR/$PROVIDER.log" &
+done
+
+wait
+
+cat "$TMP_DIR/codex.log" "$TMP_DIR/claude.log" >>"$LOG"
+
+JSON="$(
+    "$JQ" -s '
+        map(
+            select(length > 0)
+            | if type == "array" then . else [.] end
+        )
+        | add // []
+    ' "$TMP_DIR/codex.json" "$TMP_DIR/claude.json"
 )"
 
 if [[ -z "$JSON" ]]; then
