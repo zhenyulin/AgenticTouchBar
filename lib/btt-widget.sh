@@ -3,21 +3,17 @@
 #
 # Shared BetterTouchTool Script Widget support.
 #
-# Public functions:
+# A widget script sets its identity, then uses the cache/refresh pair:
 #
-#   btt_dim_gate
-#       Call near the top of a widget script:
+#   BTT_WIDGET_NAME="clash-latency"
+#   BTT_WIDGET_REFRESH_MAX_RUN=60
 #
-#           if btt_dim_gate; then
-#               exit 0
-#           fi
-#
+#   btt_cache_get <name> <max_age_seconds>
+#   btt_cache_put <name> "$value"
+#   btt_refresh_detached <name> <max_run_seconds> <command> [args...]
+#   btt_force_pending
 #   btt_publish "$result"
-#       Record and emit the final widget result.
-#       Call instead of echo/printf.
-#
-#   btt_remember "$result"
-#       Record only, for a widget that emits its own JSON.
+#   btt_current_color        # for a widget that emits its own JSON
 #
 #
 # BTT mode:
@@ -28,32 +24,42 @@
 #   The script behaves like an ordinary shell script.
 #
 #
-# Why the grey-out works this way
+# How the grey-out works
 # ------------------------------------------------------------------
 # A widget's font color can only be set by the JSON the widget script
 # itself prints. BTT's update_touch_bar_widget AppleScript command takes
-# text, icon_path, sf_symbol_* , icon_data and background_color -- there is
+# text, icon_path, sf_symbol_*, icon_data and background_color -- there is
 # no font_color and no font_size parameter, so an external process cannot
 # grey a widget out directly.
 #
-# So actions/tap-refresh.sh only drops a flag file and asks BTT to re-run
-# the widget. That run hits btt_dim_gate, which reprints the previous value
-# in grey and exits immediately; the refresh that follows repaints it in the
-# normal color. The flag is a file rather than a BTT variable so that the
-# common case -- an ordinary scheduled tick -- costs a stat() instead of an
+# So grey is not a state anybody sets: it is simply what the widget looks
+# like while its refresh lock is held. The lock exists for exactly as long
+# as the detached refresh runs, which makes the dim frame mean something --
+# it lasts as long as the work does, whether that work was started by a tap
+# or by an ordinary tick. actions/tap-refresh.sh only drops a force flag and
+# asks BTT to re-run the widget; the widget does the rest.
+#
+# The flags are files rather than BTT variables so that the common case --
+# an ordinary tick with nothing in flight -- costs a stat() instead of an
 # osascript round trip.
 #
 
 BTT_WIDGET_CACHE_DIR="${BTT_WIDGET_CACHE_DIR:-$HOME/Library/Caches/btt-widgets}"
 
+# The widget's own name, used to find its value and refresh lock.
+BTT_WIDGET_NAME="${BTT_WIDGET_NAME:-}"
+
+# How long this widget's refresh may run before the lock is presumed dead.
+BTT_WIDGET_REFRESH_MAX_RUN="${BTT_WIDGET_REFRESH_MAX_RUN:-180}"
+
 # The normal, undimmed label color.
 BTT_WIDGET_COLOR="${BTT_WIDGET_COLOR:-255,255,255,255}"
 
-# The color used while a manual refresh is in flight.
+# The color shown while a refresh is in flight.
 BTT_WIDGET_DIM_COLOR="${BTT_WIDGET_DIM_COLOR:-130,130,130,255}"
 
-# A dim flag older than this belongs to a refresh that never arrived.
-BTT_WIDGET_DIM_MAX_AGE="${BTT_WIDGET_DIM_MAX_AGE:-10}"
+# A force flag older than this belongs to a tap whose refresh never ran.
+BTT_WIDGET_FORCE_MAX_AGE="${BTT_WIDGET_FORCE_MAX_AGE:-10}"
 
 # Optional icon, so that a dimmed frame keeps the widget's icon.
 BTT_WIDGET_ICON="${BTT_WIDGET_ICON:-}"
@@ -63,12 +69,200 @@ BTT_WIDGET_ICON="${BTT_WIDGET_ICON:-}"
 # Internal: per-widget state files
 # ---------------------------------------------------------------------------
 
-btt__cache_file() {
-    printf '%s/%s.text' "$BTT_WIDGET_CACHE_DIR" "$BTT_WIDGET_UUID"
+btt__force_file() {
+    printf '%s/%s.force' "$BTT_WIDGET_CACHE_DIR" "$BTT_WIDGET_UUID"
 }
 
-btt__dim_file() {
-    printf '%s/%s.dim' "$BTT_WIDGET_CACHE_DIR" "$BTT_WIDGET_UUID"
+btt__value_file() {
+    printf '%s/%s.value' "$BTT_WIDGET_CACHE_DIR" "$1"
+}
+
+btt__refresh_lock() {
+    printf '%s/%s.refreshing' "$BTT_WIDGET_CACHE_DIR" "$1"
+}
+
+# Younger than max_age?
+btt__is_fresh() {
+    [[ -n "$(/usr/bin/find "$1" -maxdepth 0 -mtime -"${2}"s 2>/dev/null)" ]]
+}
+
+
+# ---------------------------------------------------------------------------
+# Why slow widgets freeze every other widget
+#
+# BTT ships a single BetterTouchToolShellScriptRunner XPC service and every
+# shell script widget goes through it, so a widget that blocks for n seconds
+# stops every other widget for n seconds -- and swallows their tap-refreshes
+# too. Measured here: codexbar's Claude lookup takes ~43s, during which the
+# 1s lyrics widget simply does not run.
+#
+# So anything that touches the network is computed by a detached refresh that
+# stores its result, and the widget path only ever reads that stored value.
+#
+#   btt_cache_get <name> <max_age_seconds>
+#       Print the stored value. Returns 0 when it is still fresh, 1 when it
+#       is missing or too old. A stale value is still printed, so the widget
+#       has something to show while the refresh runs.
+#
+#   btt_cache_put <name> "$value"
+#       Store a newly computed value.
+#
+#   btt_refresh_detached <name> <max_run_seconds> <command> [args...]
+#       Run <command> detached, at most one at a time, and redraw the widget
+#       once it is done.
+# ---------------------------------------------------------------------------
+
+btt_cache_get() {
+    local name="${1-}"
+    local max_age="${2:-60}"
+    local file
+    file="$(btt__value_file "$name")"
+
+    [[ -f "$file" ]] || return 1
+
+    cat "$file" 2>/dev/null
+
+    btt__is_fresh "$file" "$max_age"
+}
+
+btt_cache_put() {
+    local name="${1-}"
+    local value="${2-}"
+
+    mkdir -p "$BTT_WIDGET_CACHE_DIR" 2>/dev/null || return 1
+
+    local file
+    file="$(btt__value_file "$name")"
+
+    # Written aside and moved into place, so a widget run can never read a
+    # half-written value.
+    printf '%s' "$value" > "$file.$$" 2>/dev/null || return 1
+    mv -f "$file.$$" "$file" 2>/dev/null || return 1
+}
+
+btt_refresh_detached() {
+    local name="${1-}"
+    local max_run="${2:-120}"
+    shift 2 || return 1
+
+    mkdir -p "$BTT_WIDGET_CACHE_DIR" 2>/dev/null || return 1
+
+    local lock
+    lock="$(btt__refresh_lock "$name")"
+
+    # A lock older than the refresh could possibly take belongs to a run that
+    # died; nothing else would still be holding it.
+    if [[ -d "$lock" ]] && ! btt__is_fresh "$lock" "$max_run"; then
+        rmdir "$lock" 2>/dev/null
+    fi
+
+    # mkdir is the atomic "create only if absent": whoever wins refreshes,
+    # everyone else leaves it alone.
+    mkdir "$lock" 2>/dev/null || return 1
+
+    local uuid="${BTT_WIDGET_UUID:-}"
+
+    # The redirections are on the subshell, not on the command inside it.
+    # A background child that keeps the widget's stdout open holds the pipe
+    # open too, and whoever is reading that pipe -- BTT -- waits for it, which
+    # is the very blocking this function exists to avoid.
+    #
+    # The lock is dropped BEFORE the redraw is requested. The redraw runs the
+    # widget, and the widget colors itself by whether the lock is held: asking
+    # first would paint the new value grey and leave it grey until the next
+    # tick.
+    (
+        trap '' HUP
+        "$@"
+        rmdir "$lock" 2>/dev/null
+        btt_request_refresh "$uuid"
+    ) </dev/null >/dev/null 2>&1 &
+    disown 2>/dev/null || true
+
+    return 0
+}
+
+
+# ---------------------------------------------------------------------------
+# Public: ask BTT to redraw a widget now
+#
+# Called after a detached refresh so a new value appears immediately instead
+# of at the widget's next scheduled tick. That is what lets a slow widget be
+# given a long refresh interval without feeling stale.
+# ---------------------------------------------------------------------------
+
+btt_request_refresh() {
+    local uuid="${1-}"
+
+    [[ -z "$uuid" ]] && return 0
+
+    /usr/bin/osascript -l JavaScript - "$uuid" >/dev/null 2>&1 <<'JXA' || true
+function run(argv) {
+    Application("BetterTouchTool").refresh_widget(argv[0]);
+}
+JXA
+}
+
+
+# ---------------------------------------------------------------------------
+# Public: did a tap ask for a refresh?
+#
+# Consumed on read: the flag orders one refresh, not a mode the widget stays
+# in. A stale flag is dropped rather than obeyed, so a tap whose refresh
+# never ran cannot trigger one minutes later.
+#
+# Return:
+#   0 -> refresh regardless of how fresh the cached value is
+#   1 -> ordinary run
+# ---------------------------------------------------------------------------
+
+btt_force_pending() {
+    [[ -z "${BTT_WIDGET_UUID:-}" ]] && return 1
+
+    local flag
+    flag="$(btt__force_file)"
+
+    [[ -f "$flag" ]] || return 1
+
+    local fresh=1
+    btt__is_fresh "$flag" "$BTT_WIDGET_FORCE_MAX_AGE" || fresh=0
+
+    rm -f "$flag" 2>/dev/null
+
+    (( fresh ))
+}
+
+
+# ---------------------------------------------------------------------------
+# Public: is this widget's refresh running right now?
+# ---------------------------------------------------------------------------
+
+btt_refresh_in_flight() {
+    local name="${1:-$BTT_WIDGET_NAME}"
+
+    [[ -z "$name" ]] && return 1
+
+    local lock
+    lock="$(btt__refresh_lock "$name")"
+
+    [[ -d "$lock" ]] || return 1
+
+    btt__is_fresh "$lock" "$BTT_WIDGET_REFRESH_MAX_RUN"
+}
+
+
+# ---------------------------------------------------------------------------
+# Public: the color this widget should render in right now
+#
+# For a widget that builds its own JSON. btt_publish applies this itself.
+# ---------------------------------------------------------------------------
+
+btt_current_color() {
+    if btt_refresh_in_flight; then
+        printf '%s' "$BTT_WIDGET_DIM_COLOR"
+    else
+        printf '%s' "$BTT_WIDGET_COLOR"
+    fi
 }
 
 
@@ -102,80 +296,15 @@ JXA
 
 
 # ---------------------------------------------------------------------------
-# Public: remember the text a widget is displaying
-#
-# actions/tap-refresh.sh cannot know what a widget shows, so every widget
-# records its own last value here.
-# ---------------------------------------------------------------------------
-
-btt_remember() {
-    local result="${1-}"
-
-    [[ -z "${BTT_WIDGET_UUID:-}" ]] && return 0
-
-    mkdir -p "$BTT_WIDGET_CACHE_DIR" 2>/dev/null || return 0
-
-    printf '%s' "$result" > "$(btt__cache_file)" 2>/dev/null || true
-
-    return 0
-}
-
-
-# ---------------------------------------------------------------------------
-# Public: serve a manual refresh's "in flight" frame
-#
-# Return:
-#   0 -> this run was the dim frame; the caller must exit without working
-#   1 -> ordinary run; the caller should compute its value as usual
-# ---------------------------------------------------------------------------
-
-btt_dim_gate() {
-    [[ -z "${BTT_WIDGET_UUID:-}" ]] && return 1
-
-    local flag
-    flag="$(btt__dim_file)"
-
-    [[ -f "$flag" ]] || return 1
-
-    #
-    # Consume the flag first: whatever happens next, this widget must not
-    # come up grey again on the following tick.
-    #
-    local age
-    age="$(
-        /usr/bin/find "$flag" -mtime -"${BTT_WIDGET_DIM_MAX_AGE}"s 2>/dev/null
-    )"
-
-    rm -f "$flag" 2>/dev/null
-
-    # Flag left behind by a refresh that never ran.
-    [[ -n "$age" ]] || return 1
-
-    local last=""
-    local cache
-    cache="$(btt__cache_file)"
-
-    [[ -f "$cache" ]] && last="$(cat "$cache" 2>/dev/null)"
-
-    # Nothing published yet: there is no value to grey out.
-    [[ -n "$last" ]] || return 1
-
-    btt__emit_json "$last" "$BTT_WIDGET_DIM_COLOR"
-
-    return 0
-}
-
-
-# ---------------------------------------------------------------------------
 # Public: publish a finished widget value
 #
 # Terminal:
 #   prints plain text.
 #
 # BTT:
-#   remembers the result and emits widget JSON in the normal color.
-#   The color is always stated explicitly, so that the grey frame from a
-#   manual refresh is cleared when the real value arrives.
+#   emits widget JSON, dimmed while this widget's refresh is in flight.
+#   The color is always stated explicitly, so that a dimmed frame is cleared
+#   when the refresh finishes.
 # ---------------------------------------------------------------------------
 
 btt_publish() {
@@ -186,6 +315,5 @@ btt_publish() {
         return 0
     fi
 
-    btt_remember "$result"
-    btt__emit_json "$result" "$BTT_WIDGET_COLOR"
+    btt__emit_json "$result" "$(btt_current_color)"
 }

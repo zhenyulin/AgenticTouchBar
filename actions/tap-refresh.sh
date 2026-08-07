@@ -6,19 +6,20 @@
 #   tap-refresh.sh <widget-uuid>
 #
 # Behaviour:
-#   1. Raise the widget's dim flag and re-run it: the widget reprints its
-#      current value in grey and exits at once.
-#   2. Ask BTT to refresh the widget for real, in the background.
+#   1. Raise the widget's force flag.
+#   2. Ask BTT to re-run the widget.
 #   3. Exit immediately.
 #
-# The grey frame comes from the widget script itself, via btt_dim_gate in
-# lib/btt-widget.sh. It cannot be painted from here: BTT's
-# update_touch_bar_widget command only accepts text, icon_path, sf_symbol_*,
-# icon_data and background_color -- there is no font_color parameter, and
-# passing one has no effect beyond re-rendering the widget in its configured
-# style (which shows up as the label changing size).
+# That run starts the widget's refresh even if its cached value is still
+# fresh, and greys itself out because the refresh is now in flight. The grey
+# lasts as long as the refresh does, and the redraw that follows it restores
+# the normal color -- see lib/btt-widget.sh.
 #
-# The widget script is responsible for its own command/network timeouts.
+# Nothing is painted from here. BTT's update_touch_bar_widget command only
+# accepts text, icon_path, sf_symbol_*, icon_data and background_color: there
+# is no font_color parameter, and passing one has no effect beyond
+# re-rendering the widget in its configured style (which shows up as the
+# label changing size).
 #
 # BTT is driven through AppleScript rather than its btt:// URL scheme,
 # because the URL scheme requires BTT's "URL scripting" permission and
@@ -37,29 +38,14 @@ fi
 
 CACHE_DIR="${BTT_WIDGET_CACHE_DIR:-$HOME/Library/Caches/btt-widgets}"
 
-# Immediate visual acknowledgement.
-#
-# Failure here must NOT prevent the actual refresh request.
-#
-# This refresh is deliberately NOT detached: the widget's dim run only
-# reprints a cached string, so it returns in milliseconds, and waiting for
-# it is what guarantees the flag is consumed by the dim frame rather than by
-# the real refresh below.
+# Failure to raise the flag must NOT prevent the refresh request: a refresh
+# that only picks up a stale value still beats no refresh at all.
 if mkdir -p "$CACHE_DIR" 2>/dev/null; then
-    : > "$CACHE_DIR/$UUID.dim" 2>/dev/null || true
-
-    /usr/bin/osascript -l JavaScript - "$UUID" <<'JXA' >/dev/null 2>&1 || true
-function run(argv) {
-    Application("BetterTouchTool").refresh_widget(argv[0]);
-}
-JXA
+    : > "$CACHE_DIR/$UUID.force" 2>/dev/null || true
 fi
 
-# Fire-and-forget refresh.
-#
-# refresh_widget blocks until the widget script has finished, and that is
-# the slow, real run: it is detached so this BTT shell action returns
-# immediately.
+# Fire-and-forget: refresh_widget blocks until the widget script has
+# finished, and this BTT shell action must return immediately.
 nohup /usr/bin/osascript -l JavaScript - "$UUID" <<'JXA' >/dev/null 2>&1 &
 function run(argv) {
     const uuid = argv[0];

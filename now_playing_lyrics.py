@@ -45,7 +45,20 @@ if OpenCC is not None:
         _OPENCC_CONVERTERS = []
 
 # ---- User-tunable defaults -------------------------------------------------
-VIEWPORT_WIDTH = int(os.environ.get("BTT_LYRICS_WIDTH", "42"))
+# The Touch Bar renders a proportional font, so a pixel budget tracks the
+# real row width better than a raw character count. PIXELS_PER_CELL
+# calibrates character "cells" (narrow = 1, CJK/wide = 2, see
+# character_width) to pixels; tune it if lines wrap earlier or later than
+# they visibly need to. Setting BTT_LYRICS_WIDTH still overrides both and
+# picks a width directly in cells, as before.
+MAX_LYRIC_WIDTH_PX = float(os.environ.get("BTT_LYRICS_MAX_WIDTH_PX", "200"))
+PIXELS_PER_CELL = float(os.environ.get("BTT_LYRICS_PX_PER_CELL", "7.0"))
+_viewport_width_override = os.environ.get("BTT_LYRICS_WIDTH")
+VIEWPORT_WIDTH = (
+    int(_viewport_width_override)
+    if _viewport_width_override is not None
+    else max(round(MAX_LYRIC_WIDTH_PX / PIXELS_PER_CELL), 1)
+)
 SYNC_OFFSET_SECONDS = float(os.environ.get("BTT_LYRICS_OFFSET", "0.0"))
 SCROLL_LONG_LINES = os.environ.get("BTT_LYRICS_SCROLL", "1") not in {
     "0",
@@ -65,7 +78,10 @@ BREAK_ON_SPACE = os.environ.get("BTT_LYRICS_BREAK_ON_SPACE", "1") not in {
     "False",
 }
 MAX_LYRIC_ROWS = int(os.environ.get("BTT_LYRICS_MAX_ROWS", "2"))
-CONTINUATION_INDENT = os.environ.get("BTT_LYRICS_INDENT", "  ")
+# Wider than the prefix's character count on purpose: the Touch Bar's
+# proportional font renders a symbol like "♪ " wider than two plain spaces,
+# so matching character-for-character still looks left-shifted in practice.
+CONTINUATION_INDENT = os.environ.get("BTT_LYRICS_INDENT", "     ")
 NETWORK_TIMEOUT_SECONDS = float(os.environ.get("BTT_LYRICS_NETWORK_TIMEOUT", "4.0"))
 APPLE_MUSIC_TIMEOUT_SECONDS = float(
     os.environ.get("BTT_LYRICS_APPLE_MUSIC_TIMEOUT", "1.5")
@@ -222,11 +238,22 @@ def remember_output(text: str) -> None:
 
 
 def emit_last_output() -> None:
+    """Reprint the previous value, for a run with nothing of its own to show."""
     try:
         previous = LAST_TEXT_PATH.read_text(encoding="utf-8").strip()
     except (OSError, ValueError):
         previous = ""
     print(previous or "♪")
+
+    # Touched even though the text is unchanged, so that this file's age
+    # always means "how long since BetterTouchTool last ran the widget".
+    # Without this a widget that reprints every tick is indistinguishable
+    # from one BTT has stopped running, which is the single most useful
+    # thing to know when the Touch Bar appears frozen.
+    try:
+        os.utime(LAST_TEXT_PATH, None)
+    except OSError:
+        pass
 
 
 def log_error(message: str) -> None:
@@ -348,33 +375,32 @@ def project_playback(track: dict[str, Any], age: float) -> dict[str, Any]:
     return projected
 
 
-def current_track() -> dict[str, Any]:
-    """Apple Music's state, without waiting on Apple Music.
+def current_track() -> dict[str, Any] | None:
+    """The newest Apple Music sample, or None when there is not a usable one.
 
-    An osascript round trip costs a few hundred milliseconds and stalls for
-    seconds while a track changes, which BetterTouchTool serialises against
-    every other widget. So the widget reads the newest sample and asks a
-    detached helper for the next one, and only queries Apple Music itself
-    when there is no usable sample at all — at startup, or if sampling has
-    been failing long enough that a stale lyric would be worse.
+    The widget never queries Apple Music itself, not even as a fallback. An
+    osascript round trip costs a few hundred milliseconds and stalls for
+    seconds while a track changes -- and a fallback fires precisely when Music
+    is being slow, so every tick would pay that cost, at a one second
+    interval, on the single XPC service BetterTouchTool runs all widget
+    scripts through. That starves this widget and swallows every other
+    widget's tap-refresh with it.
+
+    So sampling only ever happens in the detached helper, and a tick that
+    finds nothing fresh reprints the last frame and waits for the next
+    sample. Recovery costs nothing: a sampler is asked for on every tick.
     """
     track, age = read_state()
 
-    if track is not None and age <= STATE_MAX_AGE_SECONDS:
-        if age >= STATE_REFRESH_SECONDS:
-            try:
-                start_sampler()
-            except Exception as exc:
-                log_error(f"Could not start Apple Music sampler: {exc}")
-        return project_playback(track, age)
+    if age >= STATE_REFRESH_SECONDS:
+        try:
+            start_sampler()
+        except Exception as exc:
+            log_error(f"Could not start Apple Music sampler: {exc}")
 
-    # Nothing usable to render from: this is the first run, or sampling has
-    # been failing for long enough that a stale lyric would be worse than the
-    # wait. Reading here also reseeds the sample, so the next tick is cheap
-    # again as soon as Apple Music answers at all.
-    track = read_apple_music()
-    write_state(track)
-    return track
+    if track is not None and age <= STATE_MAX_AGE_SECONDS:
+        return project_playback(track, age)
+    return None
 
 
 def is_placeholder_track(track: dict[str, Any]) -> bool:
@@ -1448,15 +1474,15 @@ def marquee(text: str, elapsed: float, width: int) -> str:
 
 def current_lyric_line(
     lines: list[tuple[float, str]], position: float
-) -> tuple[str | None, float]:
+) -> tuple[str | None, float, int]:
     if not lines:
-        return None, 0.0
+        return None, 0.0, -1
     timestamps = [item[0] for item in lines]
     index = bisect.bisect_right(timestamps, position) - 1
     if index < 0:
-        return None, 0.0
+        return None, 0.0, -1
     timestamp, text = lines[index]
-    return text, max(position - timestamp, 0.0)
+    return text, max(position - timestamp, 0.0), index
 
 
 def fetch_waiting_seconds(key: str) -> float:
@@ -1496,7 +1522,7 @@ def render_widget(
     synced_lyrics = record.get("syncedLyrics") or ""
     lines = record.get("parsedLines") or parse_lrc(synced_lyrics)
     position = float(track.get("position", 0.0)) + SYNC_OFFSET_SECONDS
-    lyric, elapsed = current_lyric_line(lines, position)
+    lyric, elapsed, index = current_lyric_line(lines, position)
 
     prefix = "Ⅱ " if state == "paused" else "♪ "
     if lyric is None:
@@ -1505,10 +1531,26 @@ def render_widget(
     first_width = max(VIEWPORT_WIDTH - display_width(prefix), 8)
     other_width = max(VIEWPORT_WIDTH - display_width(CONTINUATION_INDENT), 8)
     rows = wrap_lyric(lyric, [first_width, other_width], MAX_LYRIC_ROWS)
+
+    # A short current line leaves a spare row rather than wrapping into it.
+    # Fill that row with the next lyric (static, not scrolled) as a preview,
+    # so the widget still shows two rows instead of a blank second line.
+    if len(rows) == 1 and MAX_LYRIC_ROWS > 1 and index + 1 < len(lines):
+        next_lyric = lines[index + 1][1]
+        if display_width(next_lyric) > other_width:
+            next_lyric = crop_cells(next_lyric, 0, max(other_width - 1, 1)) + "…"
+        return (
+            prefix
+            + marquee(rows[0], elapsed, first_width)
+            + "\n"
+            + CONTINUATION_INDENT
+            + next_lyric
+        )
+
     return "\n".join(
-        (prefix if index == 0 else CONTINUATION_INDENT)
-        + marquee(row, elapsed, first_width if index == 0 else other_width)
-        for index, row in enumerate(rows)
+        (prefix if row_index == 0 else CONTINUATION_INDENT)
+        + marquee(row, elapsed, first_width if row_index == 0 else other_width)
+        for row_index, row in enumerate(rows)
     )
 
 
@@ -1518,17 +1560,18 @@ def widget_main() -> int:
         return 0
 
     try:
-        try:
-            track = current_track()
-        except PermissionError:
-            emit("⚠ Allow BTT → Music")
-            return 0
-        except Exception as exc:
-            log_error(str(exc))
-            emit("⚠ Apple Music error")
+        track = current_track()
+
+        if track is None:
+            # Nothing fresh to render: a sampler is already on its way, so
+            # hold the last frame rather than blanking the widget for a tick.
+            emit_last_output()
             return 0
 
         state = track.get("state")
+        if state == "denied":
+            emit("⚠ Allow BTT → Music")
+            return 0
         if state in {"not_running", "stopped"} or not track.get("title"):
             emit("♪")
             return 0
@@ -1603,6 +1646,12 @@ def sample_mode() -> int:
     try:
         write_state(read_apple_music())
         return 0
+    except PermissionError:
+        # The widget no longer talks to Apple Music at all, so this is the
+        # only place the automation prompt can be discovered. Record it as a
+        # state rather than logging it, or the widget has no way to say so.
+        write_state({"state": "denied"})
+        return 1
     except Exception as exc:
         # Leave the previous sample in place. Apple Music briefly refuses to
         # answer while a track changes, and rendering a slightly old sample
