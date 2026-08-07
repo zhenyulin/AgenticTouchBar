@@ -5,11 +5,10 @@
 # Usage:
 #   lyrics-force-refresh.sh [lyrics-widget-uuid]
 #
-# Attach this as the tap action on the Lyrics widget. It drops the cached
-# lyrics for whatever track is currently known, asks for a fresh Apple Music
-# sample, and asks BTT to repaint -- the same "clear it and let the next tick
-# refetch" idea as clear_current_cache(), but reading the last sample instead
-# of querying Music directly, since a query can stall for seconds.
+# Attach this as the first action on the Lyrics widget. It drops the cached
+# lyrics for the currently playing track. BTT's following Real JavaScript
+# action repaints the widget after this short-lived external operation, so
+# this helper does not call BetterTouchTool back through AppleScript.
 #
 # Nothing is done here directly. BTT runs shell actions through the same
 # single BetterTouchToolShellScriptRunner XPC service as the widgets, so a
@@ -28,7 +27,7 @@ UUID="${1:-${BTT_LYRICS_WIDGET_UUID:-}}"
 # this script's stdout keeps the pipe open, and BTT waits on that pipe -- which
 # would reintroduce exactly the blocking this file exists to avoid.
 nohup /usr/bin/env python3 \
-    "$HOME/Documents/BTT/widgets/lyrics/now_playing_lyrics.py" --force-refresh "$UUID" \
+    "$HOME/Documents/BTT/widgets/lyrics/now_playing_lyrics.py" --clear-current \
     </dev/null >/dev/null 2>&1 &
 
 disown 2>/dev/null || true
