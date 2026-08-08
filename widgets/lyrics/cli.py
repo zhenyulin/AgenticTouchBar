@@ -192,6 +192,21 @@ def sample_mode() -> int:
             remote = _media_remote_fallback()
             if remote is not None:
                 track, source = remote, "media_remote"
+            else:
+                previous_track, previous_age = read_state()
+                if (
+                    previous_track is not None
+                    and previous_track.get("state") in {"playing", "paused"}
+                    and previous_age <= config.STATE_MAX_AGE_SECONDS
+                ):
+                    trace(
+                        "sample",
+                        started,
+                        "held",
+                        source=source,
+                        reported=track.get("state", "?"),
+                    )
+                    return 0
 
         write_state(track)
         trace("sample", started, track.get("state", "?"), source=source)
