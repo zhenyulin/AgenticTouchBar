@@ -212,6 +212,71 @@ btt_cache_put() {
     mv -f "$file.$$" "$file" 2>/dev/null || return 1
 }
 
+# ---------------------------------------------------------------------------
+# Public: run a command fully detached, in its own session
+#
+# `& disown` alone only drops a job from the shell's job table -- in a
+# non-interactive shell (which every BTT script widget or action is), job
+# control can't be turned on to give the job a process group of its own;
+# `setopt monitor` fails outright without a controlling terminal. So a
+# background child started with plain `cmd & disown` stays in the very
+# process group BTT launched for this script. If BTT's single script-runner
+# XPC service ever waits on or signals by process group rather than just the
+# one pid it started, a slow or wedged child can block every future
+# invocation of this same script behind it -- for however long after the
+# visible script already returned. Measured: a lyrics helper backgrounded
+# this way, stuck on an unresponsive Music.app AppleScript call, silently
+# froze the lyrics widget's own ordinary ticks for as long as 26 minutes.
+#
+# A launchd job would dodge that, but was tried and rejected: it runs as a
+# separately-authorized process, and macOS's TCC then blocks it from this
+# repo's files under ~/Documents ("operation not permitted"), even though the
+# very same script runs fine spawned directly. So instead a tiny Python
+# double-fork calls setsid() on the child, which moves it into a session and
+# process group of its own while keeping it in the same
+# BTT -> zsh -> python -> target process lineage BTT already has file access
+# for.
+#
+# Any caller that backgrounds work with a raw `cmd </dev/null >/dev/null
+# 2>&1 &` should use this instead -- see actions/track-changed.sh and
+# actions/lyrics-force-refresh.sh, both of which call into Apple Music and
+# used to skip this.
+# ---------------------------------------------------------------------------
+
+btt_spawn_detached() {
+    (
+        /usr/bin/python3 -c '
+import os, sys
+if os.fork() != 0:
+    os._exit(0)
+os.setsid()
+os.execvp(sys.argv[1], sys.argv[1:])
+' "$@"
+    ) </dev/null >/dev/null 2>&1 &
+    disown 2>/dev/null || true
+}
+
+btt_ensure_player_watcher() {
+    [[ -n "${BTT_WIDGET_UUID:-}" ]] || return 0
+
+    mkdir -p "$BTT_WIDGET_CACHE_DIR" 2>/dev/null || return 0
+    local marker="$BTT_WIDGET_CACHE_DIR/player-watcher.running"
+    if [[ -d "$marker" ]] && ! btt__is_fresh "$marker" 40; then
+        rmdir "$marker" 2>/dev/null || true
+    fi
+    mkdir "$marker" 2>/dev/null || return 0
+
+    local watcher="${BTT_WIDGET_WATCHER:-$HOME/Documents/BTT/widgets/player-watcher.sh}"
+    if [[ ! -x "$watcher" ]]; then
+        rmdir "$marker" 2>/dev/null || true
+        return 0
+    fi
+
+    local BTT_WIDGET_CACHE_DIR="$BTT_WIDGET_CACHE_DIR"
+    export BTT_WIDGET_CACHE_DIR
+    btt_spawn_detached "$watcher"
+}
+
 btt_refresh_detached() {
     local name="${1-}"
     local max_run="${2:-120}"
@@ -234,47 +299,22 @@ btt_refresh_detached() {
 
     local uuid="${BTT_WIDGET_UUID:-}"
 
-    # `& disown` only drops the job from the shell's job table -- in a
-    # non-interactive shell (which every BTT script widget is), job control
-    # can't be turned on to give the job a process group of its own;
-    # `setopt monitor` fails outright without a controlling terminal. So a
-    # "detached" background child stays in the very process group BTT
-    # launched for this script. If BTT's single script-runner XPC service
-    # ever waits on or signals by process group rather than just the one pid
-    # it started, a slow child can wedge every widget behind it -- for
-    # however long after the visible script already returned.
-    #
-    # A launchd job would dodge that, but was tried and rejected: it runs as
-    # a separately-authorized process, and macOS's TCC then blocks it from
-    # this repo's files under ~/Documents ("operation not permitted"), even
-    # though the very same script runs fine spawned directly. So instead a
-    # tiny Python double-fork calls setsid() on the child, which moves it
-    # into a session and process group of its own while keeping it in the
-    # same BTT -> zsh -> python -> zsh process lineage BTT already has file
-    # access for.
-    #
     # The lock is dropped BEFORE the redraw is requested. The redraw runs the
     # widget, and the widget colors itself by whether the lock is held: asking
     # first would paint the new value grey and leave it grey until the next
     # tick.
-    (
-        /usr/bin/python3 -c '
-import os, sys
-if os.fork() != 0:
-    os._exit(0)
-os.setsid()
-os.execvp(sys.argv[1], sys.argv[1:])
-' /bin/zsh -c '
+    btt_spawn_detached /bin/zsh -c '
             trap "" HUP
             lock="$1"; uuid="$2"; shift 2
             "$@"
             rmdir "$lock" 2>/dev/null
             if [[ -n "$uuid" ]]; then
-                /usr/bin/osascript -e "tell application \"BetterTouchTool\" to refresh_widget \"$uuid\"" >/dev/null 2>&1
+                for delay in 0 0.5 2; do
+                    (( delay > 0 )) && /bin/sleep "$delay"
+                    /usr/bin/osascript -e "tell application \"BetterTouchTool\" to refresh_widget \"$uuid\"" >/dev/null 2>&1
+                done
             fi
         ' refresh-wrapper "$lock" "$uuid" "$@"
-    ) </dev/null >/dev/null 2>&1 &
-    disown 2>/dev/null || true
 
     return 0
 }
@@ -393,3 +433,7 @@ btt_publish() {
 
     btt__emit_json "$result" "$(btt_current_color)"
 }
+
+if [[ -n "${BTT_WIDGET_UUID:-}" ]]; then
+    btt_ensure_player_watcher
+fi
