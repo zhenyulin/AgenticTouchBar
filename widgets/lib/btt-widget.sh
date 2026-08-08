@@ -44,7 +44,8 @@
 # osascript round trip.
 #
 
-BTT_WIDGET_CACHE_DIR="${BTT_WIDGET_CACHE_DIR:-$HOME/Library/Caches/btt-widgets}"
+BTT_REPO_DIR="${BTT_REPO_DIR:-$HOME/Documents/BTT}"
+BTT_WIDGET_CACHE_DIR="${BTT_WIDGET_CACHE_DIR:-$BTT_REPO_DIR/cache}"
 
 # The widget's own name, used to find its value and refresh lock.
 BTT_WIDGET_NAME="${BTT_WIDGET_NAME:-}"

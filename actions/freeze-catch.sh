@@ -20,19 +20,19 @@
 #
 # Usage:
 #   FREEZE_CATCH_TIMER_TIMEOUT=5 ./actions/freeze-catch.sh
-#   FREEZE_CATCH_POLL=5          ./actions/freeze-catch.sh
+#   FREEZE_CATCH_POLL=10         ./actions/freeze-catch.sh
 #
 
 set -u
 PATH="/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin"
 
-CACHE_DIR="${BTT_WIDGET_CACHE_DIR:-$HOME/Library/Caches/btt-widgets}"
-TRACE="$CACHE_DIR/trace.tsv"
 REPO_DIR="${BTT_REPO_DIR:-${0:A:h:h}}"
+CACHE_DIR="${BTT_WIDGET_CACHE_DIR:-$REPO_DIR/cache}"
+TRACE="$CACHE_DIR/trace.tsv"
 LOG_DIR="${BTT_LOG_DIR:-$REPO_DIR/logs}"
 LOG="$LOG_DIR/freeze-catch.log"
 OUT_DIR="$LOG_DIR/freeze-samples"
-POLL="${FREEZE_CATCH_POLL:-5}"
+POLL="${FREEZE_CATCH_POLL:-10}"
 TIMER_WIDGET_UUID="E25C395A-FE13-4216-BC59-6317FD0454BF"
 TIMER_REFRESH_TIMEOUT="${FREEZE_CATCH_TIMER_TIMEOUT:-5}"
 TIMER_REFRESH_POLL="${FREEZE_CATCH_TIMER_POLL:-1}"

@@ -3,7 +3,8 @@
 set -u
 PATH="/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin"
 
-CACHE_DIR="${BTT_WIDGET_CACHE_DIR:-$HOME/Library/Caches/btt-widgets}"
+REPO_DIR="${BTT_REPO_DIR:-$HOME/Documents/BTT}"
+CACHE_DIR="${BTT_WIDGET_CACHE_DIR:-$REPO_DIR/cache}"
 RUN_MARKER="$CACHE_DIR/player-watcher.running"
 LYRICS_UUID="E19BB023-5060-4A56-95C8-6E7402779870"
 STAR_UUID="A05C5D37-7EAA-4F7B-AC00-23183CC8C6A1"

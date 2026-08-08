@@ -31,7 +31,9 @@ BTT_WIDGET_NAME="codex-quota"
 VALUE_MAX_AGE="${CODEX_QUOTA_MAX_AGE:-300}"
 BTT_WIDGET_REFRESH_MAX_RUN=180
 
-LOG="$HOME/Library/Logs/btt-codexbar.log"
+REPO_DIR="${BTT_REPO_DIR:-$HOME/Documents/BTT}"
+LOG_DIR="${BTT_LOG_DIR:-$REPO_DIR/logs}"
+LOG="$LOG_DIR/btt-codexbar.log"
 
 compute_value() {
     cd "$HOME" || {
@@ -43,7 +45,7 @@ compute_value() {
     codexbar="$(command -v codexbar)"
     jq="$(command -v jq)"
 
-    mkdir -p "$HOME/Library/Logs"
+    mkdir -p "$LOG_DIR"
 
     if [[ -z "$codexbar" || ! -x "$codexbar" ]]; then
         printf 'NO CODEXBAR'

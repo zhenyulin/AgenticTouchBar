@@ -81,7 +81,10 @@ MEDIA_REMOTE_TIMEOUT_SECONDS = float(
 # never reports Apple Music's live position, only a stale 0.
 MEDIA_REMOTE_IGNORED_BUNDLE_IDS = {"com.apple.Music"}
 
-CACHE_DIR = Path.home() / "Library" / "Caches" / "BTTNowPlayingLyrics"
+REPO_DIR = Path(os.environ.get("BTT_REPO_DIR", Path(__file__).resolve().parents[2]))
+CACHE_DIR = Path(
+    os.environ.get("BTT_LYRICS_CACHE_DIR", str(REPO_DIR / "cache" / "lyrics"))
+)
 WIDGET_LOCK_PATH = CACHE_DIR / "widget.lock"
 SAMPLER_LOCK_PATH = CACHE_DIR / "sampler.lock"
 STATE_PATH = CACHE_DIR / "state.json"
@@ -96,7 +99,7 @@ WATCH_PATH = CACHE_DIR / "watch.tsv"
 SHELL_TRACE_PATH = (
     Path(
         os.environ.get(
-            "BTT_WIDGET_CACHE_DIR", str(Path.home() / "Library/Caches/btt-widgets")
+            "BTT_WIDGET_CACHE_DIR", str(REPO_DIR / "cache")
         )
     )
     / "trace.tsv"

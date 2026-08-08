@@ -47,7 +47,8 @@ if (( ${#UUIDS[@]} == 0 )); then
     exit 1
 fi
 
-CACHE_DIR="${BTT_WIDGET_CACHE_DIR:-$HOME/Library/Caches/btt-widgets}"
+REPO_DIR="${BTT_REPO_DIR:-$HOME/Documents/BTT}"
+CACHE_DIR="${BTT_WIDGET_CACHE_DIR:-$REPO_DIR/cache}"
 
 # Failure to raise the flag must not prevent the refresh request: a refresh
 # that only picks up a stale value still beats none.
