@@ -1,7 +1,7 @@
 #!/usr/bin/env zsh
 #
 # Live capture for the tap-refresh/freeze issue (see actions/btt-freeze-guard.sh
-# and widgets/test-widget.sh). Retroactive `log show` mining after a freeze has
+# and widgets/timer-widget.sh). Retroactive `log show` mining after a freeze has
 # already ended turns up nothing conclusive -- by the time you look, the
 # evidence is gone. This instead watches the shared widget trace in real time
 # and, the moment it goes quiet for too long, runs `sample` against BTT's main
@@ -14,12 +14,13 @@
 #
 #   ./actions/freeze-catch.sh
 #
-# THRESHOLD must exceed the widget tick interval you've configured in BTT
-# (currently 60s) or every ordinary gap between ticks will look like a stall.
+# The timer probe actively asks BTT to refresh the timer widget and waits for
+# a newer timer trace row. A failed probe is stronger evidence than passive
+# trace silence because it tests the same refresh path used by tap-refresh.
 #
 # Usage:
-#   FREEZE_CATCH_THRESHOLD=90   ./actions/freeze-catch.sh   # seconds of silence -> capture
-#   FREEZE_CATCH_POLL=3         ./actions/freeze-catch.sh   # how often to check
+#   FREEZE_CATCH_TIMER_TIMEOUT=15 ./actions/freeze-catch.sh
+#   FREEZE_CATCH_POLL=3           ./actions/freeze-catch.sh
 #
 
 set -u
@@ -28,14 +29,35 @@ PATH="/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin"
 CACHE_DIR="${BTT_WIDGET_CACHE_DIR:-$HOME/Library/Caches/btt-widgets}"
 TRACE="$CACHE_DIR/trace.tsv"
 OUT_DIR="$CACHE_DIR/freeze-samples"
-THRESHOLD="${FREEZE_CATCH_THRESHOLD:-90}"
 POLL="${FREEZE_CATCH_POLL:-3}"
+TIMER_WIDGET_UUID="E25C395A-FE13-4216-BC59-6317FD0454BF"
+TIMER_REFRESH_TIMEOUT="${FREEZE_CATCH_TIMER_TIMEOUT:-15}"
+TIMER_REFRESH_POLL="${FREEZE_CATCH_TIMER_POLL:-1}"
 SAMPLE_SECONDS="${FREEZE_CATCH_SAMPLE_SECONDS:-3}"
 
 mkdir -p "$OUT_DIR"
 
-trace_mtime() {
-    /usr/bin/stat -f%m "$TRACE" 2>/dev/null || printf '0'
+timer_trace_stamp() {
+    /usr/bin/awk -F '\t' '$2 == "timer-widget" && $3 == "widget" { latest = $1 } END { printf "%.6f\n", latest + 0 }' "$TRACE" 2>/dev/null || printf '0\n'
+}
+
+timer_widget_responsive() {
+    local before after probe_pid elapsed
+    before="$(timer_trace_stamp)"
+    /usr/bin/osascript -e "tell application \"BetterTouchTool\" to refresh_widget \"$TIMER_WIDGET_UUID\"" >/dev/null 2>&1 &
+    probe_pid=$!
+
+    for (( elapsed = 0; elapsed < TIMER_REFRESH_TIMEOUT; elapsed++ )); do
+        after="$(timer_trace_stamp)"
+        if (( after > before )); then
+            kill "$probe_pid" >/dev/null 2>&1 || true
+            return 0
+        fi
+        sleep "$TIMER_REFRESH_POLL"
+    done
+
+    kill "$probe_pid" >/dev/null 2>&1 || true
+    return 1
 }
 
 capture() {
@@ -68,34 +90,26 @@ capture() {
     echo "  -> done: $bundle"
 }
 
-echo "watching $TRACE"
-echo "threshold=${THRESHOLD}s poll=${POLL}s sample=${SAMPLE_SECONDS}s -> $OUT_DIR"
+echo "probing timer-widget via $TRACE"
+echo "timeout=${TIMER_REFRESH_TIMEOUT}s poll=${POLL}s sample=${SAMPLE_SECONDS}s -> $OUT_DIR"
 echo "(Ctrl-C to stop)"
 
-LAST_SEEN="$(trace_mtime)"
-LAST_CHANGE_AT="$(/bin/date +%s)"
 CAPTURED_THIS_STALL=0
+STALL_STARTED_AT=0
 
 while true; do
-    sleep "$POLL"
-
-    NOW="$(/bin/date +%s)"
-    CURRENT="$(trace_mtime)"
-
-    if [[ "$CURRENT" != "$LAST_SEEN" ]]; then
+    CHECK_STARTED_AT="$(/bin/date +%s)"
+    if timer_widget_responsive; then
         if (( CAPTURED_THIS_STALL )); then
-            echo "$(/bin/date '+%H:%M:%S') resumed after $(( NOW - LAST_CHANGE_AT ))s of silence"
+            echo "$(/bin/date '+%H:%M:%S') timer-widget responded after $(( CHECK_STARTED_AT - STALL_STARTED_AT ))s"
         fi
-        LAST_SEEN="$CURRENT"
-        LAST_CHANGE_AT="$NOW"
         CAPTURED_THIS_STALL=0
-        continue
-    fi
-
-    SILENT_FOR=$(( NOW - LAST_CHANGE_AT ))
-    if (( SILENT_FOR >= THRESHOLD && ! CAPTURED_THIS_STALL )); then
-        echo "$(/bin/date '+%H:%M:%S') no trace activity for ${SILENT_FOR}s -- stall suspected"
-        capture "$LAST_CHANGE_AT"
+    elif (( ! CAPTURED_THIS_STALL )); then
+        STALL_STARTED_AT="$CHECK_STARTED_AT"
+        echo "$(/bin/date '+%H:%M:%S') timer-widget did not respond for ${TIMER_REFRESH_TIMEOUT}s -- stall suspected"
+        capture "$STALL_STARTED_AT"
         CAPTURED_THIS_STALL=1
     fi
+
+    sleep "$POLL"
 done

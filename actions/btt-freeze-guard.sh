@@ -3,14 +3,14 @@
 # Periodic BetterTouchTool restart and widget refresh.
 #
 # Root cause, confirmed by live capture rather than just code reading (see
-# widgets/test-widget.sh and actions/freeze-catch.sh): a `sample` taken while
+# widgets/timer-widget.sh and actions/freeze-catch.sh): a `sample` taken while
 # frozen (~/Library/Caches/btt-widgets/freeze-samples/20260808-180758/)
 # caught BetterTouchTool's own main thread 100% busy inside AppKit --
 # -[NSWindow recalculateKeyViewLoop] recursing dozens of frames deep through
 # NSPerformVisuallyAtomicChange/_layoutSubtreeWithOldSize: while decoding a
 # NIB. That blocks BTT's run loop, which is also what dispatches widget ticks
 # to its BetterTouchToolShellScriptRunner XPC helper -- so nothing runs,
-# system-wide, until that layout pass finishes. test-widget.sh froze the same
+# system-wide, until that layout pass finishes. timer-widget.sh froze the same
 # way with zero network or Apple Music work involved, which rules out any
 # particular widget's own logic (including the historical lyrics nohup/setsid
 # gap noted in actions/track-changed.sh -- a real
@@ -20,9 +20,10 @@
 # The actual fix is on BTT's side (an AppKit performance bug in its own
 # code); there is nothing in this repo to patch. Until upstream fixes it,
 # this script restarts BTT on every 3-minute LaunchAgent interval and then
-# explicitly refreshes every script widget. A fixed interval is intentional:
-# a widget-specific stall or a partially frozen BTT is not reliably visible
-# through the shared trace file.
+# explicitly refreshes every script widget. Before deciding whether to defer
+# for user activity, it explicitly refreshes timer-widget and waits for a new
+# timer trace row. A failed probe is evidence that BTT cannot dispatch the
+# Touch Bar refresh and therefore bypasses idle deferral.
 #
 # The idle-deferral below (added to preserve keyboard focus during a restart)
 # used to have no cap: as long as HIDIdleTime kept coming back under 60s at
@@ -47,6 +48,10 @@ set -u
 
 LOG="$HOME/Library/Caches/btt-widgets/freeze-guard.log"
 DEFER_COUNT_FILE="$HOME/Library/Caches/btt-widgets/freeze-guard.defers"
+TRACE="$HOME/Library/Caches/btt-widgets/trace.tsv"
+TIMER_WIDGET_UUID="E25C395A-FE13-4216-BC59-6317FD0454BF"
+TIMER_REFRESH_TIMEOUT="${BTT_TIMER_REFRESH_TIMEOUT:-15}"
+TIMER_REFRESH_POLL="${BTT_TIMER_REFRESH_POLL:-1}"
 IDLE_MIN_SECONDS=60
 # One skipped interval, not zero: still absorbs a brief burst of typing
 # elsewhere without yanking focus. Not unbounded: caps the worst case at two
@@ -55,14 +60,43 @@ MAX_CONSECUTIVE_DEFERS=1
 
 mkdir -p "$(dirname "$LOG")" 2>/dev/null
 
+timer_trace_stamp() {
+	/usr/bin/awk -F '\t' '$2 == "timer-widget" && $3 == "widget" { latest = $1 } END { printf "%.6f\n", latest + 0 }' "$TRACE" 2>/dev/null || printf '0\n'
+}
+
+timer_widget_responsive() {
+	local before after probe_pid elapsed
+	before="$(timer_trace_stamp)"
+	/usr/bin/osascript -e "tell application \"BetterTouchTool\" to refresh_widget \"$TIMER_WIDGET_UUID\"" >/dev/null 2>&1 &
+	probe_pid=$!
+
+	for (( elapsed = 0; elapsed < TIMER_REFRESH_TIMEOUT; elapsed++ )); do
+		after="$(timer_trace_stamp)"
+		if (( after > before )); then
+			kill "$probe_pid" >/dev/null 2>&1 || true
+			return 0
+		fi
+		sleep "$TIMER_REFRESH_POLL"
+	done
+
+	kill "$probe_pid" >/dev/null 2>&1 || true
+	return 1
+}
+
 defers=0
 if [[ -f "$DEFER_COUNT_FILE" ]]; then
 	defers="$(<"$DEFER_COUNT_FILE")"
 	[[ "$defers" =~ ^[0-9]+$ ]] || defers=0
 fi
 
+timer_responsive=1
+if ! timer_widget_responsive; then
+	timer_responsive=0
+	echo "$(date '+%Y-%m-%d %H:%M:%S') timer-widget unresponsive for ${TIMER_REFRESH_TIMEOUT}s -- restarting BTT" >> "$LOG"
+fi
+
 idle_nanoseconds="$(/usr/sbin/ioreg -c IOHIDSystem -d 4 -w 0 2>/dev/null | /usr/bin/awk -F'= ' '/"HIDIdleTime"/ { print $2; exit }')"
-if [[ "$idle_nanoseconds" =~ ^[0-9]+$ ]] && (( idle_nanoseconds < IDLE_MIN_SECONDS * 1000000000 )) \
+if (( timer_responsive )) && [[ "$idle_nanoseconds" =~ ^[0-9]+$ ]] && (( idle_nanoseconds < IDLE_MIN_SECONDS * 1000000000 )) \
 	&& (( defers < MAX_CONSECUTIVE_DEFERS )); then
 	echo $(( defers + 1 )) > "$DEFER_COUNT_FILE"
 	echo "$(date '+%Y-%m-%d %H:%M:%S') scheduled restart deferred -- active user ($(( defers + 1 ))/$MAX_CONSECUTIVE_DEFERS)" >> "$LOG"
