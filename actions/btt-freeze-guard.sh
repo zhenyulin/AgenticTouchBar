@@ -47,10 +47,11 @@ sleep 3
 # enough into the wedge, so make sure it's actually gone before reopening.
 killall -9 BetterTouchTool BTTRelaunch >/dev/null 2>&1
 sleep 1
-/usr/bin/open -a "BetterTouchTool"
-sleep 5
+# Preserve the front app and current keyboard focus during the scheduled restart.
+/usr/bin/open -gj -a "BetterTouchTool"
 
-/usr/bin/osascript <<'APPLESCRIPT' >/dev/null 2>&1
+refresh_widgets() {
+    /usr/bin/osascript <<'APPLESCRIPT' >/dev/null 2>&1
 tell application "BetterTouchTool"
 	refresh_widget "59F8C568-022F-4BD9-B3EB-63A7676592DF"
 	refresh_widget "CF76E4C0-5986-41F9-8F3E-00A6C8F160FE"
@@ -60,3 +61,12 @@ tell application "BetterTouchTool"
 	refresh_widget "E25C395A-FE13-4216-BC59-6317FD0454BF"
 end tell
 APPLESCRIPT
+}
+
+# BTT can accept an Apple Event before its Touch Bar widget runner is ready.
+# Retry the inexpensive redraw request while its startup finishes; each widget
+# serializes real work with its refresh lock.
+for delay in 5 5 5; do
+	sleep "$delay"
+	refresh_widgets
+done

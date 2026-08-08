@@ -110,8 +110,10 @@ partially frozen failures.
 - **Scheduler:** `~/Library/LaunchAgents/com.zhenyulin.btt-freeze-guard.plist`,
   `StartInterval` 180s, loaded via `launchctl bootstrap gui/$(id -u) …`.
 - **Logic:** log each scheduled restart, quit BTT (`osascript … quit`, then
-  `killall -9` as a fallback), reopen it, wait for startup, and call
-  `refresh_widget` for each script widget.
+  `killall -9` as a fallback), reopen it without taking foreground focus,
+  then retry `refresh_widget` for each script widget at 5, 10, and 15 seconds
+  after launch. BTT's 300-second widget intervals do not elapse before the
+  guard's 180-second restart cycle, so the guard is their effective scheduler.
 - **Logs:**
   - `~/Library/Caches/btt-widgets/freeze-guard.log` — only written the
     moments it actually restarts BTT. Empty/absent means it has never had
