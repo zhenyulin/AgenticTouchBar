@@ -32,20 +32,54 @@ clash_fetch_proxy() {
         "$API/proxies/$(clash_uri_encode "$1")"
 }
 
+clash_fetch_proxies() {
+    curl -fsS \
+        --connect-timeout 1 \
+        --max-time 2 \
+        "${CLASH_CURL_ARGS[@]}" \
+        "${CLASH_AUTH_HEADERS[@]}" \
+        "$API/proxies"
+}
+
 clash_resolve_node() {
     local current="$ROOT_GROUP"
-    local proxy_json next
+    local proxies_json proxy_json next next_json
 
     clash_setup_curl
+    proxies_json="$(clash_fetch_proxies)" || return 1
+
+    if ! jq -e --arg name "$current" '.proxies | has($name)' <<< "$proxies_json" >/dev/null 2>&1; then
+        current="$(jq -r '
+            .proxies
+            | to_entries[]
+            | select((.value.all // []) | length > 0)
+            | .key
+        ' <<< "$proxies_json" | head -n 1)"
+        [[ -n "$current" ]] || return 1
+    fi
+
     for _ in {1..8}; do
-        proxy_json="$(clash_fetch_proxy "$current")" || return 1
+        proxy_json="$(jq -c --arg name "$current" '.proxies[$name] // empty' <<< "$proxies_json")"
+        [[ -n "$proxy_json" ]] || return 1
         next="$(jq -r '.now // empty' <<< "$proxy_json" 2>/dev/null)" || return 1
 
         if [[ -z "$next" || "$next" == "$current" ]]; then
             printf '%s' "$current"
             return 0
         fi
-        current="$next"
+
+        next_json="$(jq -c --arg name "$next" '.proxies[$name] // empty' <<< "$proxies_json")"
+        if [[ -n "$next_json" ]]; then
+            current="$next"
+            continue
+        fi
+
+        current="$(jq -r --argjson proxy "$proxy_json" '
+            .proxies as $all
+            | $proxy.all[]?
+            | select($all[.] != null)
+        ' <<< "$proxies_json" 2>/dev/null | head -n 1)"
+        [[ -n "$current" ]] || return 1
     done
 
     return 1
