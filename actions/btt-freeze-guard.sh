@@ -24,6 +24,16 @@
 # a widget-specific stall or a partially frozen BTT is not reliably visible
 # through the shared trace file.
 #
+# The idle-deferral below (added to preserve keyboard focus during a restart)
+# used to have no cap: as long as HIDIdleTime kept coming back under 60s at
+# every 3-minute check, it deferred forever. trace.tsv confirmed this let real
+# freezes run 5-10 minutes uninterrupted -- freeze-guard.log shows 43
+# consecutive "deferred -- active user" lines in a row (2026-08-08 23:53 to
+# 2026-08-09 01:06) with a 603s trace gap inside that exact window. Ordinary
+# activity in some other app is not evidence BTT itself is responsive, so
+# MAX_CONSECUTIVE_DEFERS below bounds the total postponement instead of
+# leaving it open-ended.
+#
 # This file is the documented, version-controlled source. The LaunchAgent
 # does not run it from here: launchd spawns its own zsh under a TCC identity
 # that macOS blocks from ~/Documents (same restriction noted in
@@ -36,16 +46,30 @@
 set -u
 
 LOG="$HOME/Library/Caches/btt-widgets/freeze-guard.log"
+DEFER_COUNT_FILE="$HOME/Library/Caches/btt-widgets/freeze-guard.defers"
 IDLE_MIN_SECONDS=60
+# One skipped interval, not zero: still absorbs a brief burst of typing
+# elsewhere without yanking focus. Not unbounded: caps the worst case at two
+# 3-minute intervals instead of running until an idle gap happens to appear.
+MAX_CONSECUTIVE_DEFERS=1
 
 mkdir -p "$(dirname "$LOG")" 2>/dev/null
 
+defers=0
+if [[ -f "$DEFER_COUNT_FILE" ]]; then
+	defers="$(<"$DEFER_COUNT_FILE")"
+	[[ "$defers" =~ ^[0-9]+$ ]] || defers=0
+fi
+
 idle_nanoseconds="$(/usr/sbin/ioreg -c IOHIDSystem -d 4 -w 0 2>/dev/null | /usr/bin/awk -F'= ' '/"HIDIdleTime"/ { print $2; exit }')"
-if [[ "$idle_nanoseconds" =~ ^[0-9]+$ ]] && (( idle_nanoseconds < IDLE_MIN_SECONDS * 1000000000 )); then
-	echo "$(date '+%Y-%m-%d %H:%M:%S') scheduled restart deferred -- active user" >> "$LOG"
+if [[ "$idle_nanoseconds" =~ ^[0-9]+$ ]] && (( idle_nanoseconds < IDLE_MIN_SECONDS * 1000000000 )) \
+	&& (( defers < MAX_CONSECUTIVE_DEFERS )); then
+	echo $(( defers + 1 )) > "$DEFER_COUNT_FILE"
+	echo "$(date '+%Y-%m-%d %H:%M:%S') scheduled restart deferred -- active user ($(( defers + 1 ))/$MAX_CONSECUTIVE_DEFERS)" >> "$LOG"
 	exit 0
 fi
 
+rm -f "$DEFER_COUNT_FILE" 2>/dev/null
 echo "$(date '+%Y-%m-%d %H:%M:%S') scheduled restart -- restarting BTT" >> "$LOG"
 
 /usr/bin/osascript -e 'tell application "BetterTouchTool" to quit' >/dev/null 2>&1

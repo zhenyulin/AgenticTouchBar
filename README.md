@@ -110,12 +110,21 @@ partially frozen failures.
 
 - **Scheduler:** `~/Library/LaunchAgents/com.zhenyulin.btt-freeze-guard.plist`,
   `StartInterval` 180s, loaded via `launchctl bootstrap gui/$(id -u) …`.
-- **Logic:** defer while the user has been active in the preceding 60 seconds;
-  otherwise quit BTT (`osascript … quit`, then `killall -9` as a fallback),
-  reopen it without taking foreground focus, then retry `refresh_widget` for
-  each script widget at 5, 10, and 15 seconds after launch. BTT's 300-second
+- **Logic:** defer while the user has been active in the preceding 60 seconds,
+  for at most one consecutive interval (`MAX_CONSECUTIVE_DEFERS`); otherwise
+  quit BTT (`osascript … quit`, then `killall -9` as a fallback), reopen it
+  without taking foreground focus, then retry `refresh_widget` for each
+  script widget at 5, 10, and 15 seconds after launch. BTT's 300-second
   widget intervals do not elapse before the guard's 180-second restart cycle,
   so the guard is their effective scheduler.
+
+  The defer used to be uncapped: `freeze-guard.log` showed 43 consecutive
+  "deferred -- active user" checks in a row (2026-08-08 23:53 to 2026-08-09
+  01:06), and `trace.tsv` had a 603s freeze gap inside that exact window --
+  ordinary activity in some other app was being treated as evidence BTT
+  itself was fine, which it isn't. This is almost certainly why restarts
+  weren't happening reliably. The cap bounds the worst case to two 3-minute
+  intervals instead of running until an idle gap happens to appear.
 - **Logs:**
   - `~/Library/Caches/btt-widgets/freeze-guard.log` — records each restart and
     every interval deferred for recent user activity.
