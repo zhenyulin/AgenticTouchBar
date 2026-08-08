@@ -87,10 +87,12 @@ this way; `track-changed.sh` uses the same primitive instead of a bare
 BTT already restarts itself on a freeze via `BTTRelaunch`, its own bundled
 watchdog — but on the AppKit freeze above, that took 4-5 minutes each time,
 which is where this guard earns its keep: a faster, logged restart. It runs
-every 3 minutes, actively refreshes the timer widget, and waits for a new
-timer trace row. If that probe fails, the guard treats BTT as unresponsive and
-restarts immediately; otherwise it defers the restart while macOS has seen
-keyboard or pointer activity in the prior 60 seconds.
+every 5 seconds, actively refreshes the timer widget, and waits up to five
+seconds for a new timer trace row. If that probe fails, the guard treats BTT
+as unresponsive and restarts immediately. Responsive probes retain the
+separate three-minute preventive-restart cadence and may defer that restart
+once while macOS has seen keyboard or pointer activity in the prior 60
+seconds.
 
 The shared trace remains useful for diagnostics and supplies the timer probe's
 evidence: a newer `timer-widget` row means BTT dispatched the refresh.
@@ -107,13 +109,14 @@ evidence: a newer `timer-widget` row means BTT dispatched the refresh.
   ```
 
 - **Scheduler:** `~/Library/LaunchAgents/com.zhenyulin.btt-freeze-guard.plist`,
-  `StartInterval` 180s, loaded via `launchctl bootstrap gui/$(id -u) …`.
-- **Logic:** refresh timer-widget and wait up to `BTT_TIMER_REFRESH_TIMEOUT`
-  seconds for its trace row. A timeout restarts BTT even during active input;
-  a responsive BTT may still defer for at most one consecutive interval
-  (`MAX_CONSECUTIVE_DEFERS`). After a restart, the guard reopens BTT without
-  taking foreground focus and retries `refresh_widget` for each script widget
-  at 5, 10, and 15 seconds.
+  `StartInterval` 5s, loaded via `launchctl bootstrap gui/$(id -u) …`.
+- **Logic:** refresh timer-widget every five seconds and wait up to
+  `BTT_TIMER_REFRESH_TIMEOUT` seconds for its trace row. A timeout restarts
+  BTT even during active input; a responsive BTT may still defer the separate
+  three-minute preventive restart for one interval (`MAX_CONSECUTIVE_DEFERS`).
+  After a restart, the guard reopens BTT without taking foreground focus and
+  retries `refresh_widget` for each script widget at 5, 10, and 15 seconds,
+  then allows a 30-second startup grace period before resuming probes.
 
   The defer used to be uncapped: `freeze-guard.log` showed 43 consecutive
   "deferred -- active user" checks in a row (2026-08-08 23:53 to 2026-08-09
@@ -123,8 +126,12 @@ evidence: a newer `timer-widget` row means BTT dispatched the refresh.
   weren't happening reliably. The cap bounds the worst case to two 3-minute
   intervals instead of running until an idle gap happens to appear.
 - **Logs:**
-  - `~/Library/Caches/btt-widgets/freeze-guard.log` — records each restart and
-    every interval deferred for recent user activity.
+  - `logs/freeze-guard.log` — records every five-second probe with its latest
+    complete `timer-widget` trace row, plus the final row observed before a
+    restart and every deferred preventive restart.
+  - `logs/freeze-catch.log` — records each manual probe with its latest timer
+    row; `logs/freeze-samples/<timestamp>/context.txt` preserves that final
+    row and the last 20 shared-trace records alongside live process samples.
   - `~/Library/Caches/btt-widgets/freeze-guard.std{out,err}.log` — general
     run output, for debugging the guard itself.
 
@@ -165,10 +172,9 @@ future recurrence or regression:
   — re-enable it to test again after a BTT update, or if tap-refresh misbehaves
   in a new way.
 - **`actions/freeze-catch.sh`** — run manually in a terminal
-  (`./actions/freeze-catch.sh`) and left open. Polls the shared trace; the
-  moment timer-widget fails to produce a trace row within its timeout, runs
-  `sample` against both BetterTouchTool and
+  (`./actions/freeze-catch.sh`) and left open. Actively probes timer-widget
+  every five seconds; the moment it fails to produce a trace row within its
+  timeout, it runs `sample` against both BetterTouchTool and
   `BetterTouchToolShellScriptRunner` in parallel and saves the output to
-  `~/Library/Caches/btt-widgets/freeze-samples/<timestamp>/` — a real stack
-  trace of the freeze while it's still happening. This is what caught the
-  sample referenced above.
+  `logs/freeze-samples/<timestamp>/` — a real stack trace of the freeze while
+  it's still happening. This is what caught the sample referenced above.
