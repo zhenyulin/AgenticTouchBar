@@ -9,7 +9,7 @@ from typing import Any
 from .. import config
 from ..concurrency import fetch_seconds_remaining, map_concurrently
 from ..matching import choose_candidate
-from ..metadata import metadata_variants, normalized
+from ..metadata import metadata_variants, normalized, track_title_variants
 from ..output import log_error
 
 
@@ -58,7 +58,7 @@ def lrclib_api_request(
 
 
 def collect_search_candidates(track: dict[str, Any]) -> list[dict[str, Any]]:
-    title_variants = metadata_variants(track.get("title", ""))[:4]
+    title_variants = track_title_variants(track)[:4]
     artist_variants = metadata_variants(track.get("artist", ""))[:6]
     collected: list[dict[str, Any]] = []
     seen: set[str] = set()
@@ -126,7 +126,7 @@ def lrclib_exact_record(track: dict[str, Any]) -> dict[str, Any] | None:
     One attempt only: the search below is a better use of the next few
     seconds than retrying the narrowest possible query.
     """
-    title_variants = metadata_variants(track.get("title", ""))[:3]
+    title_variants = track_title_variants(track)[:3]
     artist_variants = metadata_variants(track.get("artist", ""))[:5]
     duration = round(float(track.get("duration", 0))) or None
 

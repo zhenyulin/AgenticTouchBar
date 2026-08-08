@@ -8,8 +8,9 @@ from .metadata import best_similarity
 
 
 def candidate_score(track: dict[str, Any], candidate: dict[str, Any]) -> float:
-    title_score = best_similarity(
-        track.get("title", ""), candidate.get("trackName", "")
+    title_score = max(
+        best_similarity(track.get(title_key, ""), candidate.get("trackName", ""))
+        for title_key in ("search_title", "title")
     )
     artist_score = best_similarity(
         track.get("artist", ""), candidate.get("artistName", "")

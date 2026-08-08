@@ -7,6 +7,7 @@ import hashlib
 import json
 import re
 import unicodedata
+from functools import cache
 from typing import Any
 
 from . import config
@@ -65,6 +66,17 @@ def normalized(value: str) -> str:
     return " ".join(value.split())
 
 
+@cache
+def opencc_converters() -> tuple[Any, ...]:
+    try:
+        from opencc import OpenCC  # type: ignore
+
+        return OpenCC("t2s"), OpenCC("s2t")
+    except Exception:
+        return ()
+
+
+@cache
 def load_alias_groups() -> list[list[str]]:
     groups = [list(group) for group in config.BUILTIN_ALIAS_GROUPS]
     try:
@@ -91,7 +103,7 @@ def basic_metadata_variants(value: str) -> list[str]:
     base = value.strip()
     stripped = strip_version_annotations(base)
     variants = {item for item in (base, stripped) if item}
-    for converter in config.OPENCC_CONVERTERS:
+    for converter in opencc_converters():
         for item in list(variants):
             try:
                 converted = converter.convert(item).strip()
@@ -112,6 +124,20 @@ def metadata_variants(value: str) -> list[str]:
             variants.update(item for item in group if item)
     base = value.strip()
     return sorted(variants, key=lambda item: (item != base, len(item), item.casefold()))
+
+
+def track_title_variants(track: dict[str, Any], *, local: bool = False) -> list[str]:
+    title_values = [
+        str(track.get(key) or "").strip() for key in ("search_title", "title")
+    ]
+    variants: set[str] = set()
+    variant_builder = local_title_variants if local else metadata_variants
+    for value in title_values:
+        variants.update(variant_builder(value))
+    return sorted(
+        variants,
+        key=lambda item: (item != title_values[0], len(item), item.casefold()),
+    )
 
 
 def aliases_equivalent(left: str, right: str) -> bool:
@@ -144,6 +170,7 @@ def best_similarity(left: str, right: str) -> float:
 
 def track_cache_key(track: dict[str, Any]) -> str:
     identity = {
+        "search_title": normalized(track.get("search_title", "")),
         "title": normalized(track.get("title", "")),
         "artist": normalized(track.get("artist", "")),
         "album": normalized(track.get("album", "")),

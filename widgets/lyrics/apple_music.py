@@ -67,10 +67,10 @@ def read_apple_music() -> dict[str, Any]:
         return {"state": "stopped"}
 
     fields = raw.split(config.UNIT_SEPARATOR)
-    if len(fields) != 6:
+    if len(fields) != 8:
         raise RuntimeError(f"Unexpected Apple Music response: {raw!r}")
 
-    state, title, artist, album, duration, position = fields
+    state, title, sort_title, genre, artist, album, duration, position = fields
     try:
         duration_value = float(duration)
     except ValueError:
@@ -80,14 +80,26 @@ def read_apple_music() -> dict[str, Any]:
     except ValueError:
         position_value = 0.0
 
-    return {
+    track = {
         "state": state,
         "title": title.strip(),
+        "genre": genre.strip(),
         "artist": artist.strip(),
         "album": album.strip(),
         "duration": max(duration_value, 0.0),
         "position": max(position_value, 0.0),
     }
+    search_title = sort_title.strip()
+    if (
+        search_title
+        and search_title != track["title"]
+        and (
+            "mandopop" in track["genre"].casefold()
+            or "manda" in track["genre"].casefold()
+        )
+    ):
+        track["search_title"] = search_title
+    return track
 
 
 def write_state(track: dict[str, Any]) -> None:

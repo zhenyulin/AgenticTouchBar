@@ -1,9 +1,8 @@
 """Constants and environment-tunable settings shared across the widget.
 
 Importing this module is the first thing every other module in the package
-does, so LOADED_AT is captured here, before the (possibly slow) OpenCC
-import below it -- see __main__.py for why the timing starts this
-early.
+does, so LOADED_AT is captured here -- see __main__.py for why the timing
+starts this early.
 """
 
 from __future__ import annotations
@@ -24,18 +23,6 @@ from pathlib import Path
 # much short of the true figure. The constant does not matter for spotting a
 # freeze, which shows up as a gap between runs or as one run taking seconds.
 LOADED_AT = time.monotonic()
-
-try:
-    from opencc import OpenCC  # type: ignore
-except ImportError:
-    OpenCC = None  # type: ignore
-
-OPENCC_CONVERTERS: list[object] = []
-if OpenCC is not None:
-    try:
-        OPENCC_CONVERTERS = [OpenCC("t2s"), OpenCC("s2t")]
-    except Exception:
-        OPENCC_CONVERTERS = []
 
 # ---- User-tunable defaults -------------------------------------------------
 # The Touch Bar renders a proportional font, so a pixel budget tracks the
@@ -122,6 +109,14 @@ LRCLIB_API_BASE = "https://lrclib.net/api"
 LRCAPI_API_BASE = "https://api.lrc.cx/api/v1/lyrics"
 ENABLE_LRCAPI = os.environ.get("BTT_LYRICS_LRCAPI", "1") not in {"0", "false", "False"}
 LRCAPI_TIMEOUT_SECONDS = float(os.environ.get("BTT_LYRICS_LRCAPI_TIMEOUT", "2.5"))
+CATALOG_LOOKUP_TIMEOUT_SECONDS = float(
+    os.environ.get("BTT_LYRICS_CATALOG_LOOKUP_TIMEOUT", "4.0")
+)
+# Prefer LrcAPI briefly for Chinese-catalog coverage, then use an already-ready
+# LRCLIB match instead of leaving the widget waiting for slower LrcAPI calls.
+LRCAPI_PREFERENCE_SECONDS = max(
+    float(os.environ.get("BTT_LYRICS_LRCAPI_PREFERENCE", "1.5")), 0.0
+)
 LRCAPI_MAX_ADVANCE_QUERIES = int(os.environ.get("BTT_LYRICS_LRCAPI_MAX_ADVANCE", "4"))
 LRCAPI_MAX_SINGLE_QUERIES = int(os.environ.get("BTT_LYRICS_LRCAPI_MAX_SINGLE", "2"))
 LRCLIB_MAX_SEARCH_QUERIES = int(os.environ.get("BTT_LYRICS_LRCLIB_MAX_SEARCH", "7"))
@@ -153,7 +148,7 @@ LRCLIB_RETRY_BACKOFF_SECONDS = 0.5
 # Upstream hiccups worth a second attempt rather than a cached failure.
 TRANSIENT_HTTP_STATUS = {408, 425, 429, 500, 502, 503, 504}
 RETRY_NOT_FOUND_SECONDS = 6 * 60 * 60
-MATCHER_VERSION = 6
+MATCHER_VERSION = 7
 
 # Metadata aliases commonly used by streaming catalogs and community lyric
 # databases. Add your own groups in lyrics_aliases.json next to this script.
@@ -211,6 +206,18 @@ tell application "Music"
     end try
 
     try
+        set trackSortName to (sort name of currentTrack) as text
+    on error
+        set trackSortName to ""
+    end try
+
+    try
+        set trackGenre to (genre of currentTrack) as text
+    on error
+        set trackGenre to ""
+    end try
+
+    try
         set artistName to (artist of currentTrack) as text
     on error
         set artistName to ""
@@ -234,6 +241,6 @@ tell application "Music"
         set currentPosition to "0"
     end try
 
-    return currentState & sep & trackName & sep & artistName & sep & albumName & sep & trackDuration & sep & currentPosition
+    return currentState & sep & trackName & sep & trackSortName & sep & trackGenre & sep & artistName & sep & albumName & sep & trackDuration & sep & currentPosition
 end tell
 """

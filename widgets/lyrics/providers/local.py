@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from .. import config
-from ..metadata import local_title_variants, metadata_variants, normalized
+from ..metadata import metadata_variants, normalized, track_title_variants
 from ..output import log_error
 
 
@@ -15,7 +15,7 @@ def local_lyrics_record(track: dict[str, Any]) -> dict[str, Any] | None:
     if not config.LOCAL_LYRICS_DIR.is_dir():
         return None
 
-    titles = local_title_variants(track.get("title", ""))
+    titles = track_title_variants(track, local=True)
     artists = metadata_variants(track.get("artist", ""))
     candidate_paths: list[Path] = []
     seen: set[Path] = set()
@@ -49,7 +49,9 @@ def local_lyrics_record(track: dict[str, Any]) -> dict[str, Any] | None:
                 seen.add(path)
                 candidate_paths.append(path)
     except OSError as exc:
-        log_error(f"Could not scan local lyrics directory {config.LOCAL_LYRICS_DIR}: {exc}")
+        log_error(
+            f"Could not scan local lyrics directory {config.LOCAL_LYRICS_DIR}: {exc}"
+        )
 
     for path in candidate_paths:
         try:

@@ -10,6 +10,7 @@ from typing import Any
 
 from . import config
 from .cache import atomic_write_json, cache_path, lock_path
+from .catalog import catalog_chinese_title
 from .concurrency import set_fetch_deadline
 from .locking import acquire_lock, clear_lock, spawn_helper
 from .lrc import parse_lrc
@@ -24,28 +25,55 @@ def fetch_lyrics_record(track: dict[str, Any]) -> dict[str, Any] | None:
     # then the open LRCLIB database.
     from concurrent.futures import ThreadPoolExecutor
 
+    search_title = catalog_chinese_title(track)
+    if search_title:
+        track = {**track, "search_title": search_title}
+
     local = local_lyrics_record(track)
     if local is not None:
         return local
 
-    # LrcAPI's public endpoint routinely needs several seconds per query and
-    # LRCLIB has its own bad minutes; waiting out one before starting the
-    # other is most of what keeps a new track on the hourglass. They run
-    # together, and LrcAPI still wins whenever it has an answer.
+    # Prefer LrcAPI for its Chinese-catalog coverage, but only for a bounded
+    # head start: a ready LRCLIB match is more useful than an extra wait.
+    from concurrent.futures import TimeoutError
+
     pool = ThreadPoolExecutor(max_workers=2)
     try:
         lrcapi_lookup = pool.submit(choose_lrcapi_candidate, track)
         lrclib_lookup = pool.submit(lrclib_record, track)
 
         try:
-            lrcapi = lrcapi_lookup.result()
+            lrcapi = lrcapi_lookup.result(timeout=config.LRCAPI_PREFERENCE_SECONDS)
+        except TimeoutError:
+            lrcapi = None
         except Exception as exc:
             log_error(f"LrcAPI lookup failed; using LRCLIB: {exc}")
             lrcapi = None
-        if lrcapi is not None:
-            return lrcapi
+        else:
+            if lrcapi is not None:
+                return lrcapi
+            return lrclib_lookup.result()
 
-        return lrclib_lookup.result()
+        try:
+            lrclib = lrclib_lookup.result()
+        except Exception as exc:
+            try:
+                lrcapi = lrcapi_lookup.result()
+            except Exception as lrcapi_exc:
+                log_error(f"LrcAPI lookup failed; using LRCLIB: {lrcapi_exc}")
+                raise exc
+            if lrcapi is not None:
+                return lrcapi
+            raise exc
+
+        if lrclib is not None:
+            return lrclib
+
+        try:
+            return lrcapi_lookup.result()
+        except Exception as exc:
+            log_error(f"LrcAPI lookup failed; using LRCLIB: {exc}")
+            return None
     finally:
         # Never wait on the provider whose answer is no longer wanted: the
         # cache write that ends the hourglass happens as soon as this returns.
@@ -103,9 +131,7 @@ def background_fetch(key: str, track: dict[str, Any]) -> None:
                     "retry_after": now + config.RETRY_NETWORK_ERROR_SECONDS,
                 },
             )
-            trace(
-                "fetch", started, "network_error", reason=str(exc).split(":")[0][:40]
-            )
+            trace("fetch", started, "network_error", reason=str(exc).split(":")[0][:40])
     finally:
         try:
             lock.unlink()
