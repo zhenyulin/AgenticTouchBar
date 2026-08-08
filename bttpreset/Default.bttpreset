@@ -146,7 +146,7 @@
     "BSTBrokenAPICheckEnabled" : false,
     "BTTDrawingsHighlightStartPoint" : true,
     "BSTIncreaseSnappingArea" : true,
-    "BTTShowControlStripItem" : true,
+    "BTTShowControlStripItem" : false,
     "BTTAutoSwitchToOldKeyboardImplementation" : true,
     "BTTStageManagerLeaveGap" : true,
     "showNormalMiceTab" : true,
@@ -157,6 +157,7 @@
     "BSTSnapAreaDefaultBackgroundColor" : "129.991390, 201.122858, 227.012328, 104.550000",
     "BTTScreenshotOpenImgurInBrowser" : true,
     "BTTForceForceClickPressure5F" : 600,
+    "BTTHTTPServerPort" : 51571,
     "BTTStageManagerLeftGap" : 190,
     "BSTSnapAreaDefaultShowPictogram" : false,
     "BSTSnapAreaDefaultPictoDistanceFromBottom" : 0.10000000149011612
@@ -180,6 +181,17 @@
           "BTTUUID" : "4E126879-A15E-4DFB-9EE3-B8A5F09742E7",
           "BTTOrder" : 7,
           "BTTMergeIntoTouchBarGroups" : 0,
+          "BTTActionsToExecute" : [
+            {
+              "BTTLastUpdatedAt" : 1786226324.096031,
+              "BTTTriggerParentUUID" : "4E126879-A15E-4DFB-9EE3-B8A5F09742E7",
+              "BTTIsPureAction" : true,
+              "BTTTriggerClass" : "BTTTriggerTypeTouchBar",
+              "BTTUUID" : "839EDFC6-0182-423F-81E3-7F849747F2A1",
+              "BTTOrder" : 0,
+              "BTTMergeIntoTouchBarGroups" : 0
+            }
+          ],
           "BTTWidgetName" : "Weather",
           "BTTTriggerConfig" : {
             "BTTTouchBarWeatherUnit" : 2,
@@ -226,27 +238,9 @@
               "BTTUUID" : "A3A989D1-4A80-4BA5-95D9-467A560B2510",
               "BTTPredefinedActionType" : 206,
               "BTTPredefinedActionName" : "Execute Shell Script  or  Task",
-              "BTTShellTaskActionScript" : "exec \"$HOME\/Documents\/BTT\/actions\/tap-refresh.sh\" --mark-only \\\n\"8C95B746-77DA-4B76-A966-6EBB10E755F4\"",
+              "BTTShellTaskActionScript" : "exec \"$HOME\/Documents\/BTT\/actions\/tap-refresh.sh\" \\\n\"{BTT_WIDGET_CLAUDE_UUID}\"",
               "BTTShellTaskActionConfig" : "\/bin\/zsh:::-c:::-:::",
               "BTTOrder" : 9,
-              "BTTMergeIntoTouchBarGroups" : 0
-            },
-            {
-              "BTTLastUpdatedAt" : 1786226042.0968928,
-              "BTTTriggerParentUUID" : "8C95B746-77DA-4B76-A966-6EBB10E755F4",
-              "BTTIsPureAction" : true,
-              "BTTTriggerClass" : "BTTTriggerTypeTouchBar",
-              "BTTUUID" : "B1F9A4DC-5B78-4D4B-9A4F-33F3F1E4D021",
-              "BTTPredefinedActionType" : 281,
-              "BTTPredefinedActionName" : "Run Real JavaScript",
-              "BTTAdditionalActionData" : {
-                "BTTScriptType" : 3,
-                "BTTAppleScriptUsePath" : false,
-                "BTTScriptLocation" : 0,
-                "BTTAppleScriptRunInBackground" : true,
-                "BTTAppleScriptString" : "refresh_widget({uuid: \"8C95B746-77DA-4B76-A966-6EBB10E755F4\"});\nreturnToBTT(\"done\");"
-              },
-              "BTTOrder" : 10,
               "BTTMergeIntoTouchBarGroups" : 0
             }
           ],
@@ -269,7 +263,7 @@
             "BTTTouchBarBorderColor" : "255.000000, 255.000000, 255.000000, 255.000000",
             "BTTTouchBarItemIconWidth" : 22,
             "BTTTouchBarFreeSpaceBeforeButton" : 0,
-            "BTTTouchBarShellScriptString" : "exec \"$HOME\/Documents\/BTT\/widgets\/claude-quota.sh\" \\\n\"8C95B746-77DA-4B76-A966-6EBB10E755F4\"",
+            "BTTTouchBarShellScriptString" : "exec \"$HOME\/Documents\/BTT\/widgets\/claude-quota.sh\" \\\n\"{BTT_WIDGET_CLAUDE_UUID}\"",
             "BTTTouchBarButtonFontSize" : 15,
             "BTTTouchBarIconTextOffset" : 5,
             "BTTTouchBarOnlyShowIcon" : false,
@@ -299,9 +293,9 @@
                 "BTTScriptLocation" : 0,
                 "BTTAppleScriptRunInBackground" : true,
                 "SelectedAction" : 195,
-                "BTTAppleScriptString" : "tell application \"BetterTouchTool\"\r\trefresh_widget \"59F8C568-022F-4BD9-B3EB-63A7676592DF\"\r\trefresh_widget \"508ECCA7-BAD5-469D-9418-94E2C370AE37\"\r\trefresh_widget \"8C95B746-77DA-4B76-A966-6EBB10E755F4\"\rend tell"
+                "BTTAppleScriptString" : "tell application \"BetterTouchTool\"\r\trefresh_widget \"{BTT_WIDGET_CLASH_LATENCY_UUID}\"\r\trefresh_widget \"{BTT_WIDGET_CODEX_UUID}\"\r\trefresh_widget \"{BTT_WIDGET_CLAUDE_UUID}\"\rend tell"
               },
-              "BTTInlineAppleScript" : "tell application \"BetterTouchTool\"\r\trefresh_widget \"59F8C568-022F-4BD9-B3EB-63A7676592DF\"\r\trefresh_widget \"508ECCA7-BAD5-469D-9418-94E2C370AE37\"\r\trefresh_widget \"8C95B746-77DA-4B76-A966-6EBB10E755F4\"\rend tell",
+              "BTTInlineAppleScript" : "tell application \"BetterTouchTool\"\r\trefresh_widget \"{BTT_WIDGET_CLASH_LATENCY_UUID}\"\r\trefresh_widget \"{BTT_WIDGET_CODEX_UUID}\"\r\trefresh_widget \"{BTT_WIDGET_CLAUDE_UUID}\"\rend tell",
               "BTTOrder" : 8
             }
           ]
@@ -325,27 +319,9 @@
               "BTTUUID" : "256BFD28-01EE-4EE9-8C6F-BBB79600793E",
               "BTTPredefinedActionType" : 206,
               "BTTPredefinedActionName" : "Execute Shell Script  or  Task",
-              "BTTShellTaskActionScript" : "exec \"$HOME\/Documents\/BTT\/actions\/tap-refresh.sh\" --mark-only \\\n\"E25C395A-FE13-4216-BC59-6317FD0454BF\"\n",
+              "BTTShellTaskActionScript" : "exec \"$HOME\/Documents\/BTT\/actions\/tap-refresh.sh\" \\\n\"{BTT_WIDGET_TIMER_UUID}\"\n",
               "BTTShellTaskActionConfig" : "\/bin\/zsh:::-c:::-:::",
               "BTTOrder" : 7,
-              "BTTMergeIntoTouchBarGroups" : 0
-            },
-            {
-              "BTTLastUpdatedAt" : 1786226042.0969291,
-              "BTTTriggerParentUUID" : "E25C395A-FE13-4216-BC59-6317FD0454BF",
-              "BTTIsPureAction" : true,
-              "BTTTriggerClass" : "BTTTriggerTypeTouchBar",
-              "BTTUUID" : "CD80CDE2-062A-45A5-9291-39AB094CAB46",
-              "BTTPredefinedActionType" : 281,
-              "BTTPredefinedActionName" : "Run Real JavaScript",
-              "BTTAdditionalActionData" : {
-                "BTTScriptType" : 3,
-                "BTTAppleScriptUsePath" : false,
-                "BTTScriptLocation" : 0,
-                "BTTAppleScriptRunInBackground" : true,
-                "BTTAppleScriptString" : "refresh_widget({uuid: \"E25C395A-FE13-4216-BC59-6317FD0454BF\"});\nreturnToBTT(\"done\");"
-              },
-              "BTTOrder" : 8,
               "BTTMergeIntoTouchBarGroups" : 0
             }
           ],
@@ -360,7 +336,7 @@
             "BTTTouchBarButtonHoverColor" : "248.880000, 146.115000, 128.010000, 181.050000",
             "BTTTouchBarButtonHeight" : 15,
             "BTTTouchBarButtonWidth" : 100,
-            "BTTTouchBarScriptUpdateInterval" : 60,
+            "BTTTouchBarScriptUpdateInterval" : 0,
             "BTTTouchBarItemIconHeight" : 22,
             "BTTTouchBarButtonTextAlignment" : 0,
             "BTTShellScriptDontTrimWhitepsace" : false,
@@ -370,7 +346,7 @@
             "BTTTouchBarItemIconWidth" : 22,
             "BTTTouchBarFreeSpaceBeforeButton" : 0,
             "BTTTouchBarButtonName" : "TIMER",
-            "BTTTouchBarShellScriptString" : "exec \"$HOME\/Documents\/BTT\/widgets\/timer-widget.sh\" \\\n\"E25C395A-FE13-4216-BC59-6317FD0454BF\"",
+            "BTTTouchBarShellScriptString" : "exec \"$HOME\/Documents\/BTT\/widgets\/timer-widget.sh\" \\\n\"{BTT_WIDGET_TIMER_UUID}\"",
             "BTTTouchBarButtonFontSize" : 10,
             "BTTTouchBarFontColor" : "85.000003, 85.000003, 85.000003, 255.000000",
             "BTTTouchBarIconTextOffset" : 5,
@@ -440,27 +416,9 @@
               "BTTUUID" : "CFFF823A-D595-4AC8-982D-25CC84BE6945",
               "BTTPredefinedActionType" : 206,
               "BTTPredefinedActionName" : "Execute Shell Script  or  Task",
-              "BTTShellTaskActionScript" : "exec \"$HOME\/Documents\/BTT\/actions\/tap-refresh.sh\" --mark-only \\\n\"508ECCA7-BAD5-469D-9418-94E2C370AE37\"",
+              "BTTShellTaskActionScript" : "exec \"$HOME\/Documents\/BTT\/actions\/tap-refresh.sh\" \\\n\"{BTT_WIDGET_CODEX_UUID}\"",
               "BTTShellTaskActionConfig" : "\/bin\/zsh:::-c:::-:::",
               "BTTOrder" : 9,
-              "BTTMergeIntoTouchBarGroups" : 0
-            },
-            {
-              "BTTLastUpdatedAt" : 1786226042.0970311,
-              "BTTTriggerParentUUID" : "508ECCA7-BAD5-469D-9418-94E2C370AE37",
-              "BTTIsPureAction" : true,
-              "BTTTriggerClass" : "BTTTriggerTypeTouchBar",
-              "BTTUUID" : "C4D9E0A3-1CC2-4B3C-8911-4D7E3F4D0B22",
-              "BTTPredefinedActionType" : 281,
-              "BTTPredefinedActionName" : "Run Real JavaScript",
-              "BTTAdditionalActionData" : {
-                "BTTScriptType" : 3,
-                "BTTAppleScriptUsePath" : false,
-                "BTTScriptLocation" : 0,
-                "BTTAppleScriptRunInBackground" : true,
-                "BTTAppleScriptString" : "refresh_widget({uuid: \"508ECCA7-BAD5-469D-9418-94E2C370AE37\"});\nreturnToBTT(\"done\");"
-              },
-              "BTTOrder" : 10,
               "BTTMergeIntoTouchBarGroups" : 0
             }
           ],
@@ -484,7 +442,7 @@
             "BTTTouchBarBorderColor" : "255.000000, 255.000000, 255.000000, 255.000000",
             "BTTTouchBarItemIconWidth" : 22,
             "BTTTouchBarFreeSpaceBeforeButton" : 0,
-            "BTTTouchBarShellScriptString" : "exec \"$HOME\/Documents\/BTT\/widgets\/codex-quota.sh\" \\\n\"508ECCA7-BAD5-469D-9418-94E2C370AE37\"",
+            "BTTTouchBarShellScriptString" : "exec \"$HOME\/Documents\/BTT\/widgets\/codex-quota.sh\" \\\n\"{BTT_WIDGET_CODEX_UUID}\"",
             "BTTTouchBarButtonFontSize" : 15,
             "BTTTouchBarIconTextOffset" : 5,
             "BTTTouchBarOnlyShowIcon" : false,
@@ -550,7 +508,7 @@
                 "BTTAppleScriptUsePath" : false,
                 "BTTScriptLocation" : 0,
                 "BTTAppleScriptRunInBackground" : true,
-                "BTTAppleScriptString" : "(async () => {\n  await new Promise(resolve => setTimeout(resolve, 1800));\n  refresh_widget({uuid: \"E19BB023-5060-4A56-95C8-6E7402779870\"});\n  returnToBTT(\"done\");\n})();"
+                "BTTAppleScriptString" : "(async () => {\n  await new Promise(resolve => setTimeout(resolve, 1800));\n  refresh_widget({uuid: \"{BTT_WIDGET_LYRICS_UUID}\"});\n  returnToBTT(\"done\");\n})();"
               },
               "BTTOrder" : 1,
               "BTTMergeIntoTouchBarGroups" : 0
@@ -620,6 +578,17 @@
           "BTTUUID" : "5668276F-0BBB-4A6C-BA5A-ADC262AAC047",
           "BTTOrder" : 8,
           "BTTMergeIntoTouchBarGroups" : 0,
+          "BTTActionsToExecute" : [
+            {
+              "BTTLastUpdatedAt" : 1786226328.680428,
+              "BTTTriggerParentUUID" : "5668276F-0BBB-4A6C-BA5A-ADC262AAC047",
+              "BTTIsPureAction" : true,
+              "BTTTriggerClass" : "BTTTriggerTypeTouchBar",
+              "BTTUUID" : "17B8D350-66A4-4B3C-9238-FC3A1C12D9EB",
+              "BTTOrder" : 0,
+              "BTTMergeIntoTouchBarGroups" : 0
+            }
+          ],
           "BTTWidgetName" : "Weath Icon",
           "BTTTriggerConfig" : {
             "BTTTouchBarWeatherUnit" : 2,
@@ -719,27 +688,9 @@
               "BTTUUID" : "5B139104-C6C4-43A1-8E47-0C1BAC82450D",
               "BTTPredefinedActionType" : 206,
               "BTTPredefinedActionName" : "Execute Shell Script  or  Task",
-              "BTTShellTaskActionScript" : "exec \"$HOME\/Documents\/BTT\/actions\/track-changed.sh\" \\\n    \"E19BB023-5060-4A56-95C8-6E7402779870\"",
+              "BTTShellTaskActionScript" : "exec \"$HOME\/Documents\/BTT\/actions\/track-changed.sh\" \\\n    \"{BTT_WIDGET_LYRICS_UUID}\" \\\n    \"{BTT_WIDGET_STAR_UUID}\"",
               "BTTShellTaskActionConfig" : "\/bin\/zsh:::-c:::-:::",
               "BTTOrder" : 8,
-              "BTTMergeIntoTouchBarGroups" : 0
-            },
-            {
-              "BTTLastUpdatedAt" : 1786226042.0968409,
-              "BTTTriggerParentUUID" : "2759B990-4FD7-4294-AEBF-2124BE5CE15E",
-              "BTTIsPureAction" : true,
-              "BTTTriggerClass" : "BTTTriggerTypeTouchBar",
-              "BTTUUID" : "7D0C3A7A-0B98-46C1-9AC6-4F24E7A8A612",
-              "BTTPredefinedActionType" : 281,
-              "BTTPredefinedActionName" : "Run Real JavaScript",
-              "BTTAdditionalActionData" : {
-                "BTTScriptType" : 3,
-                "BTTAppleScriptUsePath" : false,
-                "BTTScriptLocation" : 0,
-                "BTTAppleScriptRunInBackground" : true,
-                "BTTAppleScriptString" : "(async () => {\n  await new Promise(resolve => setTimeout(resolve, 600));\n  refresh_widget({uuid: \"E19BB023-5060-4A56-95C8-6E7402779870\"});\n  refresh_widget({uuid: \"A05C5D37-7EAA-4F7B-AC00-23183CC8C6A1\"});\n  returnToBTT(\"done\");\n})();"
-              },
-              "BTTOrder" : 9,
               "BTTMergeIntoTouchBarGroups" : 0
             }
           ],
@@ -784,27 +735,9 @@
               "BTTUUID" : "1787C5CE-9CBD-4CB3-ADCC-EF870F9EFE03",
               "BTTPredefinedActionType" : 206,
               "BTTPredefinedActionName" : "Execute Shell Script  or  Task",
-              "BTTShellTaskActionScript" : "exec \"$HOME\/Documents\/BTT\/actions\/tap-refresh.sh\" --mark-only \\\n\"59F8C568-022F-4BD9-B3EB-63A7676592DF\" \\\n\"CF76E4C0-5986-41F9-8F3E-00A6C8F160FE\"\n",
+              "BTTShellTaskActionScript" : "exec \"$HOME\/Documents\/BTT\/actions\/tap-refresh.sh\" \\\n\"{BTT_WIDGET_CLASH_LATENCY_UUID}\" \\\n\"{BTT_WIDGET_CLASH_REGION_UUID}\"\n",
               "BTTShellTaskActionConfig" : "\/bin\/zsh:::-c:::-:::",
               "BTTOrder" : 7,
-              "BTTMergeIntoTouchBarGroups" : 0
-            },
-            {
-              "BTTLastUpdatedAt" : 1786226042.097014,
-              "BTTTriggerParentUUID" : "CF76E4C0-5986-41F9-8F3E-00A6C8F160FE",
-              "BTTIsPureAction" : true,
-              "BTTTriggerClass" : "BTTTriggerTypeTouchBar",
-              "BTTUUID" : "E6F7A8B9-3EE4-4F90-B233-6D8BAC1D4F44",
-              "BTTPredefinedActionType" : 281,
-              "BTTPredefinedActionName" : "Run Real JavaScript",
-              "BTTAdditionalActionData" : {
-                "BTTScriptType" : 3,
-                "BTTAppleScriptUsePath" : false,
-                "BTTScriptLocation" : 0,
-                "BTTAppleScriptRunInBackground" : true,
-                "BTTAppleScriptString" : "refresh_widget({uuid: \"59F8C568-022F-4BD9-B3EB-63A7676592DF\"});\nrefresh_widget({uuid: \"CF76E4C0-5986-41F9-8F3E-00A6C8F160FE\"});\nreturnToBTT(\"done\");"
-              },
-              "BTTOrder" : 8,
               "BTTMergeIntoTouchBarGroups" : 0
             }
           ],
@@ -826,7 +759,7 @@
             "BTTTouchBarBorderColor" : "255.000000, 255.000000, 255.000000, 255.000000",
             "BTTTouchBarItemIconWidth" : 22,
             "BTTTouchBarFreeSpaceBeforeButton" : 0,
-            "BTTTouchBarShellScriptString" : "exec \"$HOME\/Documents\/BTT\/widgets\/clash-region.sh\" \\\n\"CF76E4C0-5986-41F9-8F3E-00A6C8F160FE\"",
+            "BTTTouchBarShellScriptString" : "exec \"$HOME\/Documents\/BTT\/widgets\/clash-region.sh\" \\\n\"{BTT_WIDGET_CLASH_REGION_UUID}\"",
             "BTTTouchBarButtonFontSize" : 22,
             "BTTTouchBarFontColor" : "255,255,255,255",
             "BTTTouchBarIconTextOffset" : 5,
@@ -864,27 +797,9 @@
               "BTTUUID" : "E1F484D3-F77E-4599-8F6B-CBA79E874619",
               "BTTPredefinedActionType" : 206,
               "BTTPredefinedActionName" : "Execute Shell Script  or  Task",
-              "BTTShellTaskActionScript" : "exec \"$HOME\/Documents\/BTT\/actions\/track-changed.sh\" \\\n    \"E19BB023-5060-4A56-95C8-6E7402779870\"",
+              "BTTShellTaskActionScript" : "exec \"$HOME\/Documents\/BTT\/actions\/track-changed.sh\" \\\n    \"{BTT_WIDGET_LYRICS_UUID}\" \\\n    \"{BTT_WIDGET_STAR_UUID}\"",
               "BTTShellTaskActionConfig" : "\/bin\/zsh:::-c:::-:::",
               "BTTOrder" : 1,
-              "BTTMergeIntoTouchBarGroups" : 0
-            },
-            {
-              "BTTLastUpdatedAt" : 1786226042.097064,
-              "BTTTriggerParentUUID" : "398D8506-BF6E-408B-B4FE-0E6EA6CCCE14",
-              "BTTIsPureAction" : true,
-              "BTTTriggerClass" : "BTTTriggerTypeTouchBar",
-              "BTTUUID" : "A8796A25-FDB3-4A6F-A4AD-9B9BBACB8B17",
-              "BTTPredefinedActionType" : 281,
-              "BTTPredefinedActionName" : "Run Real JavaScript",
-              "BTTAdditionalActionData" : {
-                "BTTScriptType" : 3,
-                "BTTAppleScriptUsePath" : false,
-                "BTTScriptLocation" : 0,
-                "BTTAppleScriptRunInBackground" : true,
-                "BTTAppleScriptString" : "(async () => {\n  await new Promise(resolve => setTimeout(resolve, 600));\n  refresh_widget({uuid: \"E19BB023-5060-4A56-95C8-6E7402779870\"});\n  refresh_widget({uuid: \"A05C5D37-7EAA-4F7B-AC00-23183CC8C6A1\"});\n  returnToBTT(\"done\");\n})();"
-              },
-              "BTTOrder" : 2,
               "BTTMergeIntoTouchBarGroups" : 0
             }
           ],
@@ -929,27 +844,9 @@
               "BTTUUID" : "31EBC333-AE31-4FFF-BD96-48AD058CE87A",
               "BTTPredefinedActionType" : 206,
               "BTTPredefinedActionName" : "Execute Shell Script  or  Task",
-              "BTTShellTaskActionScript" : "exec \"$HOME\/Documents\/BTT\/actions\/tap-refresh.sh\" --mark-only \\\n\"59F8C568-022F-4BD9-B3EB-63A7676592DF\" \\\n\"CF76E4C0-5986-41F9-8F3E-00A6C8F160FE\"\n",
+              "BTTShellTaskActionScript" : "exec \"$HOME\/Documents\/BTT\/actions\/tap-refresh.sh\" \\\n\"{BTT_WIDGET_CLASH_LATENCY_UUID}\" \\\n\"{BTT_WIDGET_CLASH_REGION_UUID}\"\n",
               "BTTShellTaskActionConfig" : "\/bin\/zsh:::-c:::-:::",
               "BTTOrder" : 7,
-              "BTTMergeIntoTouchBarGroups" : 0
-            },
-            {
-              "BTTLastUpdatedAt" : 1786226042.096833,
-              "BTTTriggerParentUUID" : "59F8C568-022F-4BD9-B3EB-63A7676592DF",
-              "BTTIsPureAction" : true,
-              "BTTTriggerClass" : "BTTTriggerTypeTouchBar",
-              "BTTUUID" : "D5E4F6B7-2DD3-4E8F-A122-5C7A9B0C3E33",
-              "BTTPredefinedActionType" : 281,
-              "BTTPredefinedActionName" : "Run Real JavaScript",
-              "BTTAdditionalActionData" : {
-                "BTTScriptType" : 3,
-                "BTTAppleScriptUsePath" : false,
-                "BTTScriptLocation" : 0,
-                "BTTAppleScriptRunInBackground" : true,
-                "BTTAppleScriptString" : "refresh_widget({uuid: \"59F8C568-022F-4BD9-B3EB-63A7676592DF\"});\nrefresh_widget({uuid: \"CF76E4C0-5986-41F9-8F3E-00A6C8F160FE\"});\nreturnToBTT(\"done\");"
-              },
-              "BTTOrder" : 8,
               "BTTMergeIntoTouchBarGroups" : 0
             }
           ],
@@ -971,7 +868,7 @@
             "BTTTouchBarBorderColor" : "255.000000, 255.000000, 255.000000, 255.000000",
             "BTTTouchBarItemIconWidth" : 22,
             "BTTTouchBarFreeSpaceBeforeButton" : 0,
-            "BTTTouchBarShellScriptString" : "exec \"$HOME\/Documents\/BTT\/widgets\/clash-latency.sh\" \\\n\"59F8C568-022F-4BD9-B3EB-63A7676592DF\"",
+            "BTTTouchBarShellScriptString" : "exec \"$HOME\/Documents\/BTT\/widgets\/clash-latency.sh\" \\\n\"{BTT_WIDGET_CLASH_LATENCY_UUID}\"",
             "BTTTouchBarButtonFontSize" : 15,
             "BTTTouchBarFontColor" : "255,255,255,255",
             "BTTTouchBarIconTextOffset" : 5,
@@ -1004,9 +901,9 @@
                 "BTTScriptLocation" : 0,
                 "BTTAppleScriptRunInBackground" : true,
                 "SelectedAction" : 195,
-                "BTTAppleScriptString" : "set widgetUUID to \"A05C5D37-7EAA-4F7B-AC00-23183CC8C6A1\"\n\nif application \"Music\" is running then\n    tell application \"Music\"\n        if player state is not stopped then\n            set oldFavorite to favorited of current track\n            set newFavorite to not oldFavorite\n\n            if newFavorite then\n                set newSymbol to \"★\"\n            else\n                set newSymbol to \"☆\"\n            end if\n\n            -- Update Touch Bar immediately, before Apple Music finishes.\n            tell application \"BetterTouchTool\"\n                update_touch_bar_widget widgetUUID text newSymbol\n            end tell\n\n            -- Apple Music can take a moment to persist this.\n            set favorited of current track to newFavorite\n\n            -- Never let BTT display \"missing value\".\n            return newSymbol\n        end if\n    end tell\nend if\n\nreturn \"\""
+                "BTTAppleScriptString" : "set widgetUUID to \"{BTT_WIDGET_STAR_UUID}\"\n\nif application \"Music\" is running then\n    tell application \"Music\"\n        if player state is not stopped then\n            set oldFavorite to favorited of current track\n            set newFavorite to not oldFavorite\n\n            if newFavorite then\n                set newSymbol to \"★\"\n            else\n                set newSymbol to \"☆\"\n            end if\n\n            -- Update Touch Bar immediately, before Apple Music finishes.\n            tell application \"BetterTouchTool\"\n                update_touch_bar_widget widgetUUID text newSymbol\n            end tell\n\n            -- Apple Music can take a moment to persist this.\n            set favorited of current track to newFavorite\n\n            -- Never let BTT display \"missing value\".\n            return newSymbol\n        end if\n    end tell\nend if\n\nreturn \"\""
               },
-              "BTTInlineAppleScript" : "set widgetUUID to \"A05C5D37-7EAA-4F7B-AC00-23183CC8C6A1\"\n\nif application \"Music\" is running then\n    tell application \"Music\"\n        if player state is not stopped then\n            set oldFavorite to favorited of current track\n            set newFavorite to not oldFavorite\n\n            if newFavorite then\n                set newSymbol to \"★\"\n            else\n                set newSymbol to \"☆\"\n            end if\n\n            -- Update Touch Bar immediately, before Apple Music finishes.\n            tell application \"BetterTouchTool\"\n                update_touch_bar_widget widgetUUID text newSymbol\n            end tell\n\n            -- Apple Music can take a moment to persist this.\n            set favorited of current track to newFavorite\n\n            -- Never let BTT display \"missing value\".\n            return newSymbol\n        end if\n    end tell\nend if\n\nreturn \"\"",
+              "BTTInlineAppleScript" : "set widgetUUID to \"{BTT_WIDGET_STAR_UUID}\"\n\nif application \"Music\" is running then\n    tell application \"Music\"\n        if player state is not stopped then\n            set oldFavorite to favorited of current track\n            set newFavorite to not oldFavorite\n\n            if newFavorite then\n                set newSymbol to \"★\"\n            else\n                set newSymbol to \"☆\"\n            end if\n\n            -- Update Touch Bar immediately, before Apple Music finishes.\n            tell application \"BetterTouchTool\"\n                update_touch_bar_widget widgetUUID text newSymbol\n            end tell\n\n            -- Apple Music can take a moment to persist this.\n            set favorited of current track to newFavorite\n\n            -- Never let BTT display \"missing value\".\n            return newSymbol\n        end if\n    end tell\nend if\n\nreturn \"\"",
               "BTTOrder" : 10,
               "BTTMergeIntoTouchBarGroups" : 0
             }

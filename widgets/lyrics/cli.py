@@ -33,7 +33,9 @@ def fetch_mode(arguments: list[str]) -> int:
         )
 
         def stop_fetch(_signum: int, _frame: Any) -> None:
-            raise TimeoutError(f"Lyrics fetch exceeded {config.FETCH_TIMEOUT_SECONDS:g}s")
+            raise TimeoutError(
+                f"Lyrics fetch exceeded {config.FETCH_TIMEOUT_SECONDS:g}s"
+            )
 
         signal.signal(signal.SIGALRM, stop_fetch)
         signal.setitimer(signal.ITIMER_REAL, max(config.FETCH_TIMEOUT_SECONDS, 1.0))

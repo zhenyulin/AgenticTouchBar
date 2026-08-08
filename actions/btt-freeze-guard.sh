@@ -155,7 +155,7 @@ while true; do
 	/usr/bin/open -g -a "BetterTouchTool"
 
 refresh_widgets() {
-    /usr/bin/osascript <<'APPLESCRIPT' >/dev/null 2>&1
+	/usr/bin/osascript <<'APPLESCRIPT' >/dev/null 2>&1
 tell application "BetterTouchTool"
 	refresh_widget "59F8C568-022F-4BD9-B3EB-63A7676592DF"
 	refresh_widget "CF76E4C0-5986-41F9-8F3E-00A6C8F160FE"

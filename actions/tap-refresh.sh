@@ -3,13 +3,7 @@
 # BetterTouchTool Touch Bar manual refresh helper.
 #
 # Usage:
-#   tap-refresh.sh [--mark-only] <widget-uuid> [<widget-uuid> ...]
-#
-# With --mark-only, this script only raises the force flags. That mode is for
-# BTT Touch Bar actions, whose following Real JavaScript action performs the
-# native refresh_widget call without launching osascript from the shell runner.
-# Without --mark-only, the script retains its Terminal/CLI fire-and-forget
-# refresh behavior.
+#   tap-refresh.sh [--delay-ms <milliseconds>] <widget-uuid> [<widget-uuid> ...]
 #
 # That run starts the widget's refresh even if its cached value is still
 # fresh, and greys itself out because the refresh is now in flight. The grey
@@ -31,9 +25,13 @@ set -u
 
 PATH="/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin"
 
-MARK_ONLY=0
-if [[ "${1:-}" == "--mark-only" ]]; then
-    MARK_ONLY=1
+DELAY_MS=0
+if [[ "${1:-}" == "--delay-ms" ]]; then
+    shift
+    DELAY_MS="${1:-}"
+    if [[ ! "$DELAY_MS" == <-> ]]; then
+        exit 2
+    fi
     shift
 fi
 
@@ -51,25 +49,24 @@ fi
 
 CACHE_DIR="${BTT_WIDGET_CACHE_DIR:-$HOME/Library/Caches/btt-widgets}"
 
-# Failure to raise the flag must NOT prevent the refresh request in normal
-# CLI mode: a refresh that only picks up a stale value still beats none. In
-# --mark-only mode, the following BTT JavaScript action still runs even if
-# writing a flag failed.
+# Failure to raise the flag must not prevent the refresh request: a refresh
+# that only picks up a stale value still beats none.
 if mkdir -p "$CACHE_DIR" 2>/dev/null; then
     for uuid in "${UUIDS[@]}"; do
         : > "$CACHE_DIR/$uuid.force" 2>/dev/null || true
     done
 fi
 
-if (( MARK_ONLY )); then
-    exit 0
-fi
-
 # Fire-and-forget: refresh_widget blocks until the widget script has
 # finished, and this BTT shell action must return immediately.
-nohup /usr/bin/osascript -l JavaScript - "${UUIDS[@]}" <<'JXA' >/dev/null 2>&1 &
+nohup /usr/bin/osascript -l JavaScript - "$DELAY_MS" "${UUIDS[@]}" <<'JXA' >/dev/null 2>&1 &
 function run(argv) {
+    const delayMilliseconds = Number(argv.shift()) || 0;
     const btt = Application("BetterTouchTool");
+
+    if (delayMilliseconds > 0) {
+        delay(delayMilliseconds / 1000);
+    }
 
     for (const uuid of argv) {
         btt.refresh_widget(uuid);

@@ -4,10 +4,11 @@
 # BetterTouchTool action: the track just changed.
 #
 # Usage:
-#   track-changed.sh [lyrics-widget-uuid]
+#   track-changed.sh [lyrics-widget-uuid] [star-widget-uuid]
 #
 # Environment fallbacks:
 #   BTT_LYRICS_WIDGET_UUID
+#   BTT_STAR_WIDGET_UUID
 #
 
 set -u
@@ -17,6 +18,7 @@ PATH="/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin"
 source "$HOME/Documents/BTT/widgets/lib/btt-widget.sh"
 
 LYRICS_UUID="${1:-${BTT_LYRICS_WIDGET_UUID:-}}"
+STAR_UUID="${2:-${BTT_STAR_WIDGET_UUID:-}}"
 
 #
 # Lyrics
@@ -32,6 +34,10 @@ LYRICS_UUID="${1:-${BTT_LYRICS_WIDGET_UUID:-}}"
 if [[ -n "$LYRICS_UUID" ]]; then
     btt_spawn_detached "$HOME/Documents/BTT/widgets/now-playing-lyrics.sh" \
         --track-changed "$LYRICS_UUID"
+
+    UUIDS=("$LYRICS_UUID")
+    [[ -n "$STAR_UUID" ]] && UUIDS+=("$STAR_UUID")
+    "$HOME/Documents/BTT/actions/tap-refresh.sh" --delay-ms 600 "${UUIDS[@]}"
 fi
 
 exit 0
