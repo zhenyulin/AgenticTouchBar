@@ -79,11 +79,27 @@ NETWORK_TIMEOUT_SECONDS = float(os.environ.get("BTT_LYRICS_NETWORK_TIMEOUT", "4.
 APPLE_MUSIC_TIMEOUT_SECONDS = float(
     os.environ.get("BTT_LYRICS_APPLE_MUSIC_TIMEOUT", "1.5")
 )
+# Falls back to the system-wide Now Playing info (via nowplaying-cli) when
+# Apple Music has nothing playing, which is how QQ Music and other
+# non-scriptable players are picked up. Off disables the fallback entirely.
+ENABLE_MEDIA_REMOTE = os.environ.get("BTT_LYRICS_MEDIA_REMOTE", "1") not in {
+    "0",
+    "false",
+    "False",
+}
+MEDIA_REMOTE_TIMEOUT_SECONDS = float(
+    os.environ.get("BTT_LYRICS_MEDIA_REMOTE_TIMEOUT", "1.5")
+)
+# Already covered by the direct AppleScript path, and better: MediaRemote
+# never reports Apple Music's live position, only a stale 0.
+MEDIA_REMOTE_IGNORED_BUNDLE_IDS = {"com.apple.Music"}
 
 CACHE_DIR = Path.home() / "Library" / "Caches" / "BTTNowPlayingLyrics"
 WIDGET_LOCK_PATH = CACHE_DIR / "widget.lock"
 SAMPLER_LOCK_PATH = CACHE_DIR / "sampler.lock"
 STATE_PATH = CACHE_DIR / "state.json"
+# Where the hand-tracked MediaRemote position is kept between samples.
+MEDIA_REMOTE_POSITION_PATH = CACHE_DIR / "media_remote_position.json"
 LAST_TEXT_PATH = CACHE_DIR / "last.txt"
 TRACE_PATH = CACHE_DIR / "trace.tsv"
 WATCH_PATH = CACHE_DIR / "watch.tsv"

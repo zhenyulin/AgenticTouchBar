@@ -17,6 +17,7 @@ from .debug import clear_current_cache, diagnose_current
 from .diagnostics import report_mode, watch_mode
 from .fetch import background_fetch, start_background_fetch
 from .locking import clear_lock
+from .media_remote import read_media_remote
 from .metadata import track_cache_key
 from .output import log_error, trace
 from .render import widget_main
@@ -134,30 +135,65 @@ def track_changed_mode(arguments: list[str]) -> int:
     return 0
 
 
+def _media_remote_fallback() -> dict[str, Any] | None:
+    """A system-wide Now Playing track, if one is actually playing or paused.
+
+    Used when Apple Music has nothing of its own to report, so QQ Music and
+    other non-scriptable players still show up.
+    """
+    try:
+        remote = read_media_remote()
+    except Exception as exc:
+        log_error(f"Now Playing sample failed: {exc}")
+        return None
+    return remote if remote.get("state") in {"playing", "paused"} else None
+
+
 def sample_mode() -> int:
-    """Refresh the Apple Music sample the widget renders from."""
+    """Refresh the sample the widget renders from.
+
+    Apple Music is checked first, since it is read directly and gives an
+    exact position. When it has nothing playing -- including when BTT is not
+    authorized to ask it -- the system-wide Now Playing info is checked next.
+    """
     started = time.monotonic()
     try:
-        track = read_apple_music()
+        try:
+            track = read_apple_music()
+        except PermissionError:
+            # The widget can still show QQ Music (or anything else) even
+            # when Apple Music itself is not authorized. Only fall through
+            # to the "denied" state, which surfaces the automation prompt,
+            # when nothing else has an answer either.
+            remote = _media_remote_fallback()
+            if remote is None:
+                write_state({"state": "denied"})
+                trace("sample", started, "denied")
+                return 1
+            write_state(remote)
+            trace("sample", started, remote.get("state", "?"), source="media_remote")
+            return 0
+        except Exception as exc:
+            # Leave the previous sample in place. Apple Music briefly
+            # refuses to answer while a track changes, and rendering a
+            # slightly old sample beats blanking the widget for the length
+            # of the hiccup.
+            log_error(f"Apple Music sample failed: {exc}")
+            # A slow or failing sampler is what makes the widget hold a
+            # stale frame, so the reason belongs next to the widget's own
+            # timings.
+            trace("sample", started, "failed", reason=str(exc).split(":")[0][:40])
+            return 1
+
+        source = "apple_music"
+        if track.get("state") in {"not_running", "stopped"}:
+            remote = _media_remote_fallback()
+            if remote is not None:
+                track, source = remote, "media_remote"
+
         write_state(track)
-        trace("sample", started, track.get("state", "?"))
+        trace("sample", started, track.get("state", "?"), source=source)
         return 0
-    except PermissionError:
-        # The widget no longer talks to Apple Music at all, so this is the
-        # only place the automation prompt can be discovered. Record it as a
-        # state rather than logging it, or the widget has no way to say so.
-        write_state({"state": "denied"})
-        trace("sample", started, "denied")
-        return 1
-    except Exception as exc:
-        # Leave the previous sample in place. Apple Music briefly refuses to
-        # answer while a track changes, and rendering a slightly old sample
-        # beats blanking the widget for the length of the hiccup.
-        log_error(f"Apple Music sample failed: {exc}")
-        # A slow or failing sampler is what makes the widget hold a stale
-        # frame, so the reason belongs next to the widget's own timings.
-        trace("sample", started, "failed", reason=str(exc).split(":")[0][:40])
-        return 1
     finally:
         clear_lock(config.SAMPLER_LOCK_PATH)
 
