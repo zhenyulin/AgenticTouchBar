@@ -321,6 +321,61 @@ btt_refresh_detached() {
 
 
 # ---------------------------------------------------------------------------
+# Public: run a cached widget with detached refresh work
+#
+# The caller supplies its refresh-mode flag, absolute script path, cache age,
+# and a callback that prints the refreshed value. The shared lifecycle keeps
+# cache, forced-refresh, trace, and output behavior consistent.
+# ---------------------------------------------------------------------------
+
+btt_cached_widget_main() {
+    local refresh_mode="${1:-0}"
+    local self="${2-}"
+    local value_max_age="${3:-300}"
+    local compute_value="${4-}"
+    local started
+    started="$(btt_now)"
+
+    if (( refresh_mode )); then
+        local refreshed
+        refreshed="$("$compute_value")"
+        btt_cache_put "$BTT_WIDGET_NAME" "$refreshed"
+
+        local refresh_outcome
+        case "$refreshed" in
+            "")            refresh_outcome=empty ;;
+            *ERR*|NO\ *)   refresh_outcome=error ;;
+            *)             refresh_outcome=ok ;;
+        esac
+        btt_trace refresh "$started" "$refresh_outcome" "value=$refreshed"
+        return 0
+    fi
+
+    local value fresh force outcome
+    value="$(btt_cache_get "$BTT_WIDGET_NAME" "$value_max_age")"
+    fresh=$?
+
+    force=0
+    if btt_force_pending; then
+        force=1
+    fi
+
+    if (( fresh != 0 || force )); then
+        btt_refresh_detached \
+            "$BTT_WIDGET_NAME" "$BTT_WIDGET_REFRESH_MAX_RUN" \
+            "$self" --refresh "$BTT_WIDGET_UUID"
+    fi
+
+    outcome=cached
+    (( fresh != 0 )) && outcome=stale
+    (( force )) && outcome=forced
+    [[ -n "$value" ]] || outcome=empty
+    btt_trace widget "$started" "$outcome"
+    btt_publish "${value:-…}"
+}
+
+
+# ---------------------------------------------------------------------------
 # Public: did a tap ask for a refresh?
 #
 # Consumed on read: the flag orders one refresh, not a mode the widget stays

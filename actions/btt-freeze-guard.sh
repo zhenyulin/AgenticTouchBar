@@ -36,8 +36,15 @@
 set -u
 
 LOG="$HOME/Library/Caches/btt-widgets/freeze-guard.log"
+IDLE_MIN_SECONDS=60
 
 mkdir -p "$(dirname "$LOG")" 2>/dev/null
+
+idle_nanoseconds="$(/usr/sbin/ioreg -c IOHIDSystem -d 4 -w 0 2>/dev/null | /usr/bin/awk -F'= ' '/"HIDIdleTime"/ { print $2; exit }')"
+if [[ "$idle_nanoseconds" =~ ^[0-9]+$ ]] && (( idle_nanoseconds < IDLE_MIN_SECONDS * 1000000000 )); then
+	echo "$(date '+%Y-%m-%d %H:%M:%S') scheduled restart deferred -- active user" >> "$LOG"
+	exit 0
+fi
 
 echo "$(date '+%Y-%m-%d %H:%M:%S') scheduled restart -- restarting BTT" >> "$LOG"
 

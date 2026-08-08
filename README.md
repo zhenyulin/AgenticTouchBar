@@ -87,10 +87,11 @@ this way; `track-changed.sh` uses the same primitive instead of a bare
 BTT already restarts itself on a freeze via `BTTRelaunch`, its own bundled
 watchdog — but on the AppKit freeze above, that took 4-5 minutes each time,
 which is where this guard earns its keep: a faster, logged restart. It runs
-every 3 minutes and restarts BetterTouchTool on every interval, then
-explicitly refreshes all script widgets. A fixed interval is intentional
-because a widget-specific stall or a partially frozen BTT is not reliably
-visible through the shared trace.
+every 3 minutes, but defers its restart while macOS has seen keyboard or
+pointer activity in the prior 60 seconds. This preserves active input while
+still recovering BTT at the next idle interval. A fixed interval is
+intentional because a widget-specific stall or a partially frozen BTT is not
+reliably visible through the shared trace.
 
 The shared trace remains useful for diagnostics, but it is no longer used as
 the restart condition because it cannot reliably identify widget-specific or
@@ -109,15 +110,15 @@ partially frozen failures.
 
 - **Scheduler:** `~/Library/LaunchAgents/com.zhenyulin.btt-freeze-guard.plist`,
   `StartInterval` 180s, loaded via `launchctl bootstrap gui/$(id -u) …`.
-- **Logic:** log each scheduled restart, quit BTT (`osascript … quit`, then
-  `killall -9` as a fallback), reopen it without taking foreground focus,
-  then retry `refresh_widget` for each script widget at 5, 10, and 15 seconds
-  after launch. BTT's 300-second widget intervals do not elapse before the
-  guard's 180-second restart cycle, so the guard is their effective scheduler.
+- **Logic:** defer while the user has been active in the preceding 60 seconds;
+  otherwise quit BTT (`osascript … quit`, then `killall -9` as a fallback),
+  reopen it without taking foreground focus, then retry `refresh_widget` for
+  each script widget at 5, 10, and 15 seconds after launch. BTT's 300-second
+  widget intervals do not elapse before the guard's 180-second restart cycle,
+  so the guard is their effective scheduler.
 - **Logs:**
-  - `~/Library/Caches/btt-widgets/freeze-guard.log` — only written the
-    moments it actually restarts BTT. Empty/absent means it has never had
-    to fire.
+  - `~/Library/Caches/btt-widgets/freeze-guard.log` — records each restart and
+    every interval deferred for recent user activity.
   - `~/Library/Caches/btt-widgets/freeze-guard.std{out,err}.log` — general
     run output, for debugging the guard itself.
 
