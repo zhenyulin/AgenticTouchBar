@@ -119,7 +119,10 @@ def render_tick() -> str:
             start_background_fetch(key, track)
         except Exception as exc:
             log_error(f"Could not start background fetch: {exc}")
-        emit(render_widget(track, None, fetch_waiting_seconds(key)))
+        # A lookup happens only at a track boundary. Preserve the preceding
+        # lyric frame until it completes, rather than replacing it with an
+        # intermediate pending state that makes the Touch Bar appear blank.
+        emit_last_output()
         return "pending"
 
     retry_after = float(cached.get("retry_after", 0) or 0)
