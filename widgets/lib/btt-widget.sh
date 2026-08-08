@@ -65,7 +65,7 @@ BTT_WIDGET_FORCE_MAX_AGE="${BTT_WIDGET_FORCE_MAX_AGE:-10}"
 BTT_WIDGET_ICON="${BTT_WIDGET_ICON:-}"
 
 # Trace file shared by every widget, read by
-# `now_playing_lyrics.py --report`. Set to 0 to turn tracing off.
+# `widgets/now-playing-lyrics.sh --report`. Set to 0 to turn tracing off.
 BTT_WIDGET_TRACE="${BTT_WIDGET_TRACE:-1}"
 BTT_WIDGET_TRACE_MAX_BYTES="${BTT_WIDGET_TRACE_MAX_BYTES:-2000000}"
 
@@ -110,8 +110,8 @@ btt__is_fresh() {
 #   btt_now                            -> seconds, as a float
 #   btt_trace <mode> <started> <outcome> [extra]
 #
-# Columns match the ones now_playing_lyrics.py writes, so a single
-# `now_playing_lyrics.py --report` covers every widget.
+# Columns match the ones the lyrics widget writes, so a single
+# `widgets/now-playing-lyrics.sh --report` covers every widget.
 # ---------------------------------------------------------------------------
 
 btt_now() {

@@ -39,8 +39,22 @@ def clear_lock(path: Path) -> None:
 
 
 def spawn_helper(arguments: list[str]) -> None:
+    """Launch a detached `python3 -m lyrics <arguments>`.
+
+    This package has no standalone entry file: `__main__.py` relies on `-m`
+    for its package context (relative imports), so re-entering it means
+    putting the package's parent directory on PYTHONPATH, the same way
+    widgets/now-playing-lyrics.sh does, rather than pointing at a path.
+    """
+    env = dict(os.environ)
+    package_root = str(_package_root())
+    existing = env.get("PYTHONPATH", "")
+    env["PYTHONPATH"] = (
+        package_root + os.pathsep + existing if existing else package_root
+    )
     subprocess.Popen(
-        [sys.executable, str(_entry_point()), *arguments],
+        [sys.executable, "-m", "lyrics", *arguments],
+        env=env,
         stdin=subprocess.DEVNULL,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
@@ -49,10 +63,9 @@ def spawn_helper(arguments: list[str]) -> None:
     )
 
 
-def _entry_point() -> Path:
-    """The top-level script BetterTouchTool invokes, so a detached helper
-    re-enters through the same path rather than importing the package."""
-    return Path(__file__).resolve().parent.with_name("now_playing_lyrics.py")
+def _package_root() -> Path:
+    """The directory `lyrics` needs on PYTHONPATH to be importable by name."""
+    return Path(__file__).resolve().parent.parent
 
 
 def acquire_widget_lock() -> bool:

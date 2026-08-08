@@ -26,8 +26,7 @@ UUID="${1:-${BTT_LYRICS_WIDGET_UUID:-}}"
 # Detached, and with every stream closed: a background child that still holds
 # this script's stdout keeps the pipe open, and BTT waits on that pipe -- which
 # would reintroduce exactly the blocking this file exists to avoid.
-nohup /usr/bin/env python3 \
-    "$HOME/Documents/BTT/widgets/lyrics/now_playing_lyrics.py" --clear-current \
+nohup "$HOME/Documents/BTT/widgets/now-playing-lyrics.sh" --clear-current \
     </dev/null >/dev/null 2>&1 &
 
 disown 2>/dev/null || true

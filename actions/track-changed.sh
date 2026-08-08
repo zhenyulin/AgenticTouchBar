@@ -24,8 +24,7 @@ LYRICS_UUID="${1:-${BTT_LYRICS_WIDGET_UUID:-}}"
 #
 
 if [[ -n "$LYRICS_UUID" ]]; then
-    nohup /usr/bin/env python3 \
-        "$HOME/Documents/BTT/widgets/lyrics/now_playing_lyrics.py" \
+    nohup "$HOME/Documents/BTT/widgets/now-playing-lyrics.sh" \
         --track-changed "$LYRICS_UUID" \
         </dev/null >/dev/null 2>&1 &
 fi

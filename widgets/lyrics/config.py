@@ -2,7 +2,7 @@
 
 Importing this module is the first thing every other module in the package
 does, so LOADED_AT is captured here, before the (possibly slow) OpenCC
-import below it -- see now_playing_lyrics.py for why the timing starts this
+import below it -- see __main__.py for why the timing starts this
 early.
 """
 

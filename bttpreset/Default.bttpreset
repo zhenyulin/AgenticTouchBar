@@ -280,9 +280,27 @@
               "BTTUUID" : "A3A989D1-4A80-4BA5-95D9-467A560B2510",
               "BTTPredefinedActionType" : 206,
               "BTTPredefinedActionName" : "Execute Shell Script  or  Task",
-              "BTTShellTaskActionScript" : "exec \"$HOME\/Documents\/BTT\/actions\/tap-refresh.sh\" \\\n\"8C95B746-77DA-4B76-A966-6EBB10E755F4\"",
+              "BTTShellTaskActionScript" : "exec \"$HOME\/Documents\/BTT\/actions\/tap-refresh.sh\" --mark-only \\\n\"8C95B746-77DA-4B76-A966-6EBB10E755F4\"",
               "BTTShellTaskActionConfig" : "\/bin\/zsh:::-c:::-:::",
               "BTTOrder" : 9,
+              "BTTMergeIntoTouchBarGroups" : 0
+            },
+            {
+              "BTTLastUpdatedAt" : 1786144329.000004,
+              "BTTTriggerParentUUID" : "8C95B746-77DA-4B76-A966-6EBB10E755F4",
+              "BTTIsPureAction" : true,
+              "BTTTriggerClass" : "BTTTriggerTypeTouchBar",
+              "BTTUUID" : "B1F9A4DC-5B78-4D4B-9A4F-33F3F1E4D021",
+              "BTTPredefinedActionType" : 281,
+              "BTTPredefinedActionName" : "Run Real JavaScript",
+              "BTTAdditionalActionData" : {
+                "BTTScriptType" : 3,
+                "BTTAppleScriptUsePath" : false,
+                "BTTScriptLocation" : 0,
+                "BTTAppleScriptRunInBackground" : true,
+                "BTTAppleScriptString" : "refresh_widget({uuid: \"8C95B746-77DA-4B76-A966-6EBB10E755F4\"});\nreturnToBTT(\"done\");"
+              },
+              "BTTOrder" : 10,
               "BTTMergeIntoTouchBarGroups" : 0
             }
           ],
@@ -332,9 +350,27 @@
               "BTTUUID" : "1787C5CE-9CBD-4CB3-ADCC-EF870F9EFE03",
               "BTTPredefinedActionType" : 206,
               "BTTPredefinedActionName" : "Execute Shell Script  or  Task",
-              "BTTShellTaskActionScript" : "exec \"$HOME\/Documents\/BTT\/actions\/tap-refresh.sh\" \\\n\"59F8C568-022F-4BD9-B3EB-63A7676592DF\" \\\n\"CF76E4C0-5986-41F9-8F3E-00A6C8F160FE\"\n",
+              "BTTShellTaskActionScript" : "exec \"$HOME\/Documents\/BTT\/actions\/tap-refresh.sh\" --mark-only \\\n\"59F8C568-022F-4BD9-B3EB-63A7676592DF\" \\\n\"CF76E4C0-5986-41F9-8F3E-00A6C8F160FE\"\n",
               "BTTShellTaskActionConfig" : "\/bin\/zsh:::-c:::-:::",
               "BTTOrder" : 7,
+              "BTTMergeIntoTouchBarGroups" : 0
+            },
+            {
+              "BTTLastUpdatedAt" : 1786144329.000007,
+              "BTTTriggerParentUUID" : "CF76E4C0-5986-41F9-8F3E-00A6C8F160FE",
+              "BTTIsPureAction" : true,
+              "BTTTriggerClass" : "BTTTriggerTypeTouchBar",
+              "BTTUUID" : "E6F7A8B9-3EE4-4F90-B233-6D8BAC1D4F44",
+              "BTTPredefinedActionType" : 281,
+              "BTTPredefinedActionName" : "Run Real JavaScript",
+              "BTTAdditionalActionData" : {
+                "BTTScriptType" : 3,
+                "BTTAppleScriptUsePath" : false,
+                "BTTScriptLocation" : 0,
+                "BTTAppleScriptRunInBackground" : true,
+                "BTTAppleScriptString" : "refresh_widget({uuid: \"59F8C568-022F-4BD9-B3EB-63A7676592DF\"});\nrefresh_widget({uuid: \"CF76E4C0-5986-41F9-8F3E-00A6C8F160FE\"});\nreturnToBTT(\"done\");"
+              },
+              "BTTOrder" : 8,
               "BTTMergeIntoTouchBarGroups" : 0
             }
           ],
@@ -414,9 +450,27 @@
               "BTTUUID" : "CFFF823A-D595-4AC8-982D-25CC84BE6945",
               "BTTPredefinedActionType" : 206,
               "BTTPredefinedActionName" : "Execute Shell Script  or  Task",
-              "BTTShellTaskActionScript" : "exec \"$HOME\/Documents\/BTT\/actions\/tap-refresh.sh\" \\\n\"508ECCA7-BAD5-469D-9418-94E2C370AE37\"",
+              "BTTShellTaskActionScript" : "exec \"$HOME\/Documents\/BTT\/actions\/tap-refresh.sh\" --mark-only \\\n\"508ECCA7-BAD5-469D-9418-94E2C370AE37\"",
               "BTTShellTaskActionConfig" : "\/bin\/zsh:::-c:::-:::",
               "BTTOrder" : 9,
+              "BTTMergeIntoTouchBarGroups" : 0
+            },
+            {
+              "BTTLastUpdatedAt" : 1786144329.000005,
+              "BTTTriggerParentUUID" : "508ECCA7-BAD5-469D-9418-94E2C370AE37",
+              "BTTIsPureAction" : true,
+              "BTTTriggerClass" : "BTTTriggerTypeTouchBar",
+              "BTTUUID" : "C4D9E0A3-1CC2-4B3C-8911-4D7E3F4D0B22",
+              "BTTPredefinedActionType" : 281,
+              "BTTPredefinedActionName" : "Run Real JavaScript",
+              "BTTAdditionalActionData" : {
+                "BTTScriptType" : 3,
+                "BTTAppleScriptUsePath" : false,
+                "BTTScriptLocation" : 0,
+                "BTTAppleScriptRunInBackground" : true,
+                "BTTAppleScriptString" : "refresh_widget({uuid: \"508ECCA7-BAD5-469D-9418-94E2C370AE37\"});\nreturnToBTT(\"done\");"
+              },
+              "BTTOrder" : 10,
               "BTTMergeIntoTouchBarGroups" : 0
             }
           ],
@@ -634,9 +688,27 @@
               "BTTUUID" : "31EBC333-AE31-4FFF-BD96-48AD058CE87A",
               "BTTPredefinedActionType" : 206,
               "BTTPredefinedActionName" : "Execute Shell Script  or  Task",
-              "BTTShellTaskActionScript" : "exec \"$HOME\/Documents\/BTT\/actions\/tap-refresh.sh\" \\\n\"59F8C568-022F-4BD9-B3EB-63A7676592DF\" \\\n\"CF76E4C0-5986-41F9-8F3E-00A6C8F160FE\"\n",
+              "BTTShellTaskActionScript" : "exec \"$HOME\/Documents\/BTT\/actions\/tap-refresh.sh\" --mark-only \\\n\"59F8C568-022F-4BD9-B3EB-63A7676592DF\" \\\n\"CF76E4C0-5986-41F9-8F3E-00A6C8F160FE\"\n",
               "BTTShellTaskActionConfig" : "\/bin\/zsh:::-c:::-:::",
               "BTTOrder" : 7,
+              "BTTMergeIntoTouchBarGroups" : 0
+            },
+            {
+              "BTTLastUpdatedAt" : 1786144329.000006,
+              "BTTTriggerParentUUID" : "59F8C568-022F-4BD9-B3EB-63A7676592DF",
+              "BTTIsPureAction" : true,
+              "BTTTriggerClass" : "BTTTriggerTypeTouchBar",
+              "BTTUUID" : "D5E4F6B7-2DD3-4E8F-A122-5C7A9B0C3E33",
+              "BTTPredefinedActionType" : 281,
+              "BTTPredefinedActionName" : "Run Real JavaScript",
+              "BTTAdditionalActionData" : {
+                "BTTScriptType" : 3,
+                "BTTAppleScriptUsePath" : false,
+                "BTTScriptLocation" : 0,
+                "BTTAppleScriptRunInBackground" : true,
+                "BTTAppleScriptString" : "refresh_widget({uuid: \"59F8C568-022F-4BD9-B3EB-63A7676592DF\"});\nrefresh_widget({uuid: \"CF76E4C0-5986-41F9-8F3E-00A6C8F160FE\"});\nreturnToBTT(\"done\");"
+              },
+              "BTTOrder" : 8,
               "BTTMergeIntoTouchBarGroups" : 0
             }
           ],
@@ -744,7 +816,7 @@
             "BTTTouchBarBorderColor" : "255.000000, 255.000000, 255.000000, 255.000000",
             "BTTTouchBarItemIconWidth" : 22,
             "BTTTouchBarFreeSpaceBeforeButton" : 0,
-            "BTTTouchBarShellScriptString" : "exec \"$HOME\/Documents\/BTT\/widgets\/lyrics.sh\"",
+            "BTTTouchBarShellScriptString" : "exec \"$HOME\/Documents\/BTT\/widgets\/now-playing-lyrics.sh\"",
             "BTTTouchBarButtonFontSize" : 14,
             "BTTTouchBarFontColor" : "216.365747, 216.365747, 216.365747, 217.939659",
             "BTTTouchBarIconTextOffset" : 5,

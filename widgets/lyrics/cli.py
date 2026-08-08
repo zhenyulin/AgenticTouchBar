@@ -1,4 +1,4 @@
-"""Argument dispatch: the modes now_playing_lyrics.py can be invoked in."""
+"""Argument dispatch: the modes this widget can be invoked in."""
 
 from __future__ import annotations
 

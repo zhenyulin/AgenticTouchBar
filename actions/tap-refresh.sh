@@ -3,12 +3,13 @@
 # BetterTouchTool Touch Bar manual refresh helper.
 #
 # Usage:
-#   tap-refresh.sh <widget-uuid> [<widget-uuid> ...]
+#   tap-refresh.sh [--mark-only] <widget-uuid> [<widget-uuid> ...]
 #
-# Behaviour:
-#   1. Raise each widget's force flag.
-#   2. Ask BTT to re-run each widget.
-#   3. Exit immediately.
+# With --mark-only, this script only raises the force flags. That mode is for
+# BTT Touch Bar actions, whose following Real JavaScript action performs the
+# native refresh_widget call without launching osascript from the shell runner.
+# Without --mark-only, the script retains its Terminal/CLI fire-and-forget
+# refresh behavior.
 #
 # That run starts the widget's refresh even if its cached value is still
 # fresh, and greys itself out because the refresh is now in flight. The grey
@@ -30,6 +31,12 @@ set -u
 
 PATH="/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin"
 
+MARK_ONLY=0
+if [[ "${1:-}" == "--mark-only" ]]; then
+    MARK_ONLY=1
+    shift
+fi
+
 if (( $# > 0 )); then
     UUIDS=("$@")
 elif [[ -n "${BTT_WIDGET_UUID:-}" ]]; then
@@ -44,12 +51,18 @@ fi
 
 CACHE_DIR="${BTT_WIDGET_CACHE_DIR:-$HOME/Library/Caches/btt-widgets}"
 
-# Failure to raise the flag must NOT prevent the refresh request: a refresh
-# that only picks up a stale value still beats no refresh at all.
+# Failure to raise the flag must NOT prevent the refresh request in normal
+# CLI mode: a refresh that only picks up a stale value still beats none. In
+# --mark-only mode, the following BTT JavaScript action still runs even if
+# writing a flag failed.
 if mkdir -p "$CACHE_DIR" 2>/dev/null; then
     for uuid in "${UUIDS[@]}"; do
         : > "$CACHE_DIR/$uuid.force" 2>/dev/null || true
     done
+fi
+
+if (( MARK_ONLY )); then
+    exit 0
 fi
 
 # Fire-and-forget: refresh_widget blocks until the widget script has

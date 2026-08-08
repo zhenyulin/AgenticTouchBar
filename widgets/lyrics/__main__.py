@@ -10,16 +10,16 @@ every other widget's tap-refresh too. Neither of the two slow things happens
 inline: a cache miss starts a background lyrics fetch, and Apple Music is
 sampled by a detached helper whose last sample the widget reads from disk.
 
-This file is the thin entry point BetterTouchTool and the shell scripts
-invoke directly, by path -- see actions/track-changed.sh and
-bttpreset/Default.bttpreset. The implementation lives in lyrics_widget/,
-next to this file, split into one module per concern because it outgrew a
-single 2000+ line file.
+This package is run with `python3 -m lyrics`, not executed by path -- see
+widgets/now-playing-lyrics.sh, which is the thing BetterTouchTool and the
+shell actions actually invoke, and which puts `widgets/` on PYTHONPATH so
+`lyrics` resolves. `-m` is what gives this file real package context, so the
+modules next to it can use ordinary relative imports.
 """
 
 from __future__ import annotations
 
-from lyrics_widget.cli import main
+from .cli import main
 
 if __name__ == "__main__":
     raise SystemExit(main())
