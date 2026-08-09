@@ -258,27 +258,6 @@ os.execvp(sys.argv[1], sys.argv[1:])
     disown 2>/dev/null || true
 }
 
-btt_ensure_player_watcher() {
-    [[ -n "${BTT_WIDGET_UUID:-}" ]] || return 0
-
-    mkdir -p "$BTT_WIDGET_CACHE_DIR" 2>/dev/null || return 0
-    local marker="$BTT_WIDGET_CACHE_DIR/player-watcher.running"
-    if [[ -d "$marker" ]] && ! btt__is_fresh "$marker" 40; then
-        rmdir "$marker" 2>/dev/null || true
-    fi
-    mkdir "$marker" 2>/dev/null || return 0
-
-    local watcher="${BTT_WIDGET_WATCHER:-$HOME/Documents/BTT/widgets/player-watcher.sh}"
-    if [[ ! -x "$watcher" ]]; then
-        rmdir "$marker" 2>/dev/null || true
-        return 0
-    fi
-
-    local BTT_WIDGET_CACHE_DIR="$BTT_WIDGET_CACHE_DIR"
-    export BTT_WIDGET_CACHE_DIR
-    btt_spawn_detached "$watcher"
-}
-
 btt_refresh_detached() {
     local name="${1-}"
     local max_run="${2:-120}"
@@ -491,6 +470,3 @@ btt_publish() {
     btt__emit_json "$result" "$(btt_current_color)"
 }
 
-if [[ -n "${BTT_WIDGET_UUID:-}" ]]; then
-    btt_ensure_player_watcher
-fi
