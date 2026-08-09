@@ -73,6 +73,7 @@ compute_value() {
 if (( REFRESH_MODE )); then
     REFRESHED="$(compute_value)"
     btt_cache_put "$BTT_WIDGET_NAME" "$REFRESHED"
+    write_latency_history "$STARTED" "$REFRESHED"
     case "$REFRESHED" in ""|*ERR*|No\ *) REFRESH_OUTCOME=error ;; *) REFRESH_OUTCOME=ok ;; esac
     btt_trace refresh "$STARTED" "$REFRESH_OUTCOME" "value=$REFRESHED"
     exit 0
@@ -80,7 +81,6 @@ fi
 
 VALUE="$(btt_cache_get "$BTT_WIDGET_NAME" "$VALUE_MAX_AGE")"
 FRESH=$?
-write_latency_history "$STARTED" "$VALUE"
 FORCE=0; btt_force_pending && FORCE=1
 if (( FRESH != 0 || FORCE )); then
     btt_refresh_detached "$BTT_WIDGET_NAME" "$BTT_WIDGET_REFRESH_MAX_RUN" "$SELF" --refresh "$BTT_WIDGET_UUID"

@@ -44,7 +44,7 @@ LATENCY_WIDGET_UUID="59F8C568-022F-4BD9-B3EB-63A7676592DF"
 PROBE_INTERVAL="${BTT_LATENCY_PROBE_INTERVAL:-10}"
 [[ "$PROBE_INTERVAL" =~ ^[0-9]+([.][0-9]+)?$ ]] || PROBE_INTERVAL=10
 (( PROBE_INTERVAL > 0 )) || PROBE_INTERVAL=10
-DEFAULT_LATENCY_TIMEOUT="$(/usr/bin/awk -v interval="$PROBE_INTERVAL" 'BEGIN { printf "%.6f", interval * 3 }')"
+DEFAULT_LATENCY_TIMEOUT=22
 if [[ -n "${BTT_LATENCY_TIMEOUT:-}" ]]; then
 	LATENCY_TIMEOUT="$BTT_LATENCY_TIMEOUT"
 else
@@ -119,6 +119,7 @@ write_restart_marker() {
 }
 
 request_latency_refresh() {
+	: > "$CACHE_DIR/$LATENCY_WIDGET_UUID.force" 2>/dev/null || true
 	/usr/bin/osascript -e "tell application \"BetterTouchTool\" to refresh_widget \"$LATENCY_WIDGET_UUID\"" >/dev/null 2>&1 &
 	LATENCY_REFRESH_PID=$!
 }
