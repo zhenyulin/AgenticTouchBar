@@ -39,6 +39,7 @@ CACHE_DIR="${BTT_WIDGET_CACHE_DIR:-$REPO_DIR/cache}"
 LOG_DIR="${BTT_LOG_DIR:-$REPO_DIR/logs}"
 LOG="$LOG_DIR/freeze-guard.log"
 LATENCY_HISTORY_FILE="${BTT_LATENCY_HISTORY_FILE:-$LOG_DIR/latency-history.tsv}"
+LYRICS_TRACE_FILE="${BTT_LYRICS_TRACE_FILE:-$LOG_DIR/lyrics/trace.tsv}"
 LATENCY_WIDGET_UUID="59F8C568-022F-4BD9-B3EB-63A7676592DF"
 PROBE_INTERVAL="${BTT_LATENCY_PROBE_INTERVAL:-10}"
 [[ "$PROBE_INTERVAL" =~ ^[0-9]+([.][0-9]+)?$ ]] || PROBE_INTERVAL=10
@@ -51,6 +52,9 @@ else
 fi
 [[ "$LATENCY_TIMEOUT" =~ ^[0-9]+([.][0-9]+)?$ ]] || LATENCY_TIMEOUT="$DEFAULT_LATENCY_TIMEOUT"
 (( LATENCY_TIMEOUT > 0 )) || LATENCY_TIMEOUT="$DEFAULT_LATENCY_TIMEOUT"
+LYRICS_TRACE_MAX_AGE="${BTT_LYRICS_TRACE_MAX_AGE:-5}"
+[[ "$LYRICS_TRACE_MAX_AGE" =~ ^[0-9]+([.][0-9]+)?$ ]] || LYRICS_TRACE_MAX_AGE=5
+(( LYRICS_TRACE_MAX_AGE > 0 )) || LYRICS_TRACE_MAX_AGE=5
 RESTART_STARTUP_GRACE="${BTT_RESTART_STARTUP_GRACE:-$LATENCY_TIMEOUT}"
 RESTART_KEYBOARD_IDLE_SECONDS=1
 
@@ -64,9 +68,54 @@ latency_history_stamp() {
 	/usr/bin/awk -F '\t' '($1 + 0) > latest { latest = $1 + 0 } END { printf "%.6f\n", latest + 0 }' "$LATENCY_HISTORY_FILE" 2>/dev/null || printf '0\n'
 }
 
+lyrics_trace_lag() {
+	local now_stamp
+	now_stamp="$(/bin/date +%s)"
+	/usr/bin/awk -F '\t' -v now="$now_stamp" '
+		$2 == "lyrics" && $3 == "sample" && ($1 + 0) > latest_sample {
+			latest_sample = $1 + 0
+			sample_state = $5
+		}
+		$2 == "lyrics" && $3 == "widget" && ($1 + 0) > latest_widget {
+			latest_widget = $1 + 0
+		}
+		END {
+			if (sample_state != "playing" || latest_widget == 0) {
+				print ""
+			} else {
+				printf "%.6f\n", now - latest_widget
+			}
+		}
+	' "$LYRICS_TRACE_FILE" 2>/dev/null || true
+}
+
+restart_duration() {
+	local file="$1"
+	/usr/bin/awk -F '\t' '
+		$1 == "+" {
+			first = ""
+			last = ""
+			next
+		}
+		$1 ~ /^[0-9]+([.][0-9]+)?$/ {
+			stamp = $1 + 0
+			if (first == "" || stamp < first) first = stamp
+			if (last == "" || stamp > last) last = stamp
+		}
+		END {
+			if (first == "" || last == "") print "0"
+			else printf "%.3f\n", last - first
+		}
+	' "$file" 2>/dev/null || printf '0\n'
+}
+
 write_restart_marker() {
-	mkdir -p "${LATENCY_HISTORY_FILE:h}" 2>/dev/null || return 0
-	printf '+\t%s\tBTT restart\n' "$(/bin/date +%s)" >> "$LATENCY_HISTORY_FILE" 2>/dev/null || true
+	local latency_duration lyrics_duration
+	latency_duration="$(restart_duration "$LATENCY_HISTORY_FILE")"
+	lyrics_duration="$(restart_duration "$LYRICS_TRACE_FILE")"
+	mkdir -p "${LATENCY_HISTORY_FILE:h}" "${LYRICS_TRACE_FILE:h}" 2>/dev/null || true
+	printf '+\t%s\tBTT restart\n' "$latency_duration" >> "$LATENCY_HISTORY_FILE" 2>/dev/null || true
+	printf '+\t%s\tBTT restart\n' "$lyrics_duration" >> "$LYRICS_TRACE_FILE" 2>/dev/null || true
 }
 
 request_latency_refresh() {
@@ -81,11 +130,21 @@ while true; do
 	kill "$LATENCY_REFRESH_PID" >/dev/null 2>&1 || true
 	after_latency_stamp="$(latency_history_stamp)"
 	if (( after_latency_stamp > before_latency_stamp )); then
-		log "clash-latency refresh responsive -- before=${before_latency_stamp} after=${after_latency_stamp}"
-		continue
+		lyrics_lag="$(lyrics_trace_lag)"
+		if [[ -z "$lyrics_lag" ]]; then
+			log "clash-latency refresh responsive -- before=${before_latency_stamp} after=${after_latency_stamp} lyrics=not-playing"
+			continue
+		fi
+		if /usr/bin/awk -v lag="$lyrics_lag" -v max_age="$LYRICS_TRACE_MAX_AGE" 'BEGIN { exit !(lag <= max_age) }'; then
+			log "clash-latency refresh responsive -- before=${before_latency_stamp} after=${after_latency_stamp} lyrics_lag=${lyrics_lag}s"
+			continue
+		fi
+		log "lyrics trace stale while playing for ${lyrics_lag}s -- max=${LYRICS_TRACE_MAX_AGE}s"
 	fi
 
-	log "clash-latency refresh unresponsive for ${LATENCY_TIMEOUT}s -- before=${before_latency_stamp} after=${after_latency_stamp}"
+	if (( after_latency_stamp <= before_latency_stamp )); then
+		log "clash-latency refresh unresponsive for ${LATENCY_TIMEOUT}s -- before=${before_latency_stamp} after=${after_latency_stamp}"
+	fi
 
 	# Never terminate BTT while a key is still down: its event tap can otherwise
 	# leave the front app believing a modifier remains pressed after relaunch.
