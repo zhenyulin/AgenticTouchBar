@@ -33,6 +33,7 @@ BTT_WIDGET_NAME="claude-quota"
 # get, and is unrelated to how often BTT redraws the widget.
 VALUE_MAX_AGE="${CLAUDE_QUOTA_MAX_AGE:-300}"
 BTT_WIDGET_REFRESH_MAX_RUN=180
+BTT_WIDGET_QUOTA_RESET_CYCLE_MINUTES=300
 
 REPO_DIR="${BTT_REPO_DIR:-$HOME/Documents/BTT}"
 LOG_DIR="${BTT_LOG_DIR:-$REPO_DIR/logs}"
@@ -72,6 +73,23 @@ compute_value() {
     if [[ -z "$json" ]]; then
         printf 'EMPTY JSON'
         return 0
+    fi
+
+    local reset_at
+    reset_at="$(
+        printf '%s' "$json" | "$jq" -r '
+            (if type == "array" then . else [.] end)
+            | map(
+                select(.provider == "claude" and .usage != null)
+                | .usage.primary.resetsAt
+                | if . == null then empty else fromdateiso8601 end
+            )
+            | first // empty
+        ' 2>>"$LOG"
+    )"
+    local reset_status=$?
+    if (( reset_status == 0 )); then
+        btt_quota_reset_put "$BTT_WIDGET_NAME" "$reset_at"
     fi
 
     local text

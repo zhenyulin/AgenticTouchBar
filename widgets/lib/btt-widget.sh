@@ -60,6 +60,12 @@ BTT_WIDGET_COLOR="${BTT_WIDGET_COLOR:-255,255,255,255}"
 # The color shown while a refresh is in flight.
 BTT_WIDGET_DIM_COLOR="${BTT_WIDGET_DIM_COLOR:-130,130,130,255}"
 
+# The dim color used when a quota is exhausted and waiting for reset.
+BTT_WIDGET_QUOTA_DIM_COLOR="${BTT_WIDGET_QUOTA_DIM_COLOR:-175,175,175,255}"
+
+# Set by quota widgets to enable reset-progress coloring.
+BTT_WIDGET_QUOTA_RESET_CYCLE_MINUTES="${BTT_WIDGET_QUOTA_RESET_CYCLE_MINUTES:-0}"
+
 # A force flag older than this belongs to a tap whose refresh never ran.
 BTT_WIDGET_FORCE_MAX_AGE="${BTT_WIDGET_FORCE_MAX_AGE:-10}"
 
@@ -91,6 +97,10 @@ btt__value_file() {
 
 btt__refresh_lock() {
     printf '%s/%s.refreshing' "$BTT_WIDGET_CACHE_DIR" "$1"
+}
+
+btt__quota_reset_file() {
+    printf '%s/%s.quota-reset' "$BTT_WIDGET_CACHE_DIR" "$1"
 }
 
 # Younger than max_age?
@@ -404,14 +414,119 @@ btt_refresh_in_flight() {
 
 
 # ---------------------------------------------------------------------------
+# Public: persist the exact reset time alongside a quota value
+# ---------------------------------------------------------------------------
+
+btt_quota_reset_put() {
+    local name="${1-}"
+    local reset_at="${2-}"
+    local file
+    file="$(btt__quota_reset_file "$name")"
+
+    mkdir -p "$BTT_WIDGET_CACHE_DIR" 2>/dev/null || return 1
+
+    if [[ -z "$reset_at" ]]; then
+        rm -f "$file" 2>/dev/null
+        return 0
+    fi
+
+    printf '%s' "$reset_at" > "$file.$$" 2>/dev/null || return 1
+    mv -f "$file.$$" "$file" 2>/dev/null || return 1
+}
+
+btt_quota_reset_get() {
+    local name="${1:-$BTT_WIDGET_NAME}"
+    local file
+    file="$(btt__quota_reset_file "$name")"
+    [[ -f "$file" ]] || return 1
+    cat "$file" 2>/dev/null
+}
+
+
+# ---------------------------------------------------------------------------
+# Public: color an exhausted quota by its progress toward reset
+# ---------------------------------------------------------------------------
+
+btt_quota_color() {
+    local text="${1-}"
+    local cycle="${BTT_WIDGET_QUOTA_RESET_CYCLE_MINUTES:-0}"
+
+    if (( cycle <= 0 )); then
+        printf '%s' "$BTT_WIDGET_COLOR"
+        return 0
+    fi
+
+    local first_line="${text%%$'\n'*}"
+    local used_percent="${first_line%%\%*}"
+    if [[ ! "$used_percent" =~ '^[0-9]+$' ]] || (( used_percent < 100 )); then
+        printf '%s' "$BTT_WIDGET_COLOR"
+        return 0
+    fi
+
+    local remaining_label="${first_line#*%}"
+    if [[ -z "$remaining_label" ]]; then
+        remaining_label="${text#*$'\n'}"
+        remaining_label="${remaining_label%%$'\n'*}"
+    else
+        remaining_label="${remaining_label// /}"
+    fi
+
+    local remaining_minutes=0
+    local reset_at
+    reset_at="$(btt_quota_reset_get)"
+    if [[ "$reset_at" =~ '^[0-9]+$' ]]; then
+        local now_seconds
+        now_seconds="$(btt_now)"
+        now_seconds="${now_seconds%%.*}"
+        remaining_minutes=$(( (reset_at - now_seconds) / 60 ))
+    else
+        case "$remaining_label" in
+            '<1m') remaining_minutes=0 ;;
+            *d) remaining_minutes=$(( ${remaining_label%d} * 1440 )) ;;
+            *h) remaining_minutes=$(( ${remaining_label%h} * 60 )) ;;
+            *m) remaining_minutes=$(( ${remaining_label%m} )) ;;
+        esac
+    fi
+
+    (( remaining_minutes < 0 )) && remaining_minutes=0
+    (( remaining_minutes > cycle )) && remaining_minutes="$cycle"
+
+    local progress=$(( (cycle - remaining_minutes) * 100 / cycle ))
+    local dim_color="$BTT_WIDGET_QUOTA_DIM_COLOR"
+    local normal_color="$BTT_WIDGET_COLOR"
+    local dim_r="${dim_color%%,*}"
+    local dim_rest="${dim_color#*,}"
+    local dim_g="${dim_rest%%,*}"
+    dim_rest="${dim_rest#*,}"
+    local dim_b="${dim_rest%%,*}"
+    local normal_r="${normal_color%%,*}"
+    local normal_rest="${normal_color#*,}"
+    local normal_g="${normal_rest%%,*}"
+    normal_rest="${normal_rest#*,}"
+    local normal_b="${normal_rest%%,*}"
+    local normal_a="${normal_rest#*,}"
+
+    printf '%d,%d,%d,%s' \
+        "$(( dim_r + (normal_r - dim_r) * progress / 100 ))" \
+        "$(( dim_g + (normal_g - dim_g) * progress / 100 ))" \
+        "$(( dim_b + (normal_b - dim_b) * progress / 100 ))" \
+        "$normal_a"
+}
+
+
+# ---------------------------------------------------------------------------
 # Public: the color this widget should render in right now
 #
 # For a widget that builds its own JSON. btt_publish applies this itself.
 # ---------------------------------------------------------------------------
 
 btt_current_color() {
+    local text="${1-}"
+
     if btt_refresh_in_flight; then
         printf '%s' "$BTT_WIDGET_DIM_COLOR"
+    elif (( BTT_WIDGET_QUOTA_RESET_CYCLE_MINUTES > 0 )); then
+        btt_quota_color "$text"
     else
         printf '%s' "$BTT_WIDGET_COLOR"
     fi
@@ -467,6 +582,6 @@ btt_publish() {
         return 0
     fi
 
-    btt__emit_json "$result" "$(btt_current_color)"
+    btt__emit_json "$result" "$(btt_current_color "$result")"
 }
 
