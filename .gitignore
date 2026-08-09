@@ -2,6 +2,7 @@
 /logs
 /.venv
 /cache
+/tmp
 
 # consumer-only config and agent symlinks
 /.agents
