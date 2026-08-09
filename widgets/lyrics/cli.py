@@ -21,6 +21,7 @@ from .media_remote import read_media_remote
 from .metadata import track_cache_key
 from .output import log_error, trace
 from .render import widget_main
+from .viewport import store_measured_viewport
 
 
 def fetch_mode(arguments: list[str]) -> int:
@@ -50,6 +51,31 @@ def fetch_mode(arguments: list[str]) -> int:
             lock_path(key).unlink()
         except OSError:
             pass
+        return 1
+
+
+def measure_mode(arguments: list[str]) -> int:
+    """Measure the Now Playing widget's text and store the lyric's share.
+
+    Spawned detached by the widget path when the track changes, because the
+    measurement costs an osascript launch -- a fifth of a widget tick.
+    """
+    if len(arguments) != 2:
+        return 2
+    key, encoded_payload = arguments
+    started = time.monotonic()
+    try:
+        track = json.loads(
+            base64.urlsafe_b64decode(encoded_payload.encode("ascii")).decode("utf-8")
+        )
+        store_measured_viewport(key, track)
+        return 0
+    except Exception as exc:
+        # The claim the widget path already wrote carries the previous
+        # track's width forward, so a failure here costs accuracy for one
+        # track rather than leaving the widget without a width at all.
+        log_error(f"Viewport measurement failed: {exc}")
+        trace("viewport", started, "failed", reason=str(exc).split(":")[0][:40])
         return 1
 
 
@@ -224,6 +250,8 @@ def main() -> int:
         return report_mode(sys.argv[2:])
     if len(sys.argv) >= 2 and sys.argv[1] == "--watch":
         return watch_mode(sys.argv[2:])
+    if len(sys.argv) >= 2 and sys.argv[1] == "--measure":
+        return measure_mode(sys.argv[2:])
     if len(sys.argv) >= 2 and sys.argv[1] == "--track-changed":
         return track_changed_mode(sys.argv[2:])
     if len(sys.argv) >= 2 and sys.argv[1] == "--diagnose":

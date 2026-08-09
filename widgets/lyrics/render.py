@@ -20,6 +20,7 @@ from .locking import (
 from .lrc import parse_lrc
 from .metadata import track_cache_key
 from .output import emit, emit_last_output, log_error, trace
+from .viewport import ensure_viewport, viewport_cells
 
 # What this tick is putting on the Touch Bar, filled in as the tick renders
 # and written out once by widget_main. BetterTouchTool runs the widget as a
@@ -114,10 +115,9 @@ def render_widget(
     if lyric is None:
         return prefix + title
 
-    first_width = max(config.VIEWPORT_WIDTH - display_width(prefix), 8)
-    other_width = max(
-        config.VIEWPORT_WIDTH - display_width(config.CONTINUATION_INDENT), 8
-    )
+    viewport = viewport_cells()
+    first_width = max(viewport - display_width(prefix), 8)
+    other_width = max(viewport - display_width(config.CONTINUATION_INDENT), 8)
     rows = wrap_lyric(lyric, [first_width, other_width], config.MAX_LYRIC_ROWS)
 
     # A short current line leaves a spare row rather than wrapping into it.
@@ -175,6 +175,10 @@ def render_tick() -> str:
 
     key = track_cache_key(track)
     _RECEIPT["key"] = key
+    # How wide the Now Playing widget beside this one has grown depends on
+    # the track, so the room left for the lyric is re-measured whenever the
+    # track changes -- in the background, never in this tick.
+    ensure_viewport(key, track)
     cached = read_cache(key)
     now = time.time()
 

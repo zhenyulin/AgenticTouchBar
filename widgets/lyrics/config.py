@@ -29,16 +29,58 @@ LOADED_AT = time.monotonic()
 # real row width better than a raw character count. PIXELS_PER_CELL
 # calibrates character "cells" (narrow = 1, CJK/wide = 2, see
 # character_width) to pixels; tune it if lines wrap earlier or later than
-# they visibly need to. Setting BTT_LYRICS_WIDTH still overrides both and
-# picks a width directly in cells, as before.
-MAX_LYRIC_WIDTH_PX = float(os.environ.get("BTT_LYRICS_MAX_WIDTH_PX", "200"))
+# they visibly need to.
 PIXELS_PER_CELL = float(os.environ.get("BTT_LYRICS_PX_PER_CELL", "7.0"))
+# How much of the row the lyric gets is not fixed: it is whatever the Now
+# Playing widget immediately to its left is not using, and that widget grows
+# and shrinks with the title and album it is showing (see viewport.py).
+# LYRIC_WIDTH_BUDGET_PX is what the two of them may take together.
+#
+# Calibrated against one measured track: "一萬次悲傷 - 世界" renders 98 px of
+# Now Playing text, and at that width the lyric row has room for 360 px. The
+# constant carries every other term in the layout -- icon, padding, the
+# fixed-width widgets further right, the Touch Bar's own extent -- so those
+# never need measuring, and the estimate is exact at the calibration point
+# and off only in proportion to how far a track's title strays from it.
+LYRIC_WIDTH_BUDGET_PX = float(os.environ.get("BTT_LYRICS_WIDTH_BUDGET_PX", "458"))
+# Bounds on the lyric's own share. The floor stops a very long title from
+# squeezing the lyric down to a few characters -- past it the row overflows
+# the Touch Bar's right edge instead, which is at least still readable.
+MIN_LYRIC_WIDTH_PX = float(os.environ.get("BTT_LYRICS_MIN_WIDTH_PX", "160"))
+MAX_LYRIC_WIDTH_PX = float(os.environ.get("BTT_LYRICS_MAX_WIDTH_PX", "420"))
+# Used until a track has been measured, and by any track whose measurement
+# fails. Deliberately the conservative width this widget used before it
+# measured anything, so a broken measurement degrades to the old behaviour
+# rather than to an overflowing row.
+FALLBACK_LYRIC_WIDTH_PX = float(os.environ.get("BTT_LYRICS_FALLBACK_WIDTH_PX", "200"))
+# Setting BTT_LYRICS_WIDTH overrides the whole calculation and picks a width
+# directly in cells, as before -- nothing is measured or spawned at all.
 _viewport_width_override = os.environ.get("BTT_LYRICS_WIDTH")
-VIEWPORT_WIDTH = (
-    int(_viewport_width_override)
-    if _viewport_width_override is not None
-    else max(round(MAX_LYRIC_WIDTH_PX / PIXELS_PER_CELL), 1)
+VIEWPORT_WIDTH_OVERRIDE = (
+    int(_viewport_width_override) if _viewport_width_override is not None else None
 )
+
+# The Now Playing widget's own settings, mirrored from its BTT trigger config
+# in bttpreset/Default.bttpreset -- BTTTouchBarLine1Format,
+# BTTTouchBarLine2Format, BTTTouchBarButtonFontSize and
+# BTTTouchBarLine1MaxChars. Nothing keeps these in step automatically, so a
+# change over in BTT belongs here too.
+NOW_PLAYING_LINE_FORMATS = (
+    os.environ.get("BTT_LYRICS_NOW_PLAYING_LINE1", "{title} - {album}"),
+    os.environ.get("BTT_LYRICS_NOW_PLAYING_LINE2", "{artist} "),
+)
+NOW_PLAYING_FONT_SIZE = float(os.environ.get("BTT_LYRICS_NOW_PLAYING_FONT", "12"))
+NOW_PLAYING_LINE_MAX_CHARS = int(
+    os.environ.get("BTT_LYRICS_NOW_PLAYING_MAX_CHARS", "60")
+)
+# BTT stops widening that widget at BTTTBWidgetWidth (400), of which the
+# album cover (BTTTouchBarItemIconWidth 30) and the gap after it
+# (BTTTouchBarIconTextOffset 5) are not text. A longer title truncates rather
+# than taking more of the row, so it stops costing the lyric anything either.
+NOW_PLAYING_MAX_TEXT_PX = float(os.environ.get("BTT_LYRICS_NOW_PLAYING_MAX_PX", "365"))
+# Generous: this runs in the detached helper, never on the widget path, and
+# the only thing a tighter bound would buy is a missing measurement.
+MEASURE_TIMEOUT_SECONDS = float(os.environ.get("BTT_LYRICS_MEASURE_TIMEOUT", "8.0"))
 SYNC_OFFSET_SECONDS = float(os.environ.get("BTT_LYRICS_OFFSET", "0.0"))
 SCROLL_LONG_LINES = os.environ.get("BTT_LYRICS_SCROLL", "1") not in {
     "0",
@@ -92,6 +134,9 @@ STATE_PATH = CACHE_DIR / "state.json"
 # Where the hand-tracked MediaRemote position is kept between samples.
 MEDIA_REMOTE_POSITION_PATH = CACHE_DIR / "media_remote_position.json"
 LAST_TEXT_PATH = CACHE_DIR / "last.txt"
+# The lyric's current share of the Touch Bar row, measured once per track by
+# the --measure helper and read back by every tick. See viewport.py.
+VIEWPORT_PATH = CACHE_DIR / "viewport.json"
 VALUE_PATH = CACHE_DIR / "lyrics.value"
 # What the last rendering tick put on screen, and when that frame is due to
 # change. Written only by ticks that render something of their own, so an

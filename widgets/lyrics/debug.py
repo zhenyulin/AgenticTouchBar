@@ -14,6 +14,11 @@ from .providers.apple_cache import apple_cache_record
 from .providers.local import local_lyrics_record
 from .providers.lrcapi import collect_lrcapi_candidates
 from .providers.lrclib import collect_search_candidates
+from .viewport import (
+    lyric_width_px,
+    now_playing_lines,
+    now_playing_width_px,
+)
 
 
 def diagnose_current() -> int:
@@ -29,6 +34,14 @@ def diagnose_current() -> int:
 
     print(json.dumps(track, ensure_ascii=False, indent=2))
     print(f"cache key: {track_cache_key(track)}")
+    now_playing_px = now_playing_width_px(track)
+    lyric_px = lyric_width_px(now_playing_px)
+    print(
+        f"now playing rows: {now_playing_lines(track)} -> {now_playing_px:.0f}px, "
+        f"leaving the lyric {lyric_px:.0f}px "
+        f"({max(round(lyric_px / config.PIXELS_PER_CELL), 1)} cells) "
+        f"of {config.LYRIC_WIDTH_BUDGET_PX:.0f}px"
+    )
     print(f"title variants: {metadata_variants(track.get('title', ''))}")
     print(f"artist variants: {metadata_variants(track.get('artist', ''))}")
     print(f"local lyrics directory: {config.LOCAL_LYRICS_DIR}")
