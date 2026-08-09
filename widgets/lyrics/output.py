@@ -39,6 +39,7 @@ def remember_output(text: str) -> None:
     try:
         config.CACHE_DIR.mkdir(parents=True, exist_ok=True)
         config.LAST_TEXT_PATH.write_text(text, encoding="utf-8")
+        config.VALUE_PATH.write_text(text, encoding="utf-8")
     except OSError:
         pass
 
@@ -49,7 +50,9 @@ def emit_last_output() -> None:
         previous = config.LAST_TEXT_PATH.read_text(encoding="utf-8").strip()
     except (OSError, ValueError):
         previous = ""
-    print(previous or "♪")
+    output = previous or "♪"
+    print(output)
+    remember_output(output)
 
     # Touched even though the text is unchanged, so that this file's age
     # always means "how long since BetterTouchTool last ran the widget".
@@ -82,9 +85,7 @@ def trace(mode: str, started: float, outcome: str, **fields: Any) -> None:
     # Same columns as lib/btt-widget.sh writes, so one --report covers every
     # widget: a freeze is a property of BetterTouchTool, not of one script,
     # and it is only diagnosable with all of them side by side.
-    line = (
-        f"{time.time():.3f}\tlyrics\t{mode}\t{elapsed_ms:.0f}\t{outcome}\t{extra}\n"
-    )
+    line = f"{time.time():.3f}\tlyrics\t{mode}\t{elapsed_ms:.0f}\t{outcome}\t{extra}\n"
 
     oversized = False
     try:
@@ -100,7 +101,10 @@ def trace(mode: str, started: float, outcome: str, **fields: Any) -> None:
         # One generation kept, so the trace costs at most twice the cap and a
         # freeze is still inspectable just after a rotation.
         try:
-            os.replace(config.TRACE_PATH, config.TRACE_PATH.with_name(config.TRACE_PATH.name + ".1"))
+            os.replace(
+                config.TRACE_PATH,
+                config.TRACE_PATH.with_name(config.TRACE_PATH.name + ".1"),
+            )
         except OSError:
             pass
 

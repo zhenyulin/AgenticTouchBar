@@ -40,6 +40,7 @@ LOG_DIR="${BTT_LOG_DIR:-$REPO_DIR/logs}"
 LOG="$LOG_DIR/freeze-guard.log"
 LATENCY_HISTORY_FILE="${BTT_LATENCY_HISTORY_FILE:-$LOG_DIR/latency-history.tsv}"
 LYRICS_TRACE_FILE="${BTT_LYRICS_TRACE_FILE:-$LOG_DIR/lyrics/trace.tsv}"
+LYRICS_VALUE_FILE="${BTT_LYRICS_VALUE_FILE:-$CACHE_DIR/lyrics.value}"
 LATENCY_WIDGET_UUID="59F8C568-022F-4BD9-B3EB-63A7676592DF"
 PROBE_INTERVAL="${BTT_LATENCY_PROBE_INTERVAL:-10}"
 [[ "$PROBE_INTERVAL" =~ ^[0-9]+([.][0-9]+)?$ ]] || PROBE_INTERVAL=10
@@ -89,6 +90,11 @@ lyrics_trace_lag() {
 	' "$LYRICS_TRACE_FILE" 2>/dev/null || true
 }
 
+lyrics_value_matches_last_output() {
+	[[ -f "$LYRICS_VALUE_FILE" && -f "$CACHE_DIR/last.txt" ]] || return 1
+	cmp -s "$LYRICS_VALUE_FILE" "$CACHE_DIR/last.txt"
+}
+
 restart_duration() {
 	local file="$1"
 	/usr/bin/awk -F '\t' '
@@ -135,6 +141,9 @@ while true; do
 		if [[ -z "$lyrics_lag" ]]; then
 			log "clash-latency refresh responsive -- before=${before_latency_stamp} after=${after_latency_stamp} lyrics=not-playing"
 			continue
+		fi
+		if ! lyrics_value_matches_last_output; then
+			log "lyrics value mismatch -- value=${LYRICS_VALUE_FILE} last=${CACHE_DIR}/last.txt"
 		fi
 		if /usr/bin/awk -v lag="$lyrics_lag" -v max_age="$LYRICS_TRACE_MAX_AGE" 'BEGIN { exit !(lag <= max_age) }'; then
 			log "clash-latency refresh responsive -- before=${before_latency_stamp} after=${after_latency_stamp} lyrics_lag=${lyrics_lag}s"

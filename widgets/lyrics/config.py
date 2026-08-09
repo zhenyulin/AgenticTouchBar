@@ -92,6 +92,7 @@ STATE_PATH = CACHE_DIR / "state.json"
 # Where the hand-tracked MediaRemote position is kept between samples.
 MEDIA_REMOTE_POSITION_PATH = CACHE_DIR / "media_remote_position.json"
 LAST_TEXT_PATH = CACHE_DIR / "last.txt"
+VALUE_PATH = CACHE_DIR / "lyrics.value"
 TRACE_PATH = LOG_DIR / "lyrics" / "trace.tsv"
 WATCH_PATH = LOG_DIR / "lyrics" / "watch.tsv"
 # Where the shell widgets trace, via lib/btt-widget.sh. --report reads both,
