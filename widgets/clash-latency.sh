@@ -20,6 +20,8 @@ BTT_WIDGET_NAME="clash-latency"
 LATENCY_HISTORY_FILE="${BTT_LATENCY_HISTORY_FILE:-${BTT_LOG_DIR:-$BTT_REPO_DIR/logs}/latency-history.tsv}"
 VALUE_MAX_AGE="${CLASH_MAX_AGE:-30}"
 BTT_WIDGET_REFRESH_MAX_RUN=60
+BTT_WIDGET_LATENCY_MIN_MS="${CLASH_LATENCY_MIN_MS:-150}"
+BTT_WIDGET_LATENCY_MAX_MS="${CLASH_LATENCY_MAX_MS:-800}"
 
 write_latency_history() {
     local stamp="$1" value="$2" latency node
@@ -37,7 +39,8 @@ TIMEOUT_MS="${CLASH_TIMEOUT_MS:-3000}"
 FONT_COLOR="${CLASH_FONT_COLOR:-}"
 
 emit_widget() {
-    local text="$1" color="${FONT_COLOR:-$(btt_current_color)}"
+    local text="$1"
+    local color="${FONT_COLOR:-$(btt_current_color "$text")}"
     if [[ -n "$ICON_PATH" && -f "$ICON_PATH" ]]; then
         jq -cn --arg text "$text" --arg color "$color" --arg icon "$ICON_PATH" \
             '{text: $text, font_color: $color, icon_path: $icon}'

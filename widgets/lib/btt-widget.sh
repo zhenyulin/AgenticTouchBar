@@ -444,54 +444,14 @@ btt_quota_reset_get() {
 
 
 # ---------------------------------------------------------------------------
-# Public: color an exhausted quota by its progress toward reset
+# Public: interpolate the configured widget color range
 # ---------------------------------------------------------------------------
 
-btt_quota_color() {
-    local text="${1-}"
-    local cycle="${BTT_WIDGET_QUOTA_RESET_CYCLE_MINUTES:-0}"
+btt_color_at_progress() {
+    local progress="${1:-100}"
+    (( progress < 0 )) && progress=0
+    (( progress > 100 )) && progress=100
 
-    if (( cycle <= 0 )); then
-        printf '%s' "$BTT_WIDGET_COLOR"
-        return 0
-    fi
-
-    local first_line="${text%%$'\n'*}"
-    local used_percent="${first_line%%\%*}"
-    if [[ ! "$used_percent" =~ '^[0-9]+$' ]] || (( used_percent < 100 )); then
-        printf '%s' "$BTT_WIDGET_COLOR"
-        return 0
-    fi
-
-    local remaining_label="${first_line#*%}"
-    if [[ -z "$remaining_label" ]]; then
-        remaining_label="${text#*$'\n'}"
-        remaining_label="${remaining_label%%$'\n'*}"
-    else
-        remaining_label="${remaining_label// /}"
-    fi
-
-    local remaining_minutes=0
-    local reset_at
-    reset_at="$(btt_quota_reset_get)"
-    if [[ "$reset_at" =~ '^[0-9]+$' ]]; then
-        local now_seconds
-        now_seconds="$(btt_now)"
-        now_seconds="${now_seconds%%.*}"
-        remaining_minutes=$(( (reset_at - now_seconds) / 60 ))
-    else
-        case "$remaining_label" in
-            '<1m') remaining_minutes=0 ;;
-            *d) remaining_minutes=$(( ${remaining_label%d} * 1440 )) ;;
-            *h) remaining_minutes=$(( ${remaining_label%h} * 60 )) ;;
-            *m) remaining_minutes=$(( ${remaining_label%m} )) ;;
-        esac
-    fi
-
-    (( remaining_minutes < 0 )) && remaining_minutes=0
-    (( remaining_minutes > cycle )) && remaining_minutes="$cycle"
-
-    local progress=$(( (cycle - remaining_minutes) * 100 / cycle ))
     local dim_color="$BTT_WIDGET_QUOTA_DIM_COLOR"
     local normal_color="$BTT_WIDGET_COLOR"
     local dim_r="${dim_color%%,*}"
@@ -515,6 +475,95 @@ btt_quota_color() {
 
 
 # ---------------------------------------------------------------------------
+# Public: color a quota by usage or its progress toward reset
+# ---------------------------------------------------------------------------
+
+btt_quota_color() {
+    local text="${1-}"
+    local cycle="${BTT_WIDGET_QUOTA_RESET_CYCLE_MINUTES:-0}"
+
+    if (( cycle <= 0 )); then
+        printf '%s' "$BTT_WIDGET_COLOR"
+        return 0
+    fi
+
+    local first_line="${text%%$'\n'*}"
+    local used_percent="${first_line%%\%*}"
+    if [[ ! "$used_percent" =~ '^[0-9]+$' ]]; then
+        printf '%s' "$BTT_WIDGET_COLOR"
+        return 0
+    fi
+
+    local progress
+    if (( used_percent < 100 )); then
+        progress=$(( 100 - used_percent ))
+    else
+        local remaining_label="${first_line#*%}"
+        if [[ -z "$remaining_label" ]]; then
+            remaining_label="${text#*$'\n'}"
+            remaining_label="${remaining_label%%$'\n'*}"
+        else
+            remaining_label="${remaining_label// /}"
+        fi
+
+        local remaining_minutes=0
+        local reset_at
+        reset_at="$(btt_quota_reset_get)"
+        if [[ "$reset_at" =~ '^[0-9]+$' ]]; then
+            local now_seconds
+            now_seconds="$(btt_now)"
+            now_seconds="${now_seconds%%.*}"
+            remaining_minutes=$(( (reset_at - now_seconds) / 60 ))
+        else
+            case "$remaining_label" in
+                '<1m') remaining_minutes=0 ;;
+                *d) remaining_minutes=$(( ${remaining_label%d} * 1440 )) ;;
+                *h) remaining_minutes=$(( ${remaining_label%h} * 60 )) ;;
+                *m) remaining_minutes=$(( ${remaining_label%m} )) ;;
+            esac
+        fi
+
+        (( remaining_minutes < 0 )) && remaining_minutes=0
+        (( remaining_minutes > cycle )) && remaining_minutes="$cycle"
+
+        progress=$(( (cycle - remaining_minutes) * 100 / cycle ))
+    fi
+
+    btt_color_at_progress "$progress"
+}
+
+
+# ---------------------------------------------------------------------------
+# Public: color latency from the configured minimum to maximum
+# ---------------------------------------------------------------------------
+
+btt_latency_color() {
+    local text="${1-}"
+    local min_ms="${BTT_WIDGET_LATENCY_MIN_MS:-150}"
+    local max_ms="${BTT_WIDGET_LATENCY_MAX_MS:-800}"
+    local first_line="${text%%$'\n'*}"
+    local latency="${first_line%%ms*}"
+
+    if [[ ! "$min_ms" =~ '^[0-9]+$' || ! "$max_ms" =~ '^[0-9]+$' || \
+        ! "$latency" =~ '^[0-9]+$' ]] || (( max_ms <= min_ms )); then
+        printf '%s' "$BTT_WIDGET_COLOR"
+        return 0
+    fi
+
+    local progress
+    if (( latency <= min_ms )); then
+        progress=100
+    elif (( latency >= max_ms )); then
+        progress=0
+    else
+        progress=$(( (max_ms - latency) * 100 / (max_ms - min_ms) ))
+    fi
+
+    btt_color_at_progress "$progress"
+}
+
+
+# ---------------------------------------------------------------------------
 # Public: the color this widget should render in right now
 #
 # For a widget that builds its own JSON. btt_publish applies this itself.
@@ -525,6 +574,9 @@ btt_current_color() {
 
     if btt_refresh_in_flight; then
         printf '%s' "$BTT_WIDGET_DIM_COLOR"
+    elif [[ -n "${BTT_WIDGET_LATENCY_MIN_MS:-}" &&
+        -n "${BTT_WIDGET_LATENCY_MAX_MS:-}" ]]; then
+        btt_latency_color "$text"
     elif (( BTT_WIDGET_QUOTA_RESET_CYCLE_MINUTES > 0 )); then
         btt_quota_color "$text"
     else
