@@ -9,7 +9,7 @@ from typing import Any
 
 from . import config
 from .apple_music import _last_sample_age_ms, current_track, is_placeholder_track
-from .cache import cache_path, read_cache
+from .cache import cache_path, read_compatible_cache
 from .fetch import start_background_fetch
 from .layout import crop_cells, current_lyric_line, display_width, marquee, wrap_lyric
 from .locking import (
@@ -86,11 +86,11 @@ def render_widget(
 
     status = cached.get("status")
     if status == "instrumental":
-        return "♪"
+        return "♬"
     if status == "not_found":
-        return "♪"
-    if status == "network_error":
-        return "⚠ Lyrics network error"
+        return "♩"
+    if status == "cache_error":
+        return "⚠ Apple lyrics cache error"
     if status != "ok":
         return "♪ Lyrics unavailable"
 
@@ -111,7 +111,11 @@ def render_widget(
             lines[index + 1][0] - position, 0.0
         )
 
-    prefix = "Ⅱ " if state == "paused" else "♪ "
+    prefix = (
+        "Ⅱ "
+        if state == "paused"
+        else ("♪ " if record.get("source") == "apple-cache" else "♫ ")
+    )
     if lyric is None:
         return prefix + title
 
@@ -120,9 +124,6 @@ def render_widget(
     other_width = max(viewport - display_width(config.CONTINUATION_INDENT), 8)
     rows = wrap_lyric(lyric, [first_width, other_width], config.MAX_LYRIC_ROWS)
 
-    # A short current line leaves a spare row rather than wrapping into it.
-    # Fill that row with the next lyric (static, not scrolled) as a preview,
-    # so the widget still shows two rows instead of a blank second line.
     if len(rows) == 1 and config.MAX_LYRIC_ROWS > 1 and index + 1 < len(lines):
         next_lyric = lines[index + 1][1]
         if display_width(next_lyric) > other_width:
@@ -179,7 +180,7 @@ def render_tick() -> str:
     # the track, so the room left for the lyric is re-measured whenever the
     # track changes -- in the background, never in this tick.
     ensure_viewport(key, track)
-    cached = read_cache(key)
+    cached = read_compatible_cache(key, track)
     now = time.time()
 
     if cached is None:

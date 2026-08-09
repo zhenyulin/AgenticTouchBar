@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from . import config
+from .metadata import normalized
 from .output import log_error
 
 
@@ -41,3 +42,37 @@ def read_cache(key: str) -> dict[str, Any] | None:
         except OSError:
             pass
         return None
+
+
+def read_compatible_cache(key: str, track: dict[str, Any]) -> dict[str, Any] | None:
+    cached = read_cache(key)
+    if cached is not None and cached.get("status") != "not_found":
+        return cached
+
+    title = normalized(str(track.get("title", "") or ""))
+    artist = normalized(str(track.get("artist", "") or ""))
+    album = normalized(str(track.get("album", "") or ""))
+    duration = float(track.get("duration", 0.0) or 0.0)
+    if not title or not artist or not duration:
+        return cached
+
+    for path in config.CACHE_DIR.glob("*.json"):
+        if path == cache_path(key):
+            continue
+        try:
+            candidate = json.loads(path.read_text(encoding="utf-8"))
+            record = candidate.get("record") or {}
+            record_duration = float(record.get("duration", 0.0) or 0.0)
+        except (OSError, TypeError, ValueError):
+            continue
+        if (
+            candidate.get("status") == "ok"
+            and normalized(str(record.get("trackName", "") or "")) == title
+            and normalized(str(record.get("artistName", "") or "")) == artist
+            and normalized(str(record.get("albumName", "") or "")) == album
+            and abs(record_duration - duration) <= 2.0
+        ):
+            atomic_write_json(cache_path(key), candidate)
+            return candidate
+
+    return cached

@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """BetterTouchTool Touch Bar lyrics widget for Apple Music.
 
-Apple Music supplies track metadata and playback position through AppleScript.
-A token-free Chinese lyrics aggregator (LrcAPI) and LRCLIB supply synchronized LRC lyrics, which are cached locally.
+Apple Music supplies track metadata, playback position, and cached synchronized
+lyrics through AppleScript and its local URL cache.
 
 The widget path never blocks. BetterTouchTool runs widget scripts one at a
 time and its refresh_widget command waits for them, so a slow run freezes

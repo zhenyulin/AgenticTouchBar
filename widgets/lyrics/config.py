@@ -38,16 +38,14 @@ PIXELS_PER_CELL = float(os.environ.get("BTT_LYRICS_PX_PER_CELL", "7.0"))
 #
 # Calibrated against one measured track: "一萬次悲傷 - 世界" renders 98 px of
 # Now Playing text, and at that width the lyric row has room for 360 px. The
-# constant carries every other term in the layout -- icon, padding, the
-# fixed-width widgets further right, the Touch Bar's own extent -- so those
-# never need measuring, and the estimate is exact at the calibration point
-# and off only in proportion to how far a track's title strays from it.
-LYRIC_WIDTH_BUDGET_PX = float(os.environ.get("BTT_LYRICS_WIDTH_BUDGET_PX", "458"))
+# Expanded to leave room for roughly 1.5x the current lyric width on tracks
+# with comparable Now Playing metadata, while retaining dynamic measurement.
+LYRIC_WIDTH_BUDGET_PX = float(os.environ.get("BTT_LYRICS_WIDTH_BUDGET_PX", "615"))
 # Bounds on the lyric's own share. The floor stops a very long title from
 # squeezing the lyric down to a few characters -- past it the row overflows
 # the Touch Bar's right edge instead, which is at least still readable.
 MIN_LYRIC_WIDTH_PX = float(os.environ.get("BTT_LYRICS_MIN_WIDTH_PX", "160"))
-MAX_LYRIC_WIDTH_PX = float(os.environ.get("BTT_LYRICS_MAX_WIDTH_PX", "420"))
+MAX_LYRIC_WIDTH_PX = float(os.environ.get("BTT_LYRICS_MAX_WIDTH_PX", "390"))
 # Used until a track has been measured, and by any track whose measurement
 # fails. Deliberately the conservative width this widget used before it
 # measured anything, so a broken measurement degrades to the old behaviour
@@ -104,7 +102,6 @@ MAX_LYRIC_ROWS = int(os.environ.get("BTT_LYRICS_MAX_ROWS", "2"))
 # proportional font renders a symbol like "♪ " wider than two plain spaces,
 # so matching character-for-character still looks left-shifted in practice.
 CONTINUATION_INDENT = os.environ.get("BTT_LYRICS_INDENT", "         ")
-NETWORK_TIMEOUT_SECONDS = float(os.environ.get("BTT_LYRICS_NETWORK_TIMEOUT", "4.0"))
 APPLE_MUSIC_TIMEOUT_SECONDS = float(
     os.environ.get("BTT_LYRICS_APPLE_MUSIC_TIMEOUT", "1.5")
 )
@@ -161,27 +158,7 @@ SHELL_TRACE_PATH = (
 # holds several hours -- long enough to still cover a freeze noticed later.
 TRACE_MAX_BYTES = int(os.environ.get("BTT_LYRICS_TRACE_MAX_BYTES", "4000000"))
 TRACE_ENABLED = os.environ.get("BTT_LYRICS_TRACE", "1") not in {"0", "false", "False"}
-LRCLIB_API_BASE = "https://lrclib.net/api"
-LRCAPI_API_BASE = "https://api.lrc.cx/api/v1/lyrics"
-ENABLE_LRCAPI = os.environ.get("BTT_LYRICS_LRCAPI", "1") not in {"0", "false", "False"}
-LRCAPI_TIMEOUT_SECONDS = float(os.environ.get("BTT_LYRICS_LRCAPI_TIMEOUT", "2.5"))
-CATALOG_LOOKUP_TIMEOUT_SECONDS = float(
-    os.environ.get("BTT_LYRICS_CATALOG_LOOKUP_TIMEOUT", "4.0")
-)
-# Prefer LrcAPI briefly for Chinese-catalog coverage, then use an already-ready
-# LRCLIB match instead of leaving the widget waiting for slower LrcAPI calls.
-LRCAPI_PREFERENCE_SECONDS = max(
-    float(os.environ.get("BTT_LYRICS_LRCAPI_PREFERENCE", "1.5")), 0.0
-)
-LRCAPI_MAX_ADVANCE_QUERIES = int(os.environ.get("BTT_LYRICS_LRCAPI_MAX_ADVANCE", "4"))
-LRCAPI_MAX_SINGLE_QUERIES = int(os.environ.get("BTT_LYRICS_LRCAPI_MAX_SINGLE", "2"))
-LRCLIB_MAX_SEARCH_QUERIES = int(os.environ.get("BTT_LYRICS_LRCLIB_MAX_SEARCH", "7"))
 FETCH_TIMEOUT_SECONDS = float(os.environ.get("BTT_LYRICS_FETCH_TIMEOUT", "20"))
-# Providers and their individual queries run concurrently: LrcAPI's public
-# endpoint regularly needs several seconds per query, and run one after the
-# other those seconds are exactly how long the widget shows an hourglass.
-FETCH_WORKERS = max(int(os.environ.get("BTT_LYRICS_FETCH_WORKERS", "6")), 1)
-USER_AGENT = "BTT-NowPlaying-Lyrics/6.0 (personal macOS Touch Bar widget)"
 LOCK_MAX_AGE_SECONDS = max(FETCH_TIMEOUT_SECONDS + 15.0, 30.0)
 WIDGET_LOCK_MAX_AGE_SECONDS = max(APPLE_MUSIC_TIMEOUT_SECONDS * 4.0, 3.0)
 SAMPLER_LOCK_MAX_AGE_SECONDS = max(APPLE_MUSIC_TIMEOUT_SECONDS * 2.0, 3.0)
@@ -198,42 +175,11 @@ TRACK_FOLLOW_SECONDS = float(os.environ.get("BTT_LYRICS_TRACK_FOLLOW", "3.0"))
 TRACK_FOLLOW_INTERVAL = float(os.environ.get("BTT_LYRICS_TRACK_FOLLOW_STEP", "0.15"))
 # The Lyrics widget's BTT UUID, so a track change can repaint it at once.
 LYRICS_WIDGET_UUID = os.environ.get("BTT_LYRICS_WIDGET_UUID", "")
-RETRY_NETWORK_ERROR_SECONDS = 90
-LRCLIB_RETRY_ATTEMPTS = int(os.environ.get("BTT_LYRICS_LRCLIB_RETRIES", "2"))
-LRCLIB_RETRY_BACKOFF_SECONDS = 0.5
-# Upstream hiccups worth a second attempt rather than a cached failure.
-TRANSIENT_HTTP_STATUS = {408, 425, 429, 500, 502, 503, 504}
+RETRY_CACHE_ERROR_SECONDS = 90
 RETRY_NOT_FOUND_SECONDS = 6 * 60 * 60
-# Bump to invalidate every cached record: a stored "ok" is never refetched, so
-# records chosen before a provider or ranking change would otherwise persist.
-# 9: allow whole-second rounding in Apple Music TTML durations.
-MATCHER_VERSION = 9
-
-# Metadata aliases commonly used by streaming catalogs and community lyric
-# databases. Add your own groups in lyrics_aliases.json next to this script.
-BUILTIN_ALIAS_GROUPS = [
-    ["張懸", "张悬", "Deserts Chang", "安溥", "Anpu"],
-    [
-        "银河快递",
-        "銀河快遞",
-        "Galaxy Express",
-        "银河快递(Galaxy Express)",
-        "銀河快遞(Galaxy Express)",
-    ],
-]
-ALIASES_PATH = Path(
-    os.environ.get(
-        "BTT_LYRICS_ALIASES",
-        str(Path(__file__).resolve().parent.with_name("lyrics_aliases.json")),
-    )
-)
-
-LOCAL_LYRICS_DIR = Path(
-    os.environ.get(
-        "BTT_LYRICS_LOCAL_DIR",
-        str(Path(__file__).resolve().parent.with_name("lyrics")),
-    )
-)
+# Bump this when the cache-key inputs change, so records created by retired
+# network providers cannot be reused by the Apple Music cache-only path.
+CACHE_KEY_VERSION = 1
 
 # Apple Music caches the time-synced TTML it fetches for the catalog track it is
 # about to display, as an ordinary NSURLCache entry. Reading it costs one local
@@ -251,7 +197,7 @@ APPLE_MUSIC_CACHE_FS_DIR = APPLE_MUSIC_CACHE_DB.with_name("fsCachedData")
 # playing track by its declared duration. TTML commonly rounds the duration to
 # whole seconds while AppleScript reports fractional seconds. Adjacent tracks
 # on one album can sit ~2s apart, so keep the window below that gap.
-APPLE_MUSIC_CACHE_DURATION_TOLERANCE = 1.0
+APPLE_MUSIC_CACHE_DURATION_TOLERANCE = 2.0
 # Beyond a handful the query stops being free, and older rows are stale anyway.
 APPLE_MUSIC_CACHE_MAX_ROWS = 12
 
@@ -285,18 +231,6 @@ tell application "Music"
     end try
 
     try
-        set trackSortName to (sort name of currentTrack) as text
-    on error
-        set trackSortName to ""
-    end try
-
-    try
-        set trackGenre to (genre of currentTrack) as text
-    on error
-        set trackGenre to ""
-    end try
-
-    try
         set artistName to (artist of currentTrack) as text
     on error
         set artistName to ""
@@ -320,6 +254,6 @@ tell application "Music"
         set currentPosition to "0"
     end try
 
-    return currentState & sep & trackName & sep & trackSortName & sep & trackGenre & sep & artistName & sep & albumName & sep & trackDuration & sep & currentPosition
+    return currentState & sep & trackName & sep & artistName & sep & albumName & sep & trackDuration & sep & currentPosition
 end tell
 """

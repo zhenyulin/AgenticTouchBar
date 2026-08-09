@@ -18,14 +18,16 @@ import re
 import shutil
 import sqlite3
 import tempfile
-import xml.etree.ElementTree as ElementTree
+import unicodedata
 from pathlib import Path
 from typing import Any
+from xml.etree import ElementTree
 
 from .. import config
 from ..output import log_error
 
 TTML_NS = "{http://www.w3.org/ns/ttml}"
+XML_LANG = "{http://www.w3.org/XML/1998/namespace}lang"
 # "12.345", "1:03.226" or "01:02:03.226" all appear across catalogs.
 CLOCK_RE = re.compile(r"^(?:(?:(\d+):)?(\d+):)?(\d+(?:\.\d+)?)$")
 
@@ -43,12 +45,13 @@ def _line_text(paragraph: ElementTree.Element) -> str:
     return " ".join("".join(paragraph.itertext()).split())
 
 
-def _ttml_to_lrc(ttml: str) -> tuple[str, float | None]:
-    """Convert TTML to LRC text, alongside the declared song duration."""
+def _ttml_to_lrc(ttml: str) -> tuple[str, float | None, str]:
+    """Convert TTML to LRC text, duration, and declared language."""
     root = ElementTree.fromstring(ttml)
 
     body = root.find(f"{TTML_NS}body")
     duration = _clock_seconds(body.get("dur", "")) if body is not None else None
+    language = root.get(XML_LANG, "")
 
     lines: list[tuple[float, str]] = []
     for paragraph in root.iter(f"{TTML_NS}p"):
@@ -61,7 +64,21 @@ def _ttml_to_lrc(ttml: str) -> tuple[str, float | None]:
     rendered = "\n".join(
         f"[{int(begin) // 60:02d}:{begin % 60:06.3f}]{text}" for begin, text in lines
     )
-    return rendered, duration
+    return rendered, duration, language
+
+
+def _track_uses_cjk(track: dict[str, Any]) -> bool:
+    return any(
+        unicodedata.east_asian_width(character) in {"W", "F"}
+        for field in ("title", "artist", "album")
+        for character in str(track.get(field, "") or "")
+    )
+
+
+def _language_matches_track(track: dict[str, Any], language: str) -> bool:
+    if not language or not _track_uses_cjk(track):
+        return True
+    return language.casefold().startswith(("zh", "ja", "ko"))
 
 
 def _cached_rows() -> list[tuple[str, str, int]]:
@@ -141,12 +158,14 @@ def apple_cache_record(track: dict[str, Any]) -> dict[str, Any] | None:
             continue
 
         try:
-            synced, ttml_duration = _ttml_to_lrc(ttml)
+            synced, ttml_duration, language = _ttml_to_lrc(ttml)
         except ElementTree.ParseError as exc:
             log_error(f"Could not parse cached Apple Music TTML: {exc}")
             continue
 
         if not synced or ttml_duration is None:
+            continue
+        if not _language_matches_track(track, language):
             continue
         gap = abs(ttml_duration - track_duration)
         if gap > config.APPLE_MUSIC_CACHE_DURATION_TOLERANCE:

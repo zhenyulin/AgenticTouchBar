@@ -31,8 +31,11 @@ def watch_mode(arguments: list[str]) -> int:
         print("usage: --watch [seconds]")
         return 2
 
-    probe = ['/usr/bin/osascript', '-e',
-             'tell application "BetterTouchTool" to get_string_variable "__probe__"']
+    probe = [
+        "/usr/bin/osascript",
+        "-e",
+        'tell application "BetterTouchTool" to get_string_variable "__probe__"',
+    ]
     print(f"Watching BTT every {interval:g}s → {config.WATCH_PATH}\nCtrl-C to stop.")
 
     try:
@@ -56,7 +59,9 @@ def watch_mode(arguments: list[str]) -> int:
                 pass
 
             if answer != "ok" or took > 2000:
-                print(f"  {time.strftime('%H:%M:%S')}  BTT {answer} after {took:.0f} ms")
+                print(
+                    f"  {time.strftime('%H:%M:%S')}  BTT {answer} after {took:.0f} ms"
+                )
             time.sleep(interval)
     except KeyboardInterrupt:
         print("\nstopped")
@@ -93,7 +98,9 @@ def freeze_verdict(
     unanswered = [row for row in during if row[1] != "ok"]
     slow = [row for row in during if row[2] > 2000]
     if unanswered:
-        return f"→ BTT ITSELF WEDGED ({len(unanswered)}/{len(during)} probes unanswered)"
+        return (
+            f"→ BTT ITSELF WEDGED ({len(unanswered)}/{len(during)} probes unanswered)"
+        )
     if slow:
         return f"→ BTT struggling ({len(slow)} probes over 2s)"
     return "→ BTT healthy, it simply stopped scheduling the widget"
@@ -174,7 +181,9 @@ def median_interval(ticks: list[Row]) -> float:
     return percentile_interval(ticks, 0.5)
 
 
-def report_widget(name: str, rows: list[Row], watched: list[tuple[float, str, float]]) -> None:
+def report_widget(
+    name: str, rows: list[Row], watched: list[tuple[float, str, float]]
+) -> None:
     """One widget's ticks: how long they took, and where they stopped."""
     ticks = [row for row in rows if row.mode == "widget"]
     if not ticks:
@@ -217,7 +226,9 @@ def report_widget(name: str, rows: list[Row], watched: list[tuple[float, str, fl
     slowest = sorted(ticks, key=lambda row: row.elapsed_ms, reverse=True)[:3]
     for row in slowest:
         if row.elapsed_ms > 200:
-            print(f"    slow: {stamp_of(row.at)}  {row.elapsed_ms:.0f} ms  {row.outcome} {row.extra}")
+            print(
+                f"    slow: {stamp_of(row.at)}  {row.elapsed_ms:.0f} ms  {row.outcome} {row.extra}"
+            )
 
 
 def report_mode(arguments: list[str]) -> int:
@@ -264,7 +275,9 @@ def report_mode(arguments: list[str]) -> int:
                 f"at {stamp_of(slowest.at)}   [{tally(entries)}]"
             )
             for row in entries:
-                if row.outcome in {"failed", "network_error", "denied", "error"}:
-                    print(f"    {stamp_of(row.at)}  {row.widget} {row.outcome}  {row.extra}")
+                if row.outcome in {"failed", "cache_error", "denied", "error"}:
+                    print(
+                        f"    {stamp_of(row.at)}  {row.widget} {row.outcome}  {row.extra}"
+                    )
 
     return 0
