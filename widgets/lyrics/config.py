@@ -85,24 +85,20 @@ REPO_DIR = Path(os.environ.get("BTT_REPO_DIR", Path(__file__).resolve().parents[
 CACHE_DIR = Path(
     os.environ.get("BTT_LYRICS_CACHE_DIR", str(REPO_DIR / "cache" / "lyrics"))
 )
+LOG_DIR = Path(os.environ.get("BTT_LOG_DIR", str(REPO_DIR / "logs")))
 WIDGET_LOCK_PATH = CACHE_DIR / "widget.lock"
 SAMPLER_LOCK_PATH = CACHE_DIR / "sampler.lock"
 STATE_PATH = CACHE_DIR / "state.json"
 # Where the hand-tracked MediaRemote position is kept between samples.
 MEDIA_REMOTE_POSITION_PATH = CACHE_DIR / "media_remote_position.json"
 LAST_TEXT_PATH = CACHE_DIR / "last.txt"
-TRACE_PATH = CACHE_DIR / "trace.tsv"
-WATCH_PATH = CACHE_DIR / "watch.tsv"
+TRACE_PATH = LOG_DIR / "lyrics" / "trace.tsv"
+WATCH_PATH = LOG_DIR / "lyrics" / "watch.tsv"
 # Where the shell widgets trace, via lib/btt-widget.sh. --report reads both,
 # because "did every widget stop at once, or just this one?" is the question
 # that separates a BetterTouchTool problem from a script problem.
 SHELL_TRACE_PATH = (
-    Path(
-        os.environ.get(
-            "BTT_WIDGET_CACHE_DIR", str(REPO_DIR / "cache")
-        )
-    )
-    / "trace.tsv"
+    Path(os.environ.get("BTT_WIDGET_LOG_DIR", str(LOG_DIR))) / "trace.tsv"
 )
 # One line per run at a one second interval is roughly 5 MB a day, so the cap
 # holds several hours -- long enough to still cover a freeze noticed later.

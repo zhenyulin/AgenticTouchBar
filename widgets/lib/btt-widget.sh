@@ -46,6 +46,7 @@
 
 BTT_REPO_DIR="${BTT_REPO_DIR:-$HOME/Documents/BTT}"
 BTT_WIDGET_CACHE_DIR="${BTT_WIDGET_CACHE_DIR:-$BTT_REPO_DIR/cache}"
+BTT_WIDGET_LOG_DIR="${BTT_WIDGET_LOG_DIR:-${BTT_LOG_DIR:-$BTT_REPO_DIR/logs}}"
 
 # The widget's own name, used to find its value and refresh lock.
 BTT_WIDGET_NAME="${BTT_WIDGET_NAME:-}"
@@ -140,8 +141,8 @@ btt_trace() {
     outcome="${outcome//[$'\t\n\r']/ }"
     extra="${extra//[$'\t\n\r']/ }"
 
-    local file="$BTT_WIDGET_CACHE_DIR/trace.tsv"
-    mkdir -p "$BTT_WIDGET_CACHE_DIR" 2>/dev/null || return 0
+    local file="${BTT_WIDGET_TRACE_FILE:-$BTT_WIDGET_LOG_DIR/trace.tsv}"
+    mkdir -p "${file:h}" 2>/dev/null || return 0
 
     printf '%s\t%s\t%s\t%.0f\t%s\t%s\n' \
         "$now" "${BTT_WIDGET_NAME:-unnamed}" "$mode" \

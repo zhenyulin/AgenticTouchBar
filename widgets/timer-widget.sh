@@ -42,7 +42,7 @@ BTT_WIDGET_COLOR="175,175,175,255"
 # How long the simulated refresh takes, i.e. how long the grey period lasts.
 # Kept visible (a few seconds) rather than instant, so the color change is
 # actually observable.
-REFRESH_DELAY="${TIMER_WIDGET_REFRESH_DELAY:-2}"
+REFRESH_DELAY="${TIMER_WIDGET_REFRESH_DELAY:-1}"
 
 # Persist the start time for the current BTT PID. This resets on a BTT
 # restart, while a frozen BTT naturally leaves the displayed timer unchanged.
@@ -68,11 +68,25 @@ if (( REFRESH_MODE )); then
     exit 0
 fi
 
-VALUE="$TIMER_VALUE"
+# The timer is derived from the wall clock on every run, so the cache exists
+# only to make a tap grey the widget out. Its max age must therefore be far
+# larger than both the BTT tick interval (10s) and the shared post-refresh
+# redraws, which re-run the widget up to 2s after the lock drops. At the old
+# default of 1s every ordinary tick and every redraw found the cache stale
+# and started a new refresh, and each refresh's tail redraws kept it stale
+# forever: a grey/dark flicker on a ~3s cycle instead of one dim frame per
+# tap. 3600s means a refresh only starts on a tap, on the first run, or
+# after an hour with no refresh at all (a one-off sanity re-check).
+VALUE_MAX_AGE="${TIMER_WIDGET_MAX_AGE:-3600}"
+VALUE="$(btt_cache_get "$BTT_WIDGET_NAME" "$VALUE_MAX_AGE")"
+FRESH=$?
 FORCE=0; btt_force_pending && FORCE=1
-if (( FORCE )); then
+if (( FRESH != 0 || FORCE )); then
     btt_refresh_detached "$BTT_WIDGET_NAME" "$BTT_WIDGET_REFRESH_MAX_RUN" "$SELF" --refresh "$BTT_WIDGET_UUID"
 fi
-OUTCOME=cached; (( FORCE )) && OUTCOME=forced
+OUTCOME=cached; (( FRESH != 0 )) && OUTCOME=stale; (( FORCE )) && OUTCOME=forced; [[ -n "$VALUE" ]] || OUTCOME=empty
 btt_trace widget "$STARTED" "$OUTCOME" "timer=$TIMER_VALUE btt_pid=${BTT_PID:-unknown}"
-btt_publish "${VALUE}"
+# Publish the value computed this run: the cache is only rewritten on tap,
+# so the cached copy would freeze the display between taps. The heartbeat
+# must keep advancing as long as BTT keeps ticking.
+btt_publish "$TIMER_VALUE"

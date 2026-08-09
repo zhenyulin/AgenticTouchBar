@@ -17,8 +17,20 @@ STARTED="$(btt_now)"
 ICON_PATH="${CLASH_ICON:-}"
 BTT_WIDGET_ICON="$ICON_PATH"
 BTT_WIDGET_NAME="clash-latency"
+LATENCY_HISTORY_FILE="${BTT_LATENCY_HISTORY_FILE:-${BTT_LOG_DIR:-$BTT_REPO_DIR/logs}/latency-history.tsv}"
 VALUE_MAX_AGE="${CLASH_MAX_AGE:-30}"
 BTT_WIDGET_REFRESH_MAX_RUN=60
+
+write_latency_history() {
+    local stamp="$1" value="$2" latency node
+    latency="${value%%$'\n'*}"
+    [[ "$value" == *$'\n'* ]] && node="${value#*$'\n'}" || node=""
+    latency="${latency//$'\t'/ }"
+    node="${node//$'\t'/ }"
+    node="${node//$'\n'/ }"
+    mkdir -p "${LATENCY_HISTORY_FILE:h}" 2>/dev/null || return 0
+    printf '%s\t%s\t%s\n' "$stamp" "$latency" "$node" >> "$LATENCY_HISTORY_FILE" 2>/dev/null || true
+}
 
 TEST_URL="${CLASH_TEST_URL:-https://cp.cloudflare.com/generate_204}"
 TIMEOUT_MS="${CLASH_TIMEOUT_MS:-3000}"
@@ -52,7 +64,7 @@ compute_value() {
     delay="$(jq -r '.delay // 0' <<< "$delay_json" 2>/dev/null || printf '0')"
 
     if [[ "$delay" =~ ^[0-9]+$ ]] && (( delay > 0 )); then
-        printf '%sms\n%s' "$delay" "$(clash_proxy_label "$node")"
+        printf '%sms\n %s' "$delay" "$(clash_proxy_label "$node")"
     else
         printf 'Timeout'
     fi
@@ -68,6 +80,7 @@ fi
 
 VALUE="$(btt_cache_get "$BTT_WIDGET_NAME" "$VALUE_MAX_AGE")"
 FRESH=$?
+write_latency_history "$STARTED" "$VALUE"
 FORCE=0; btt_force_pending && FORCE=1
 if (( FRESH != 0 || FORCE )); then
     btt_refresh_detached "$BTT_WIDGET_NAME" "$BTT_WIDGET_REFRESH_MAX_RUN" "$SELF" --refresh "$BTT_WIDGET_UUID"
