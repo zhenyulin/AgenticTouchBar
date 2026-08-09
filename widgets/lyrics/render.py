@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+import os
 import time
 from typing import Any
 
@@ -18,6 +20,52 @@ from .locking import (
 from .lrc import parse_lrc
 from .metadata import track_cache_key
 from .output import emit, emit_last_output, log_error, trace
+
+# What this tick is putting on the Touch Bar, filled in as the tick renders
+# and written out once by widget_main. BetterTouchTool runs the widget as a
+# fresh process every tick, so this is per-tick state rather than anything
+# shared between runs.
+_RECEIPT: dict[str, Any] = {"key": "", "state": "", "index": -1, "next_change_at": None}
+
+# Outcomes whose frame is a reprint of the previous one (see
+# emit_last_output), which deliberately leave the previous receipt and its
+# deadline alone. This is the whole point of the receipt: a widget that
+# reprints the last frame every second -- because the sampler died, or
+# because its lock is held -- writes a trace line every second too, so it
+# looks perfectly healthy right up until you glance at the Touch Bar. An
+# untouched deadline sliding into the past is the only local evidence that
+# the display has stopped moving.
+#
+# "pending" is not one of them: holding the previous lyric while a fetch for
+# a new track runs is deliberate, bounded by FETCH_TIMEOUT_SECONDS, and would
+# otherwise strand the previous track's deadline at every cache miss. It
+# writes a receipt with no deadline instead, which reads as "nothing is due
+# to change".
+REPRINT_OUTCOMES = {"no_sample", "locked", "crashed"}
+
+
+def write_render_receipt(outcome: str) -> None:
+    """Record what went on screen this tick, for the freeze guard to check."""
+    if outcome in REPRINT_OUTCOMES:
+        return
+
+    payload = dict(_RECEIPT)
+    payload["at"] = time.time()
+    payload["outcome"] = outcome
+
+    # Written whole, then renamed over the old one, so the guard reading it a
+    # few times a minute never catches a half-written line.
+    temporary = config.RENDER_PATH.with_name(f"render.tmp.{os.getpid()}")
+    try:
+        config.RENDER_PATH.parent.mkdir(parents=True, exist_ok=True)
+        with temporary.open("w", encoding="utf-8") as handle:
+            json.dump(payload, handle, ensure_ascii=False)
+        os.replace(temporary, config.RENDER_PATH)
+    except OSError:
+        try:
+            temporary.unlink()
+        except OSError:
+            pass
 
 
 def render_widget(
@@ -50,6 +98,17 @@ def render_widget(
     lines = record.get("parsedLines") or parse_lrc(synced_lyrics)
     position = float(track.get("position", 0.0)) + config.SYNC_OFFSET_SECONDS
     lyric, elapsed, index = current_lyric_line(lines, position)
+
+    # The one thing only this function knows: when the frame it is about to
+    # return stops being correct. Recording it as a wall clock time lets the
+    # freeze guard judge a stuck display without parsing any LRC -- and
+    # judge it against the gap this track actually has, instead of a fixed
+    # threshold that a long instrumental break trips for no reason.
+    _RECEIPT["index"] = index
+    if state == "playing" and index + 1 < len(lines):
+        _RECEIPT["next_change_at"] = time.time() + max(
+            lines[index + 1][0] - position, 0.0
+        )
 
     prefix = "Ⅱ " if state == "paused" else "♪ "
     if lyric is None:
@@ -94,9 +153,13 @@ def render_tick() -> str:
         return "no_sample"
 
     state = track.get("state")
+    _RECEIPT["state"] = state or ""
     if state == "denied":
         emit("⚠ Allow BTT → Music")
         return "denied"
+    if state == "paused":
+        emit("")
+        return "paused"
     if state in {"not_running", "stopped"} or not track.get("title"):
         # BetterTouchTool hides script widgets whose text is empty. Match the
         # native Now Playing widget when Music has been quit instead of
@@ -111,6 +174,7 @@ def render_tick() -> str:
         return "placeholder"
 
     key = track_cache_key(track)
+    _RECEIPT["key"] = key
     cached = read_cache(key)
     now = time.time()
 
@@ -159,4 +223,5 @@ def widget_main() -> int:
         return 0
     finally:
         release_widget_lock()
+        write_render_receipt(outcome)
         trace("widget", started, outcome, sample_age_ms=_last_sample_age_ms())
