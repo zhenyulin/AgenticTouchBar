@@ -26,10 +26,6 @@ def fetch_lyrics_record(track: dict[str, Any]) -> dict[str, Any] | None:
     # token-free Chinese sources, then the open LRCLIB database.
     from concurrent.futures import ThreadPoolExecutor
 
-    search_title = catalog_chinese_title(track)
-    if search_title:
-        track = {**track, "search_title": search_title}
-
     local = local_lyrics_record(track)
     if local is not None:
         return local
@@ -40,6 +36,10 @@ def fetch_lyrics_record(track: dict[str, Any]) -> dict[str, Any] | None:
     apple_cached = apple_cache_record(track)
     if apple_cached is not None:
         return apple_cached
+
+    search_title = catalog_chinese_title(track)
+    if search_title:
+        track = {**track, "search_title": search_title}
 
     # Prefer LrcAPI for its Chinese-catalog coverage, but only for a bounded
     # head start: a ready LRCLIB match is more useful than an extra wait.
