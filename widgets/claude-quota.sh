@@ -137,10 +137,19 @@ compute_value() {
             (if type == "array" then . else [.] end)
             | map(
                 if .provider == "claude" and .usage != null then
-                    used(.usage.primary.usedPercent)
-                    + " " + until_reset(.usage.primary.resetsAt)
-                    + "\n" + used(.usage.secondary.usedPercent)
-                    + " " + until_reset(.usage.secondary.resetsAt)
+                                        .usage.primary as $primary
+                                        | .usage.secondary as $secondary
+                                        | if ($secondary.usedPercent // 0) >= 100 then
+                                                used($secondary.usedPercent)
+                                                + " " + until_reset($secondary.resetsAt)
+                                                + "\n  " + used($primary.usedPercent)
+                                                + " " + until_reset($primary.resetsAt)
+                                            else
+                                                used($primary.usedPercent)
+                                                + " " + until_reset($primary.resetsAt)
+                                                + "\n" + used($secondary.usedPercent)
+                                                + " " + until_reset($secondary.resetsAt)
+                                            end
                 else
                     empty
                 end
