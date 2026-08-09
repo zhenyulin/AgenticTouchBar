@@ -544,8 +544,18 @@ btt_latency_color() {
     local first_line="${text%%$'\n'*}"
     local latency="${first_line%%ms*}"
 
-    if [[ ! "$min_ms" =~ '^[0-9]+$' || ! "$max_ms" =~ '^[0-9]+$' || \
-        ! "$latency" =~ '^[0-9]+$' ]] || (( max_ms <= min_ms )); then
+    if [[ ! "$min_ms" =~ '^[0-9]+$' || ! "$max_ms" =~ '^[0-9]+$' ]] || \
+        (( max_ms <= min_ms )); then
+        printf '%s' "$BTT_WIDGET_COLOR"
+        return 0
+    fi
+
+    if [[ "$first_line" == "Timeout" ]]; then
+        btt_color_at_progress 0
+        return 0
+    fi
+
+    if [[ ! "$latency" =~ '^[0-9]+$' ]]; then
         printf '%s' "$BTT_WIDGET_COLOR"
         return 0
     fi
