@@ -56,6 +56,7 @@ def read_compatible_cache(key: str, track: dict[str, Any]) -> dict[str, Any] | N
     if not title or not artist or not duration:
         return cached
 
+    compatible: dict[str, Any] | None = None
     for path in config.CACHE_DIR.glob("*.json"):
         if path == cache_path(key):
             continue
@@ -65,6 +66,12 @@ def read_compatible_cache(key: str, track: dict[str, Any]) -> dict[str, Any] | N
             record_duration = float(record.get("duration", 0.0) or 0.0)
         except (OSError, TypeError, ValueError):
             continue
+        if candidate.get("status") == "ok" and record.get("source") == "apple-cache":
+            try:
+                path.unlink()
+            except OSError:
+                pass
+            continue
         if (
             candidate.get("status") == "ok"
             and normalized(str(record.get("trackName", "") or "")) == title
@@ -72,7 +79,10 @@ def read_compatible_cache(key: str, track: dict[str, Any]) -> dict[str, Any] | N
             and normalized(str(record.get("albumName", "") or "")) == album
             and abs(record_duration - duration) <= 2.0
         ):
-            atomic_write_json(cache_path(key), candidate)
-            return candidate
+            compatible = candidate
+
+    if compatible is not None:
+        atomic_write_json(cache_path(key), compatible)
+        return compatible
 
     return cached

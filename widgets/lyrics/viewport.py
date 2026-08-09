@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import base64
 import json
+import string
 import subprocess
 import time
 from functools import cache
@@ -32,6 +33,8 @@ from .locking import spawn_helper
 from .output import log_error, trace
 
 MEASURE_SCRIPT = Path(__file__).resolve().with_name("text_width.js")
+CHARACTER_METRICS_VERSION = 2
+MEASURED_CHARACTERS = " " + string.ascii_letters + string.digits + string.punctuation
 
 
 class _TrackFields(dict):
@@ -78,6 +81,15 @@ def measure_px(strings: list[str], font_size: float) -> list[float]:
     return widths
 
 
+def measure_track(track: dict[str, Any]) -> tuple[list[float], dict[str, float]]:
+    """Measure Now Playing rows and lyric-font glyph advances."""
+    lines = now_playing_lines(track)
+    characters = list(dict.fromkeys(MEASURED_CHARACTERS + "".join(lines)))
+    row_widths = measure_px(lines, config.NOW_PLAYING_FONT_SIZE)
+    character_widths = measure_px(characters, config.LYRICS_FONT_SIZE)
+    return row_widths, dict(zip(characters, character_widths))
+
+
 def now_playing_width_px(track: dict[str, Any]) -> float:
     """How wide the Now Playing widget's text is for this track.
 
@@ -119,6 +131,16 @@ def stored_lyric_px(stored: dict[str, Any]) -> float | None:
         return None
 
 
+def stored_character_width(character: str) -> float | None:
+    metrics = read_viewport().get("character_widths")
+    if not isinstance(metrics, dict):
+        return None
+    try:
+        return float(metrics[character])
+    except (KeyError, TypeError, ValueError):
+        return None
+
+
 def write_viewport(payload: dict[str, Any]) -> None:
     try:
         atomic_write_json(config.VIEWPORT_PATH, payload)
@@ -151,7 +173,10 @@ def ensure_viewport(key: str, track: dict[str, Any]) -> None:
         return
 
     stored = read_viewport()
-    if stored.get("key") == key:
+    if (
+        stored.get("key") == key
+        and stored.get("metrics_version") == CHARACTER_METRICS_VERSION
+    ):
         return
 
     carried = stored_lyric_px(stored)
@@ -180,7 +205,8 @@ def encode_track(track: dict[str, Any]) -> str:
 def store_measured_viewport(key: str, track: dict[str, Any]) -> None:
     """Measure this track and record the lyric's share of the row."""
     started = time.monotonic()
-    now_playing_px = now_playing_width_px(track)
+    row_widths, character_widths = measure_track(track)
+    now_playing_px = min(max(row_widths), config.NOW_PLAYING_MAX_TEXT_PX)
     lyric_px = lyric_width_px(now_playing_px)
 
     # The track can change again while osascript is starting up. Landing a
@@ -195,6 +221,9 @@ def store_measured_viewport(key: str, track: dict[str, Any]) -> None:
             "key": key,
             "lyric_px": lyric_px,
             "now_playing_px": now_playing_px,
+            "now_playing_rows_px": row_widths,
+            "character_widths": character_widths,
+            "metrics_version": CHARACTER_METRICS_VERSION,
             "measured": True,
             "at": time.time(),
         }

@@ -9,17 +9,22 @@ import unicodedata
 from . import config
 
 
-def character_width(character: str) -> int:
+def character_width(character: str) -> float:
     if unicodedata.combining(character):
         return 0
+    from .viewport import stored_character_width
+
+    measured = stored_character_width(character)
+    if measured is not None:
+        return measured / config.PIXELS_PER_CELL
     return 2 if unicodedata.east_asian_width(character) in {"W", "F", "A"} else 1
 
 
-def display_width(text: str) -> int:
+def display_width(text: str) -> float:
     return sum(character_width(character) for character in text)
 
 
-def crop_cells(text: str, start: int, width: int) -> str:
+def crop_cells(text: str, start: float, width: float) -> str:
     current = 0
     used = 0
     output: list[str] = []
@@ -47,11 +52,11 @@ def break_positions(text: str, break_chars: str) -> list[int]:
     ]
 
 
-def row_width(widths: list[int], index: int) -> int:
+def row_width(widths: list[float], index: int) -> float:
     return widths[min(index, len(widths) - 1)]
 
 
-def rows_overflow(rows: list[str], widths: list[int]) -> int:
+def rows_overflow(rows: list[str], widths: list[float]) -> float:
     """Cells by which the worst row exceeds its budget; <= 0 means all fit."""
     return max(
         display_width(row) - row_width(widths, index) for index, row in enumerate(rows)
@@ -59,7 +64,7 @@ def rows_overflow(rows: list[str], widths: list[int]) -> int:
 
 
 def wrap_at_breaks(
-    text: str, widths: list[int], max_rows: int, break_chars: str
+    text: str, widths: list[float], max_rows: int, break_chars: str
 ) -> list[str]:
     """Wrap an over-wide line onto at most max_rows rows at break_chars.
 
@@ -99,7 +104,7 @@ def wrap_at_breaks(
     return [row for row in rows if row] or [text]
 
 
-def wrap_lyric(text: str, widths: list[int], max_rows: int) -> list[str]:
+def wrap_lyric(text: str, widths: list[float], max_rows: int) -> list[str]:
     """Wrap at punctuation, falling back to spaces only when that is not enough.
 
     Punctuation marks phrase ends, so it is the better break when it fits.
@@ -125,7 +130,7 @@ def wrap_lyric(text: str, widths: list[int], max_rows: int) -> list[str]:
     return best or [text]
 
 
-def marquee(text: str, elapsed: float, width: int) -> str:
+def marquee(text: str, elapsed: float, width: float) -> str:
     if width <= 0 or display_width(text) <= width:
         return text
     if not config.SCROLL_LONG_LINES:

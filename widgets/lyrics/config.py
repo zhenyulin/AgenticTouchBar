@@ -26,21 +26,18 @@ LOADED_AT = time.monotonic()
 
 # ---- User-tunable defaults -------------------------------------------------
 # The Touch Bar renders a proportional font, so a pixel budget tracks the
-# real row width better than a raw character count. PIXELS_PER_CELL
-# calibrates character "cells" (narrow = 1, CJK/wide = 2, see
-# character_width) to pixels; tune it if lines wrap earlier or later than
-# they visibly need to.
+# real row width better than a raw character count. Measured glyph advances
+# are normalized to layout cells with PIXELS_PER_CELL; character_width falls
+# back to narrow = 1 and CJK/wide = 2 when no measurement exists.
 PIXELS_PER_CELL = float(os.environ.get("BTT_LYRICS_PX_PER_CELL", "7.0"))
 # How much of the row the lyric gets is not fixed: it is whatever the Now
 # Playing widget immediately to its left is not using, and that widget grows
 # and shrinks with the title and album it is showing (see viewport.py).
 # LYRIC_WIDTH_BUDGET_PX is what the two of them may take together.
 #
-# Calibrated against one measured track: "一萬次悲傷 - 世界" renders 98 px of
-# Now Playing text, and at that width the lyric row has room for 360 px. The
-# Expanded to leave room for roughly 1.5x the current lyric width on tracks
-# with comparable Now Playing metadata, while retaining dynamic measurement.
-LYRIC_WIDTH_BUDGET_PX = float(os.environ.get("BTT_LYRICS_WIDTH_BUDGET_PX", "615"))
+# Calibrated against the current 13 px lyrics widget: the existing track leaves
+# enough room for the next complete word without changing the widget font.
+LYRIC_WIDTH_BUDGET_PX = float(os.environ.get("BTT_LYRICS_WIDTH_BUDGET_PX", "485"))
 # Bounds on the lyric's own share. The floor stops a very long title from
 # squeezing the lyric down to a few characters -- past it the row overflows
 # the Touch Bar's right edge instead, which is at least still readable.
@@ -67,6 +64,8 @@ NOW_PLAYING_LINE_FORMATS = (
     os.environ.get("BTT_LYRICS_NOW_PLAYING_LINE1", "{title} - {album}"),
     os.environ.get("BTT_LYRICS_NOW_PLAYING_LINE2", "{artist} "),
 )
+# Mirrored from the Lyrics shell widget in bttpreset/Default.bttpreset.
+LYRICS_FONT_SIZE = float(os.environ.get("BTT_LYRICS_FONT_SIZE", "13"))
 NOW_PLAYING_FONT_SIZE = float(os.environ.get("BTT_LYRICS_NOW_PLAYING_FONT", "12"))
 NOW_PLAYING_LINE_MAX_CHARS = int(
     os.environ.get("BTT_LYRICS_NOW_PLAYING_MAX_CHARS", "60")
@@ -101,7 +100,7 @@ MAX_LYRIC_ROWS = int(os.environ.get("BTT_LYRICS_MAX_ROWS", "2"))
 # Wider than the prefix's character count on purpose: the Touch Bar's
 # proportional font renders a symbol like "♪ " wider than two plain spaces,
 # so matching character-for-character still looks left-shifted in practice.
-CONTINUATION_INDENT = os.environ.get("BTT_LYRICS_INDENT", "         ")
+CONTINUATION_INDENT = os.environ.get("BTT_LYRICS_INDENT", "       ")
 APPLE_MUSIC_TIMEOUT_SECONDS = float(
     os.environ.get("BTT_LYRICS_APPLE_MUSIC_TIMEOUT", "1.5")
 )
@@ -116,6 +115,7 @@ ENABLE_MEDIA_REMOTE = os.environ.get("BTT_LYRICS_MEDIA_REMOTE", "1") not in {
 MEDIA_REMOTE_TIMEOUT_SECONDS = float(
     os.environ.get("BTT_LYRICS_MEDIA_REMOTE_TIMEOUT", "1.5")
 )
+NETWORK_TIMEOUT_SECONDS = float(os.environ.get("BTT_LYRICS_NETWORK_TIMEOUT", "4.0"))
 # Already covered by the direct AppleScript path, and better: MediaRemote
 # never reports Apple Music's live position, only a stale 0.
 MEDIA_REMOTE_IGNORED_BUNDLE_IDS = {"com.apple.Music"}
@@ -158,6 +158,30 @@ SHELL_TRACE_PATH = (
 # holds several hours -- long enough to still cover a freeze noticed later.
 TRACE_MAX_BYTES = int(os.environ.get("BTT_LYRICS_TRACE_MAX_BYTES", "4000000"))
 TRACE_ENABLED = os.environ.get("BTT_LYRICS_TRACE", "1") not in {"0", "false", "False"}
+LRCLIB_API_BASE = "https://lrclib.net/api"
+LRCAPI_API_BASE = "https://api.lrc.cx/api/v1/lyrics"
+ENABLE_LRCAPI = os.environ.get("BTT_LYRICS_LRCAPI", "1") not in {
+    "0",
+    "false",
+    "False",
+}
+LRCAPI_TIMEOUT_SECONDS = float(os.environ.get("BTT_LYRICS_LRCAPI_TIMEOUT", "2.5"))
+CATALOG_LOOKUP_TIMEOUT_SECONDS = float(
+    os.environ.get("BTT_LYRICS_CATALOG_LOOKUP_TIMEOUT", "4.0")
+)
+LRCAPI_PREFERENCE_SECONDS = max(
+    float(os.environ.get("BTT_LYRICS_LRCAPI_PREFERENCE", "1.5")), 0.0
+)
+LRCAPI_MAX_ADVANCE_QUERIES = int(os.environ.get("BTT_LYRICS_LRCAPI_MAX_ADVANCE", "4"))
+LRCAPI_MAX_SINGLE_QUERIES = int(os.environ.get("BTT_LYRICS_LRCAPI_MAX_SINGLE", "2"))
+LRCLIB_MAX_SEARCH_QUERIES = int(os.environ.get("BTT_LYRICS_LRCLIB_MAX_SEARCH", "7"))
+# Providers and their individual queries run concurrently so a slow public
+# endpoint does not serialize every title and artist variant.
+FETCH_WORKERS = max(int(os.environ.get("BTT_LYRICS_FETCH_WORKERS", "6")), 1)
+USER_AGENT = "BTT-NowPlaying-Lyrics/6.0 (personal macOS Touch Bar widget)"
+LRCLIB_RETRY_ATTEMPTS = int(os.environ.get("BTT_LYRICS_LRCLIB_RETRIES", "2"))
+LRCLIB_RETRY_BACKOFF_SECONDS = 0.5
+TRANSIENT_HTTP_STATUS = {408, 425, 429, 500, 502, 503, 504}
 FETCH_TIMEOUT_SECONDS = float(os.environ.get("BTT_LYRICS_FETCH_TIMEOUT", "20"))
 LOCK_MAX_AGE_SECONDS = max(FETCH_TIMEOUT_SECONDS + 15.0, 30.0)
 WIDGET_LOCK_MAX_AGE_SECONDS = max(APPLE_MUSIC_TIMEOUT_SECONDS * 4.0, 3.0)
@@ -177,9 +201,34 @@ TRACK_FOLLOW_INTERVAL = float(os.environ.get("BTT_LYRICS_TRACK_FOLLOW_STEP", "0.
 LYRICS_WIDGET_UUID = os.environ.get("BTT_LYRICS_WIDGET_UUID", "")
 RETRY_CACHE_ERROR_SECONDS = 90
 RETRY_NOT_FOUND_SECONDS = 6 * 60 * 60
-# Bump this when the cache-key inputs change, so records created by retired
-# network providers cannot be reused by the Apple Music cache-only path.
-CACHE_KEY_VERSION = 1
+# Bump this when provider behavior or cache-key inputs change. Apple-cache
+# records carry the current track metadata even when duration matching chose a
+# different cached TTML, so they cannot safely migrate across generations.
+CACHE_KEY_VERSION = 3
+
+BUILTIN_ALIAS_GROUPS = [
+    ["張懸", "张悬", "Deserts Chang", "安溥", "Anpu"],
+    [
+        "银河快递",
+        "銀河快遞",
+        "Galaxy Express",
+        "银河快递(Galaxy Express)",
+        "銀河快遞(Galaxy Express)",
+    ],
+]
+ALIASES_PATH = Path(
+    os.environ.get(
+        "BTT_LYRICS_ALIASES",
+        str(Path(__file__).resolve().parent.with_name("lyrics_aliases.json")),
+    )
+)
+
+LOCAL_LYRICS_DIR = Path(
+    os.environ.get(
+        "BTT_LYRICS_LOCAL_DIR",
+        str(Path(__file__).resolve().parent.with_name("lyrics")),
+    )
+)
 
 # Apple Music caches the time-synced TTML it fetches for the catalog track it is
 # about to display, as an ordinary NSURLCache entry. Reading it costs one local

@@ -9,19 +9,77 @@ from typing import Any
 
 from . import config
 from .cache import atomic_write_json, cache_path, lock_path
+from .catalog import catalog_chinese_title
+from .concurrency import set_fetch_deadline
 from .locking import acquire_lock, clear_lock, spawn_helper
 from .lrc import parse_lrc
 from .output import log_error, trace
 from .providers.apple_cache import apple_cache_record
+from .providers.local import local_lyrics_record
+from .providers.lrcapi import choose_lrcapi_candidate
+from .providers.lrclib import lrclib_record
 
 
 def fetch_lyrics_record(track: dict[str, Any]) -> dict[str, Any] | None:
-    return apple_cache_record(track)
+    from concurrent.futures import ThreadPoolExecutor, TimeoutError
+
+    local = local_lyrics_record(track)
+    if local is not None:
+        return local
+
+    apple_cached = apple_cache_record(track)
+    if apple_cached is not None:
+        return apple_cached
+
+    search_title = catalog_chinese_title(track)
+    if search_title:
+        track = {**track, "search_title": search_title}
+
+    pool = ThreadPoolExecutor(max_workers=2)
+    try:
+        lrcapi_lookup = pool.submit(choose_lrcapi_candidate, track)
+        lrclib_lookup = pool.submit(lrclib_record, track)
+
+        try:
+            lrcapi = lrcapi_lookup.result(timeout=config.LRCAPI_PREFERENCE_SECONDS)
+        except TimeoutError:
+            lrcapi = None
+        except Exception as exc:
+            log_error(f"LrcAPI lookup failed; using LRCLIB: {exc}")
+            lrcapi = None
+        else:
+            if lrcapi is not None:
+                return lrcapi
+            return lrclib_lookup.result()
+
+        try:
+            lrclib = lrclib_lookup.result()
+        except Exception as exc:
+            try:
+                lrcapi = lrcapi_lookup.result()
+            except Exception as lrcapi_exc:
+                log_error(f"LrcAPI lookup failed; using LRCLIB: {lrcapi_exc}")
+                raise exc
+            if lrcapi is not None:
+                return lrcapi
+            raise exc
+
+        if lrclib is not None:
+            return lrclib
+
+        try:
+            return lrcapi_lookup.result()
+        except Exception as exc:
+            log_error(f"LrcAPI lookup failed; using LRCLIB: {exc}")
+            return None
+    finally:
+        pool.shutdown(wait=False)
 
 
 def background_fetch(key: str, track: dict[str, Any]) -> None:
     lock = lock_path(key)
     started = time.monotonic()
+    set_fetch_deadline(time.monotonic() + max(config.FETCH_TIMEOUT_SECONDS - 3.0, 1.0))
     try:
         try:
             record = fetch_lyrics_record(track)
@@ -70,6 +128,7 @@ def background_fetch(key: str, track: dict[str, Any]) -> None:
             )
             trace("fetch", started, "cache_error", reason=str(exc).split(":")[0][:40])
     finally:
+        set_fetch_deadline(None)
         try:
             lock.unlink()
         except OSError:

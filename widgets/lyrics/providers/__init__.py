@@ -1,1 +1,1 @@
-"""Apple Music's cached TTML lyrics provider."""
+"""Lyrics providers used by the detached fetch pipeline."""
