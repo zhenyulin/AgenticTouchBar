@@ -9,7 +9,7 @@ from typing import Any
 
 from . import config
 from .apple_music import _last_sample_age_ms, current_track, is_placeholder_track
-from .cache import cache_path, read_compatible_cache
+from .cache import atomic_write_json, cache_path, read_compatible_cache
 from .fetch import start_background_fetch
 from .layout import crop_cells, current_lyric_line, display_width, marquee, wrap_lyric
 from .locking import (
@@ -20,6 +20,7 @@ from .locking import (
 from .lrc import parse_lrc
 from .metadata import track_cache_key
 from .output import emit, emit_last_output, log_error, trace
+from .providers.apple_cache import apple_cache_record
 from .viewport import ensure_viewport, viewport_cells
 
 # What this tick is putting on the Touch Bar, filled in as the tick renders
@@ -182,6 +183,16 @@ def render_tick() -> str:
     ensure_viewport(key, track)
     cached = read_compatible_cache(key, track)
     now = time.time()
+
+    if cached is not None and cached.get("status") == "not_found":
+        apple_record = apple_cache_record(track)
+        if apple_record is not None:
+            apple_record = dict(apple_record)
+            apple_record["parsedLines"] = parse_lrc(
+                apple_record.get("syncedLyrics") or ""
+            )
+            cached = {"status": "ok", "fetched_at": now, "record": apple_record}
+            atomic_write_json(cache_path(key), cached)
 
     if cached is None:
         try:
