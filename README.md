@@ -108,6 +108,31 @@ evidence: a newer `timer-widget` row means BTT dispatched the refresh.
   cp actions/btt-freeze-guard.sh ~/Library/Application\ Support/BTT/btt-freeze-guard.sh
   ```
 
+- **Helper binary:** `actions/hid-state.c`, deployed beside the script as
+  `~/Library/Application Support/BTT/hid-state` (same `~/Documents` block, so
+  it cannot be run from the repo). It reports whether a modifier or mouse
+  button is held right now, which is what the guard checks before terminating
+  BTT — killing its event tap mid-gesture is what leaves the front app with a
+  latched Shift or a phantom mouse-down. `HIDIdleTime` cannot answer this:
+  modifiers do not auto-repeat and a paused drag posts nothing, so both read
+  as idle within a second. Rebuild after editing:
+
+  ```sh
+  clang -O2 actions/hid-state.c -framework ApplicationServices \
+      -o ~/Library/Application\ Support/BTT/hid-state
+  ```
+
+- **Deferral is a delay, not a veto.** Both input checks above postpone a
+  restart rather than cancel it, and `BTT_RESTART_DEFER_MAX` (60s) caps how
+  long that can go on: past the deadline the restart proceeds and says so in
+  the log. Without the cap, typing through a freeze holds the restart off for
+  as long as the user keeps working — which is exactly when they want the
+  Touch Bar back, and is the same uncapped-defer failure recorded above. The
+  deadline is measured from the first deferral in a run and cleared the moment
+  a probe finds BTT healthy, so an old run cannot make a later restart skip
+  its checks. A modifier still reported held a minute on is already latched,
+  and restarting is as likely to clear it as to cause it.
+
 - **Scheduler:** `~/Library/LaunchAgents/com.zhenyulin.btt-freeze-guard.plist`,
   `StartInterval` 5s, loaded via `launchctl bootstrap gui/$(id -u) …`.
 - **Logic:** refresh timer-widget every five seconds and wait up to

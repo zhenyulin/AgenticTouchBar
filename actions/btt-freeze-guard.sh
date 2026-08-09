@@ -19,9 +19,37 @@
 #
 # The actual fix is on BTT's side (an AppKit performance bug in its own
 # code); there is nothing in this repo to patch. Until upstream fixes it,
-# this script actively refreshes the Latency widget and watches its dedicated
-# history timestamp. BTT is restarted only when the refresh does not dispatch
-# the widget within the configured timeout.
+# this script watches two independent signals and restarts BTT when either
+# says the Touch Bar has stopped moving:
+#
+#   1. The widget heartbeat: the newest tick of any widget in
+#      HEARTBEAT_WIDGETS, from logs/trace.tsv. Those widgets run on a fixed
+#      BTT interval and write their trace row before doing any real work, so
+#      a gap there means BTT is not dispatching widget scripts at all --
+#      which is exactly the wedge above. This replaced an earlier probe that
+#      forced a refresh of the Clash latency widget and watched its history
+#      file: that file only gets a row after a network round trip to the
+#      Clash controller, so every slow or skipped probe read as a freeze. It
+#      restarted BTT roughly every two minutes while BTT was demonstrably
+#      fine, and only the keyboard-idle deferral below kept it from being
+#      worse.
+#
+#   2. The lyrics render deadline. A frozen widget and a working one look
+#      identical in the heartbeat if the widget is running but reprinting its
+#      previous frame -- which is what the lyrics widget does when its Apple
+#      Music sampler dies or its lock is held (see render.py's
+#      emit_last_output paths). So every tick that renders a lyric of its own
+#      records, in logs/lyrics/render.json, the wall clock time at which the
+#      line on screen is due to be replaced by the next LRC line. A deadline
+#      in the past means the display has stopped moving, and needs no LRC
+#      knowledge here to check. It is also self-scaling: a long instrumental
+#      break sets a deadline far out instead of tripping a fixed threshold.
+#
+# Not every stuck display is BTT's fault, and restarting BTT does not fix the
+# ones that are not, so an overdue deadline is read together with the widget's
+# newest trace row before reaching for the kill. A "no_sample" tick means the
+# Apple Music sampler has nothing fresh to draw from and a "locked" tick means
+# the previous tick is still running; both are logged and left alone.
 #
 # This file is the documented, version-controlled source. The LaunchAgent
 # does not run it from here: launchd spawns its own zsh under a TCC identity
@@ -29,35 +57,87 @@
 # widgets/lib/btt-widget.sh re: btt_refresh_detached), even though BTT
 # itself can read this whole repo fine. The actually-running copy lives at
 # ~/Library/Application Support/BTT/btt-freeze-guard.sh -- re-copy this file
-# there after making changes.
+# there after making changes, and `launchctl kickstart -k` the agent so the
+# running process is the new one.
 #
 
 set -u
+
+# Sub-second wall clock, via $EPOCHREALTIME. The signals watched here are
+# timestamps written with fractional seconds, and `date +%s` truncates: it
+# reads up to a second in the past, which shows up as negative ages.
+zmodload zsh/datetime
 
 REPO_DIR="${BTT_REPO_DIR:-$HOME/Documents/BTT}"
 CACHE_DIR="${BTT_WIDGET_CACHE_DIR:-$REPO_DIR/cache}"
 LOG_DIR="${BTT_LOG_DIR:-$REPO_DIR/logs}"
 LOG="$LOG_DIR/freeze-guard.log"
-LATENCY_HISTORY_FILE="${BTT_LATENCY_HISTORY_FILE:-$LOG_DIR/latency-history.tsv}"
+
+# The shell widgets' shared trace, written by lib/btt-widget.sh.
+WIDGET_TRACE_FILE="${BTT_WIDGET_TRACE_FILE:-$LOG_DIR/trace.tsv}"
+# Which widgets' ticks count as the heartbeat. Both run on a fixed interval
+# from BTT and write their trace row before doing any real work, so a gap in
+# them is BTT and nothing else: timer-widget every 10.0s with no network or
+# Apple Music work at all, clash-latency every 13.1s with its network probe
+# detached into a separate refresh process.
+#
+# The lyrics widget is deliberately not one of them, even though it ticks
+# fastest. Its cadence is neither fixed nor unconditional -- it renders about
+# every 2.4s while a track plays and stops entirely when Music is paused or
+# the widget is hidden -- so including it made the heartbeat track the lyrics
+# widget's own health instead of BTT's, and hid exactly the case the lyrics
+# receipt exists to catch. The two signals are now independent.
+HEARTBEAT_WIDGETS="${BTT_HEARTBEAT_WIDGETS:-timer-widget clash-latency}"
+TIMER_WIDGET_UUID="E25C395A-FE13-4216-BC59-6317FD0454BF"
+
 LYRICS_TRACE_FILE="${BTT_LYRICS_TRACE_FILE:-$LOG_DIR/lyrics/trace.tsv}"
-LYRICS_VALUE_FILE="${BTT_LYRICS_VALUE_FILE:-$CACHE_DIR/lyrics.value}"
-LATENCY_WIDGET_UUID="59F8C568-022F-4BD9-B3EB-63A7676592DF"
-PROBE_INTERVAL="${BTT_LATENCY_PROBE_INTERVAL:-10}"
-[[ "$PROBE_INTERVAL" =~ ^[0-9]+([.][0-9]+)?$ ]] || PROBE_INTERVAL=10
-(( PROBE_INTERVAL > 0 )) || PROBE_INTERVAL=10
-DEFAULT_LATENCY_TIMEOUT=22
-if [[ -n "${BTT_LATENCY_TIMEOUT:-}" ]]; then
-	LATENCY_TIMEOUT="$BTT_LATENCY_TIMEOUT"
-else
-	LATENCY_TIMEOUT="$DEFAULT_LATENCY_TIMEOUT"
-fi
-[[ "$LATENCY_TIMEOUT" =~ ^[0-9]+([.][0-9]+)?$ ]] || LATENCY_TIMEOUT="$DEFAULT_LATENCY_TIMEOUT"
-(( LATENCY_TIMEOUT > 0 )) || LATENCY_TIMEOUT="$DEFAULT_LATENCY_TIMEOUT"
-LYRICS_TRACE_MAX_AGE="${BTT_LYRICS_TRACE_MAX_AGE:-5}"
-[[ "$LYRICS_TRACE_MAX_AGE" =~ ^[0-9]+([.][0-9]+)?$ ]] || LYRICS_TRACE_MAX_AGE=5
-(( LYRICS_TRACE_MAX_AGE > 0 )) || LYRICS_TRACE_MAX_AGE=5
-RESTART_STARTUP_GRACE="${BTT_RESTART_STARTUP_GRACE:-$LATENCY_TIMEOUT}"
+# Everything this script knows about the lyrics widget comes from these two,
+# and both are deliberately under logs/. launchd's zsh gets EPERM opening
+# anything under cache/ -- macOS gates ~/Documents and only logs/ carries the
+# com.apple.macl grant that lets this process through, which is also why the
+# running copy of this script lives outside the repo.
+LYRICS_RENDER_FILE="${BTT_LYRICS_RENDER_FILE:-$LOG_DIR/lyrics/render.json}"
+
+number_or() {
+	local value="$1" fallback="$2"
+	[[ "$value" =~ ^[0-9]+([.][0-9]+)?$ ]] || value="$fallback"
+	(( value > 0 )) || value="$fallback"
+	print -r -- "$value"
+}
+
+# How often the signals are read. Cheap: two awk passes over local files.
+PROBE_INTERVAL="$(number_or "${BTT_PROBE_INTERVAL:-10}" 10)"
+# How long the widget heartbeat may go quiet before BTT is considered wedged.
+# timer-widget ticks every 10s, so this is four missed ticks.
+HEARTBEAT_TIMEOUT="$(number_or "${BTT_HEARTBEAT_TIMEOUT:-45}" 45)"
+# Slack on the lyrics deadline, covering a slow tick plus sampler jitter.
+LYRICS_OVERDUE_GRACE="$(number_or "${BTT_LYRICS_OVERDUE_GRACE:-3}" 3)"
+# Consecutive overdue probes before restarting. The heartbeat is proof BTT is
+# alive in this case, so the display being stuck is the weaker of the two
+# signals and gets asked twice more before it costs a restart.
+LYRICS_OVERDUE_STRIKES="$(number_or "${BTT_LYRICS_OVERDUE_STRIKES:-3}" 3)"
+# How long the widget may go without rendering a frame while the track is
+# playing. It renders about once a second, so this is a very long silence --
+# and unlike the deadline it also covers the outcomes that schedule no change
+# at all, which would otherwise mask the widget dying underneath them.
+LYRICS_RENDER_MAX_AGE="$(number_or "${BTT_LYRICS_RENDER_MAX_AGE:-30}" 30)"
+RESTART_STARTUP_GRACE="$(number_or "${BTT_RESTART_STARTUP_GRACE:-45}" 45)"
 RESTART_KEYBOARD_IDLE_SECONDS=1
+# How long to wait for a held modifier or mouse button to be released before
+# giving up on this probe's restart. Long enough for a click or a chord to
+# finish, short enough that a real wedge is not prolonged.
+RESTART_INPUT_WAIT="$(number_or "${BTT_RESTART_INPUT_WAIT:-5}" 5)"
+# How long the checks below may keep postponing a restart before it goes ahead
+# anyway. A deferral is a delay, not a veto: BTT stays wedged for minutes at a
+# time (trace.tsv has a 603s gap), and someone typing through it would
+# otherwise hold the restart off for exactly as long as they keep working --
+# which is when they most want the Touch Bar back. Past this deadline the
+# stuck-modifier risk is the lesser of the two, and it is also self-diagnosing:
+# nobody holds Shift for a minute, so input still reported held that long is
+# already latched, and a restart is as likely to clear it as to cause it.
+RESTART_DEFER_MAX="$(number_or "${BTT_RESTART_DEFER_MAX:-60}" 60)"
+GUARD_DIR="${0:A:h}"
+HID_STATE_BIN="${BTT_HID_STATE_BIN:-$GUARD_DIR/hid-state}"
 
 mkdir -p "$CACHE_DIR" "$LOG_DIR" 2>/dev/null
 
@@ -65,35 +145,163 @@ log() {
 	echo "$(date '+%Y-%m-%d %H:%M:%S') $*" >> "$LOG"
 }
 
-latency_history_stamp() {
-	/usr/bin/awk -F '\t' '($1 + 0) > latest { latest = $1 + 0 } END { printf "%.6f\n", latest + 0 }' "$LATENCY_HISTORY_FILE" 2>/dev/null || printf '0\n'
+# Only log a repeated verdict once, so a healthy day is a handful of lines
+# rather than one every probe interval. Deduplicated on a caller-supplied key
+# rather than on the message, because every message carries ages that differ
+# on each probe -- with the heartbeat now sampling one fixed-interval widget
+# it sweeps 0-10s -- and would defeat the check outright.
+LAST_VERDICT=""
+log_verdict() {
+	local key="$1"
+	shift
+	[[ "$key" == "$LAST_VERDICT" ]] && return 0
+	LAST_VERDICT="$key"
+	log "$@"
 }
 
-lyrics_trace_lag() {
-	local now_stamp
-	now_stamp="$(/bin/date +%s)"
-	/usr/bin/awk -F '\t' -v now="$now_stamp" '
-		$2 == "lyrics" && $3 == "sample" && ($1 + 0) > latest_sample {
-			latest_sample = $1 + 0
-			sample_state = $5
+# --- Reading the signals ----------------------------------------------------
+
+# The receipt and sample files are single-line JSON written by
+# lyrics/cache.py's atomic_write_json, so a field can be picked out without a
+# JSON parser -- and without making this guard depend on python3 or jq being
+# healthy, which is the thing it may well be watching fail.
+json_number() {
+	[[ -f "$1" ]] || return 0
+	/usr/bin/awk -v key="\"$2\"" '
+		{
+			start = index($0, key)
+			if (start == 0) next
+			rest = substr($0, start + length(key))
+			sub(/^[ \t]*:[ \t]*/, "", rest)
+			if (match(rest, /^-?[0-9]+([.][0-9]+)?([eE][-+]?[0-9]+)?/)) {
+				print substr(rest, RSTART, RLENGTH)
+			}
+			exit
 		}
-		$2 == "lyrics" && $3 == "widget" && ($1 + 0) > latest_widget {
-			latest_widget = $1 + 0
+	' "$1" 2>/dev/null
+}
+
+json_string() {
+	[[ -f "$1" ]] || return 0
+	/usr/bin/awk -v key="\"$2\"" '
+		{
+			start = index($0, key)
+			if (start == 0) next
+			rest = substr($0, start + length(key))
+			if (sub(/^[ \t]*:[ \t]*"/, "", rest) && match(rest, /^[^"]*/)) {
+				print substr(rest, RSTART, RLENGTH)
+			}
+			exit
+		}
+	' "$1" 2>/dev/null
+}
+
+# Seconds since the last ordinary widget tick, from whichever of the two
+# traces is newer. Rows whose first field is not a timestamp are the restart
+# markers written below.
+heartbeat_age() {
+	/usr/bin/awk -F '\t' -v now="$EPOCHREALTIME" -v widgets="$HEARTBEAT_WIDGETS" '
+		BEGIN {
+			count = split(widgets, names, " ")
+			for (i = 1; i <= count; i++) watched[names[i]] = 1
+		}
+		$3 == "widget" && $1 ~ /^[0-9]+([.][0-9]+)?$/ && ($2 in watched) {
+			if (($1 + 0) > latest) latest = $1 + 0
 		}
 		END {
-			if (sample_state != "playing" || latest_widget == 0) {
-				print ""
-			} else {
-				printf "%.6f\n", now - latest_widget
-			}
+			if (latest == 0) print "unknown"
+			else printf "%.1f\n", (now - latest > 0 ? now - latest : 0)
 		}
-	' "$LYRICS_TRACE_FILE" 2>/dev/null || true
+	' "$WIDGET_TRACE_FILE" 2>/dev/null || print -r -- unknown
 }
 
-lyrics_value_matches_last_output() {
-	[[ -f "$LYRICS_VALUE_FILE" && -f "$CACHE_DIR/last.txt" ]] || return 1
-	cmp -s "$LYRICS_VALUE_FILE" "$CACHE_DIR/last.txt"
+# The newest lyrics widget tick, as "<outcome> <sample_age_ms>". Its trace
+# row is the only other thing worth knowing when the display is overdue: it
+# says whether the widget was even in a position to render a new frame.
+lyrics_last_tick() {
+	/usr/bin/awk -F '\t' '
+		$2 == "lyrics" && $3 == "widget" && $1 ~ /^[0-9]+([.][0-9]+)?$/ && ($1 + 0) > latest {
+			latest = $1 + 0
+			outcome = $5
+			age = "none"
+			if (match($6, /sample_age_ms=[^ ]+/)) {
+				age = substr($6, RSTART + 14, RLENGTH - 14)
+			}
+		}
+		END { if (latest) print outcome, age }
+	' "$LYRICS_TRACE_FILE" 2>/dev/null
 }
+
+# Why the display is not moving, given that it should be: the widget's newest
+# trace row names the two paths that reprint the previous frame on purpose,
+# and neither is BTT's fault or fixable by restarting it.
+lyrics_blame() {
+	local tick outcome sample_age
+	tick=(${=$(lyrics_last_tick)})
+	outcome="${tick[1]:-none}"
+	sample_age="${tick[2]:-none}"
+	case "$outcome" in
+		no_sample) print -r -- "sampler-stale sample_age_ms=$sample_age" ;;
+		locked) print -r -- "widget-locked" ;;
+		*) print -r -- "$1 tick=$outcome" ;;
+	esac
+}
+
+# One of: idle / no-receipt / ok / sampler-stale / widget-locked / stalled /
+# overdue, plus detail.
+lyrics_display_state() {
+	local now render_at render_state render_deadline render_outcome overdue
+
+	now="$EPOCHREALTIME"
+	render_at="$(json_number "$LYRICS_RENDER_FILE" at)"
+	if [[ -z "$render_at" ]]; then
+		print -r -- "no-receipt"
+		return
+	fi
+	render_outcome="$(json_string "$LYRICS_RENDER_FILE" outcome)"
+
+	# The receipt's own view of the player. Reading cache/lyrics/state.json
+	# would be the more direct source, but launchd cannot open anything under
+	# cache/ -- see RENDER_PATH in lyrics/config.py.
+	render_state="$(json_string "$LYRICS_RENDER_FILE" state)"
+	if [[ "$render_state" != "playing" ]]; then
+		printf 'idle state=%s\n' "${render_state:-unknown}"
+		return
+	fi
+
+	# Playing, and this widget renders about once a second, so a receipt this
+	# old means it has stopped rendering entirely -- while the heartbeat says
+	# the other widgets are still being dispatched. That is the one shape a
+	# deadline cannot catch, because the outcomes with no deadline of their
+	# own (an instrumental track, a fetch still running) would otherwise read
+	# as healthy forever once the widget died underneath them.
+	if (( now - render_at > LYRICS_RENDER_MAX_AGE )); then
+		lyrics_blame "$(printf 'stalled render_age=%.1fs outcome=%s' \
+			"$(( now - render_at ))" "${render_outcome:-?}")"
+		return
+	fi
+
+	# Absent when nothing is due to change: instrumental, no lyrics found, or
+	# a fetch still running for a new track.
+	render_deadline="$(json_number "$LYRICS_RENDER_FILE" next_change_at)"
+	if [[ -z "$render_deadline" ]]; then
+		printf 'ok no-scheduled-change outcome=%s render_age=%.1fs\n' \
+			"${render_outcome:-?}" "$(( now - render_at ))"
+		return
+	fi
+
+	overdue=$(( now - render_deadline - LYRICS_OVERDUE_GRACE ))
+	if (( overdue <= 0 )); then
+		printf 'ok due_in=%.1fs\n' "$(( render_deadline - now ))"
+		return
+	fi
+
+	# The line on screen should have been replaced by now.
+	lyrics_blame "$(printf 'overdue by=%.1fs render_age=%.1fs' \
+		"$overdue" "$(( now - render_at ))")"
+}
+
+# --- Restarting -------------------------------------------------------------
 
 restart_duration() {
 	local file="$1"
@@ -116,64 +324,13 @@ restart_duration() {
 }
 
 write_restart_marker() {
-	local latency_duration lyrics_duration
-	latency_duration="$(restart_duration "$LATENCY_HISTORY_FILE")"
+	local widget_duration lyrics_duration
+	widget_duration="$(restart_duration "$WIDGET_TRACE_FILE")"
 	lyrics_duration="$(restart_duration "$LYRICS_TRACE_FILE")"
-	mkdir -p "${LATENCY_HISTORY_FILE:h}" "${LYRICS_TRACE_FILE:h}" 2>/dev/null || true
-	printf '+\t%s\tBTT restart\n' "$latency_duration" >> "$LATENCY_HISTORY_FILE" 2>/dev/null || true
+	mkdir -p "${WIDGET_TRACE_FILE:h}" "${LYRICS_TRACE_FILE:h}" 2>/dev/null || true
+	printf '+\t%s\tBTT restart\n' "$widget_duration" >> "$WIDGET_TRACE_FILE" 2>/dev/null || true
 	printf '+\t%s\tBTT restart\n' "$lyrics_duration" >> "$LYRICS_TRACE_FILE" 2>/dev/null || true
 }
-
-request_latency_refresh() {
-	: > "$CACHE_DIR/$LATENCY_WIDGET_UUID.force" 2>/dev/null || true
-	/usr/bin/osascript -e "tell application \"BetterTouchTool\" to refresh_widget \"$LATENCY_WIDGET_UUID\"" >/dev/null 2>&1 &
-	LATENCY_REFRESH_PID=$!
-}
-
-while true; do
-	before_latency_stamp="$(latency_history_stamp)"
-	request_latency_refresh
-	sleep "$LATENCY_TIMEOUT"
-	kill "$LATENCY_REFRESH_PID" >/dev/null 2>&1 || true
-	after_latency_stamp="$(latency_history_stamp)"
-	if (( after_latency_stamp > before_latency_stamp )); then
-		lyrics_lag="$(lyrics_trace_lag)"
-		if [[ -z "$lyrics_lag" ]]; then
-			log "clash-latency refresh responsive -- before=${before_latency_stamp} after=${after_latency_stamp} lyrics=not-playing"
-			continue
-		fi
-		if ! lyrics_value_matches_last_output; then
-			log "lyrics value mismatch -- value=${LYRICS_VALUE_FILE} last=${CACHE_DIR}/last.txt"
-		fi
-		if /usr/bin/awk -v lag="$lyrics_lag" -v max_age="$LYRICS_TRACE_MAX_AGE" 'BEGIN { exit !(lag <= max_age) }'; then
-			log "clash-latency refresh responsive -- before=${before_latency_stamp} after=${after_latency_stamp} lyrics_lag=${lyrics_lag}s"
-			continue
-		fi
-		log "lyrics trace stale while playing for ${lyrics_lag}s -- max=${LYRICS_TRACE_MAX_AGE}s"
-	fi
-
-	if (( after_latency_stamp <= before_latency_stamp )); then
-		log "clash-latency refresh unresponsive for ${LATENCY_TIMEOUT}s -- before=${before_latency_stamp} after=${after_latency_stamp}"
-	fi
-
-	# Never terminate BTT while a key is still down: its event tap can otherwise
-	# leave the front app believing a modifier remains pressed after relaunch.
-	restart_idle_nanoseconds="$(/usr/sbin/ioreg -c IOHIDSystem -d 4 -w 0 2>/dev/null | /usr/bin/awk -F'= ' '/"HIDIdleTime"/ { print $2; exit }')"
-	if [[ "$restart_idle_nanoseconds" =~ ^[0-9]+$ ]] && (( restart_idle_nanoseconds < RESTART_KEYBOARD_IDLE_SECONDS * 1000000000 )); then
-		log "restart deferred -- keyboard activity within ${RESTART_KEYBOARD_IDLE_SECONDS}s"
-		continue
-	fi
-
-	write_restart_marker
-	/usr/bin/osascript -e 'tell application "BetterTouchTool" to quit' >/dev/null 2>&1
-	sleep 3
-	# Belt and suspenders: the quit above can itself be a no-op if BTT is deep
-	# enough into the wedge, so make sure it's actually gone before reopening.
-	killall -9 BetterTouchTool BTTRelaunch >/dev/null 2>&1
-	sleep 1
-	# Keep the current app in front, but do not launch BTT hidden: `-j` also
-	# hides its Touch Bar UI until the user manually reveals it.
-	/usr/bin/open -g -a "BetterTouchTool"
 
 refresh_widgets() {
 	/usr/bin/osascript <<'APPLESCRIPT' >/dev/null 2>&1
@@ -188,13 +345,173 @@ end tell
 APPLESCRIPT
 }
 
-# BTT can accept an Apple Event before its Touch Bar widget runner is ready.
-# Retry the inexpensive redraw request while its startup finishes; each widget
-# serializes real work with its refresh lock.
+# A quiet heartbeat is worth one nudge before it is worth a restart: BTT can
+# simply have nothing scheduled. This asks for the timer widget specifically,
+# which does no network or Apple Music work, so a tick that follows is proof
+# of dispatch rather than of anything else.
+nudge_heartbeat() {
+	/usr/bin/osascript -e \
+		"tell application \"BetterTouchTool\" to refresh_widget \"$TIMER_WIDGET_UUID\"" \
+		>/dev/null 2>&1 &
+	NUDGE_PID=$!
+}
+
+# Whether a modifier or mouse button is being held right now, asked of the
+# window server rather than inferred from event timing. Prints the detail on
+# stdout. See actions/hid-state.c for why HIDIdleTime cannot answer this.
+input_held() {
+	local state
+	[[ -x "$HID_STATE_BIN" ]] || return 1
+	state="$("$HID_STATE_BIN" 2>/dev/null)"
+	[[ "$state" == "held "* ]] || return 1
+	print -r -- "$state"
+}
+
+# When the current run of deferrals began, or 0 when not deferring. Cleared by
+# a restart and by the main loop the moment BTT looks healthy again, so an old
+# run never makes a later restart skip its checks.
+DEFER_SINCE=0
+
+# Record a deferral and report whether the deadline has run out. Callers past
+# the deadline proceed anyway.
+defer_restart() {
+	local reason="$1"
+	(( DEFER_SINCE )) || DEFER_SINCE=$EPOCHSECONDS
+	log "restart deferred -- ${reason}"
+	return 1
+}
+
+restart_btt() {
+	# Overdue deferrals stop being honoured, so a wedge cannot outlast the fix.
+	local overdue=0
+	(( DEFER_SINCE && EPOCHSECONDS - DEFER_SINCE >= RESTART_DEFER_MAX )) && overdue=1
+
+	# Never terminate BTT mid-gesture. Its event tap sits between the hardware
+	# and every other app, and its trackpad actions post synthetic events of
+	# their own, so tearing it down while a modifier or button is down can leave
+	# the front app with a latched Shift or a phantom mouse-down that nothing
+	# clears -- a stuck drag overlay in the editor being the usual tell.
+	local held waited
+	for (( waited = 0; waited < RESTART_INPUT_WAIT * 4; waited++ )); do
+		held="$(input_held)" || break
+		sleep 0.25
+	done
+	if held="$(input_held)"; then
+		if (( ! overdue )); then
+			defer_restart "input still held after ${RESTART_INPUT_WAIT}s (${held})"
+			return 1
+		fi
+		log "restarting with input still held (${held}) -- deferred $(( EPOCHSECONDS - DEFER_SINCE ))s, past ${RESTART_DEFER_MAX}s deadline"
+	fi
+
+	# Belt to that braces: a keystroke may also be in flight but not yet landed.
+	local idle_nanoseconds
+	idle_nanoseconds="$(/usr/sbin/ioreg -c IOHIDSystem -d 4 -w 0 2>/dev/null | /usr/bin/awk -F'= ' '/"HIDIdleTime"/ { print $2; exit }')"
+	if [[ "$idle_nanoseconds" =~ ^[0-9]+$ ]] && (( idle_nanoseconds < RESTART_KEYBOARD_IDLE_SECONDS * 1000000000 )); then
+		if (( ! overdue )); then
+			defer_restart "keyboard activity within ${RESTART_KEYBOARD_IDLE_SECONDS}s"
+			return 1
+		fi
+		log "restarting during active typing -- deferred $(( EPOCHSECONDS - DEFER_SINCE ))s, past ${RESTART_DEFER_MAX}s deadline"
+	fi
+
+	DEFER_SINCE=0
+	write_restart_marker
+	/usr/bin/osascript -e 'tell application "BetterTouchTool" to quit' >/dev/null 2>&1
+	sleep 3
+	# The quit above can itself be a no-op if BTT is deep enough into the wedge,
+	# so make sure it is actually gone before reopening. SIGTERM first: it still
+	# runs BTT's teardown, which unregisters the event tap and releases anything
+	# it was holding. SIGKILL cannot, so it is the last resort rather than the
+	# opening move.
+	local settle
+	killall BetterTouchTool BTTRelaunch >/dev/null 2>&1
+	for (( settle = 0; settle < 8; settle++ )); do
+		/usr/bin/pgrep -x BetterTouchTool >/dev/null 2>&1 || break
+		sleep 0.5
+	done
+	if /usr/bin/pgrep -x BetterTouchTool >/dev/null 2>&1; then
+		log "BTT ignored SIGTERM for 4s -- escalating to SIGKILL"
+		killall -9 BetterTouchTool BTTRelaunch >/dev/null 2>&1
+	fi
+	sleep 1
+	# Keep the current app in front, but do not launch BTT hidden: `-j` also
+	# hides its Touch Bar UI until the user manually reveals it.
+	/usr/bin/open -g -a "BetterTouchTool"
+
+	# BTT can accept an Apple Event before its Touch Bar widget runner is
+	# ready. Retry the inexpensive redraw request while its startup finishes;
+	# each widget serializes real work with its refresh lock.
+	local delay
 	for delay in 5 5 5; do
 		sleep "$delay"
 		refresh_widgets
 	done
 	log "restart refresh sequence complete -- waiting ${RESTART_STARTUP_GRACE}s before resuming probes"
 	sleep "$RESTART_STARTUP_GRACE"
+	return 0
+}
+
+# --- Main loop --------------------------------------------------------------
+
+overdue_strikes=0
+nudged=0
+
+while true; do
+	sleep "$PROBE_INTERVAL"
+
+	beat="$(heartbeat_age)"
+	if [[ "$beat" == "unknown" ]]; then
+		log_verdict no-trace "no ${HEARTBEAT_WIDGETS// / or } tick on record -- nothing to watch"
+		continue
+	fi
+
+	if (( beat > HEARTBEAT_TIMEOUT )); then
+		overdue_strikes=0
+		log "no widget tick for ${beat}s -- max=${HEARTBEAT_TIMEOUT}s"
+		LAST_VERDICT=""
+		restart_btt && nudged=0
+		continue
+	fi
+
+	# Halfway to the timeout, ask for a tick rather than waiting to accuse.
+	if (( beat > HEARTBEAT_TIMEOUT / 2 )); then
+		if (( ! nudged )); then
+			log "heartbeat quiet for ${beat}s -- refreshing the timer widget"
+			nudge_heartbeat
+			nudged=1
+		fi
+		continue
+	fi
+	nudged=0
+
+	lyrics="$(lyrics_display_state)"
+	case "$lyrics" in
+		overdue*|stalled*)
+			(( overdue_strikes++ ))
+			if (( overdue_strikes < LYRICS_OVERDUE_STRIKES )); then
+				log_verdict "strike-${overdue_strikes}" \
+					"lyrics display ${lyrics} -- strike ${overdue_strikes}/${LYRICS_OVERDUE_STRIKES}"
+				continue
+			fi
+			log "lyrics display ${lyrics} while heartbeat is ${beat}s old -- restarting"
+			overdue_strikes=0
+			LAST_VERDICT=""
+			restart_btt
+			;;
+		sampler-stale*|widget-locked*)
+			# BTT is dispatching ticks, so the widget is running and simply has
+			# nothing new to draw: Apple Music, the detached sampler, or the
+			# widget's own lock is the one that is stuck. A restart cannot fix
+			# any of those, and would cost a Touch Bar outage for nothing.
+			overdue_strikes=0
+			DEFER_SINCE=0
+			log_verdict "${lyrics%% *}" "lyrics ${lyrics} -- not BTT (heartbeat ${beat}s)"
+			;;
+		*)
+			overdue_strikes=0
+			DEFER_SINCE=0
+			log_verdict "healthy-${lyrics%% *}" "healthy -- heartbeat=${beat}s lyrics=${lyrics}"
+			;;
+	esac
 done
