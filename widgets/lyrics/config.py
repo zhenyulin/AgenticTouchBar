@@ -93,6 +93,17 @@ STATE_PATH = CACHE_DIR / "state.json"
 MEDIA_REMOTE_POSITION_PATH = CACHE_DIR / "media_remote_position.json"
 LAST_TEXT_PATH = CACHE_DIR / "last.txt"
 VALUE_PATH = CACHE_DIR / "lyrics.value"
+# What the last rendering tick put on screen, and when that frame is due to
+# change. Written only by ticks that render something of their own, so an
+# expired deadline in here is the freeze guard's evidence that the widget has
+# stopped producing frames -- see render.write_render_receipt.
+#
+# It lives beside the trace rather than in CACHE_DIR because its only reader
+# is actions/btt-freeze-guard.sh, which runs under launchd. That process gets
+# EPERM opening anything under cache/ -- macOS gates ~/Documents, and only
+# logs/ carries the com.apple.macl grant that lets it through. The widget
+# itself runs under BetterTouchTool, which has the consent to write either.
+RENDER_PATH = LOG_DIR / "lyrics" / "render.json"
 TRACE_PATH = LOG_DIR / "lyrics" / "trace.tsv"
 WATCH_PATH = LOG_DIR / "lyrics" / "watch.tsv"
 # Where the shell widgets trace, via lib/btt-widget.sh. --report reads both,
@@ -148,7 +159,10 @@ LRCLIB_RETRY_BACKOFF_SECONDS = 0.5
 # Upstream hiccups worth a second attempt rather than a cached failure.
 TRANSIENT_HTTP_STATUS = {408, 425, 429, 500, 502, 503, 504}
 RETRY_NOT_FOUND_SECONDS = 6 * 60 * 60
-MATCHER_VERSION = 7
+# Bump to invalidate every cached record: a stored "ok" is never refetched, so
+# records chosen before a provider or ranking change would otherwise persist.
+# 8: added the Apple Music TTML cache provider.
+MATCHER_VERSION = 8
 
 # Metadata aliases commonly used by streaming catalogs and community lyric
 # databases. Add your own groups in lyrics_aliases.json next to this script.
@@ -175,6 +189,27 @@ LOCAL_LYRICS_DIR = Path(
         str(Path(__file__).resolve().parent.with_name("lyrics")),
     )
 )
+
+# Apple Music caches the time-synced TTML it fetches for the catalog track it is
+# about to display, as an ordinary NSURLCache entry. Reading it costs one local
+# sqlite query, so it is worth trying before any network provider — but it is an
+# LRU cache holding only the last handful of played tracks, never a library.
+APPLE_MUSIC_CACHE_DB = Path(
+    os.environ.get(
+        "BTT_LYRICS_APPLE_CACHE_DB",
+        str(Path.home() / "Library/Caches/com.apple.Music/Cache.db"),
+    )
+)
+# Payloads above a few KB spill to a file named by the receiver_data column.
+APPLE_MUSIC_CACHE_FS_DIR = APPLE_MUSIC_CACHE_DB.with_name("fsCachedData")
+# AppleScript exposes no catalog ID, so the cached TTML is matched to the
+# playing track by its declared duration. Both numbers come from Apple and
+# agree to well under a millisecond in practice, so this stays tight: adjacent
+# tracks on one album can sit ~2s apart, and a loose window mistakes one for
+# the other. A near miss is not a near match here — it is a different song.
+APPLE_MUSIC_CACHE_DURATION_TOLERANCE = 0.05
+# Beyond a handful the query stops being free, and older rows are stale anyway.
+APPLE_MUSIC_CACHE_MAX_ROWS = 12
 
 # While a stream starts, Apple Music reports a placeholder track with no
 # artist. Looking those up wastes a fetch and caches a miss under a key the

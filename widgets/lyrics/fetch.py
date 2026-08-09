@@ -15,14 +15,15 @@ from .concurrency import set_fetch_deadline
 from .locking import acquire_lock, clear_lock, spawn_helper
 from .lrc import parse_lrc
 from .output import log_error, trace
+from .providers.apple_cache import apple_cache_record
 from .providers.local import local_lyrics_record
 from .providers.lrcapi import choose_lrcapi_candidate
 from .providers.lrclib import lrclib_record
 
 
 def fetch_lyrics_record(track: dict[str, Any]) -> dict[str, Any] | None:
-    # Provider order: user-maintained local LRC, token-free Chinese sources,
-    # then the open LRCLIB database.
+    # Provider order: user-maintained local LRC, Apple Music's own cached TTML,
+    # token-free Chinese sources, then the open LRCLIB database.
     from concurrent.futures import ThreadPoolExecutor
 
     search_title = catalog_chinese_title(track)
@@ -32,6 +33,13 @@ def fetch_lyrics_record(track: dict[str, Any]) -> dict[str, Any] | None:
     local = local_lyrics_record(track)
     if local is not None:
         return local
+
+    # Apple's own timings beat a community guess at the same song, and cost a
+    # local sqlite read rather than a round trip. It only ever answers for
+    # catalog tracks Music has just played, so a miss here is the normal case.
+    apple_cached = apple_cache_record(track)
+    if apple_cached is not None:
+        return apple_cached
 
     # Prefer LrcAPI for its Chinese-catalog coverage, but only for a bounded
     # head start: a ready LRCLIB match is more useful than an extra wait.

@@ -10,6 +10,7 @@ from .apple_music import read_apple_music
 from .cache import cache_path, lock_path
 from .matching import candidate_score, choose_candidate
 from .metadata import local_title_variants, metadata_variants, track_cache_key
+from .providers.apple_cache import apple_cache_record
 from .providers.local import local_lyrics_record
 from .providers.lrcapi import collect_lrcapi_candidates
 from .providers.lrclib import collect_search_candidates
@@ -36,6 +37,12 @@ def diagnose_current() -> int:
         print(f"LOCAL LRC: {local.get('localPath')}")
         return 0
     print("No matching local synchronized LRC.")
+    print(f"Apple Music lyrics cache: {config.APPLE_MUSIC_CACHE_DB}")
+    apple_cached = apple_cache_record(track)
+    if apple_cached is not None:
+        print(f"APPLE CACHE: {apple_cached.get('id')}")
+        return 0
+    print("No matching cached Apple Music TTML.")
     print(f"LrcAPI enabled: {config.ENABLE_LRCAPI}")
     if config.ENABLE_LRCAPI:
         diagnostic_titles = local_title_variants(track.get("title", ""))[:4]
