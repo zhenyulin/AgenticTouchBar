@@ -91,12 +91,13 @@ HEARTBEAT_WIDGETS="${BTT_HEARTBEAT_WIDGETS:-timer-widget clash-latency}"
 TIMER_WIDGET_UUID="E25C395A-FE13-4216-BC59-6317FD0454BF"
 
 LYRICS_TRACE_FILE="${BTT_LYRICS_TRACE_FILE:-$LOG_DIR/lyrics/trace.tsv}"
-# Everything this script knows about the lyrics widget comes from these two,
-# and both are deliberately under logs/. launchd's zsh gets EPERM opening
+# The render receipt is deliberately under logs/. launchd's zsh gets EPERM opening
 # anything under cache/ -- macOS gates ~/Documents and only logs/ carries the
 # com.apple.macl grant that lets this process through, which is also why the
 # running copy of this script lives outside the repo.
 LYRICS_RENDER_FILE="${BTT_LYRICS_RENDER_FILE:-$LOG_DIR/lyrics/render.json}"
+LYRICS_VALUE_FILE="${BTT_LYRICS_VALUE_FILE:-$CACHE_DIR/lyrics.value}"
+LYRICS_LAST_FILE="${BTT_LYRICS_LAST_FILE:-$CACHE_DIR/last.txt}"
 
 number_or() {
 	local value="$1" fallback="$2"
@@ -121,7 +122,9 @@ LYRICS_OVERDUE_STRIKES="$(number_or "${BTT_LYRICS_OVERDUE_STRIKES:-3}" 3)"
 # and unlike the deadline it also covers the outcomes that schedule no change
 # at all, which would otherwise mask the widget dying underneath them.
 LYRICS_RENDER_MAX_AGE="$(number_or "${BTT_LYRICS_RENDER_MAX_AGE:-30}" 30)"
-RESTART_STARTUP_GRACE="$(number_or "${BTT_RESTART_STARTUP_GRACE:-45}" 45)"
+RESTART_STARTUP_GRACE="$(number_or "${BTT_RESTART_STARTUP_GRACE:-15}" 15)"
+RESTART_ACTION_TIMEOUT="$(number_or "${BTT_RESTART_ACTION_TIMEOUT:-4}" 4)"
+RESTART_REFRESH_TIMEOUT="$(number_or "${BTT_RESTART_REFRESH_TIMEOUT:-2}" 2)"
 RESTART_KEYBOARD_IDLE_SECONDS=1
 # How long to wait for a held modifier or mouse button to be released before
 # giving up on this probe's restart. Long enough for a click or a chord to
@@ -230,6 +233,20 @@ lyrics_last_tick() {
 		}
 		END { if (latest) print outcome, age }
 	' "$LYRICS_TRACE_FILE" 2>/dev/null
+}
+
+lyrics_value_matches_last_output() {
+	[[ -f "$LYRICS_VALUE_FILE" && -f "$LYRICS_LAST_FILE" ]] || return 2
+	cmp -s "$LYRICS_VALUE_FILE" "$LYRICS_LAST_FILE"
+}
+
+lyrics_cache_state() {
+	lyrics_value_matches_last_output
+	case $? in
+		0) print -r -- "match" ;;
+		1) print -r -- "mismatch" ;;
+		*) print -r -- "unavailable" ;;
+	esac
 }
 
 # Why the display is not moving, given that it should be: the widget's newest
@@ -345,6 +362,22 @@ end tell
 APPLESCRIPT
 }
 
+refresh_widgets_bounded() {
+	local refresh_pid waited
+	refresh_widgets &
+	refresh_pid=$!
+	for (( waited = 0; waited < RESTART_REFRESH_TIMEOUT * 4; waited++ )); do
+		if ! kill -0 "$refresh_pid" 2>/dev/null; then
+			wait "$refresh_pid" 2>/dev/null || true
+			return 0
+		fi
+		sleep 0.25
+	done
+	kill "$refresh_pid" 2>/dev/null || true
+	wait "$refresh_pid" 2>/dev/null || true
+	log "restart widget refresh timed out after ${RESTART_REFRESH_TIMEOUT}s"
+}
+
 # A quiet heartbeat is worth one nudge before it is worth a restart: BTT can
 # simply have nothing scheduled. This asks for the timer widget specifically,
 # which does no network or Apple Music work, so a tick that follows is proof
@@ -367,6 +400,14 @@ input_held() {
 	print -r -- "$state"
 }
 
+btt_pid() {
+	/usr/bin/pgrep -x BetterTouchTool 2>/dev/null | /usr/bin/awk 'NR == 1 { print; exit }'
+}
+
+btt_running() {
+	[[ -n "$(btt_pid)" ]]
+}
+
 # When the current run of deferrals began, or 0 when not deferring. Cleared by
 # a restart and by the main loop the moment BTT looks healthy again, so an old
 # run never makes a later restart skip its checks.
@@ -381,7 +422,69 @@ defer_restart() {
 	return 1
 }
 
+restart_input_reason() {
+	local held waited idle_nanoseconds
+	for (( waited = 0; waited < RESTART_INPUT_WAIT * 4; waited++ )); do
+		held="$(input_held)" || break
+		sleep 0.25
+	done
+	if held="$(input_held)"; then
+		print -r -- "input still held after ${RESTART_INPUT_WAIT}s (${held})"
+		return 1
+	fi
+
+	idle_nanoseconds="$(/usr/sbin/ioreg -c IOHIDSystem -d 4 -w 0 2>/dev/null | /usr/bin/awk -F'= ' '/"HIDIdleTime"/ { print $2; exit }')"
+	if [[ "$idle_nanoseconds" =~ ^[0-9]+$ ]] && (( idle_nanoseconds < RESTART_KEYBOARD_IDLE_SECONDS * 1000000000 )); then
+		print -r -- "keyboard activity within ${RESTART_KEYBOARD_IDLE_SECONDS}s"
+		return 1
+	fi
+}
+
+request_btt_restart() {
+	local pid="$1" request_pid waited
+	/usr/bin/osascript -e 'tell application "BetterTouchTool" to trigger_action "{\"BTTPredefinedActionType\":55}"' \
+		>/dev/null 2>&1 &
+	request_pid=$!
+	for (( waited = 0; waited < RESTART_ACTION_TIMEOUT * 4; waited++ )); do
+		if ! kill -0 "$pid" 2>/dev/null; then
+			kill "$request_pid" 2>/dev/null || true
+			wait "$request_pid" 2>/dev/null || true
+			return 0
+		fi
+		sleep 0.25
+	done
+	kill "$request_pid" 2>/dev/null || true
+	wait "$request_pid" 2>/dev/null || true
+	return 1
+}
+
+terminate_btt() {
+	local pid="$1" settle
+	[[ "$(btt_pid)" == "$pid" ]] || return 0
+	kill "$pid" 2>/dev/null || true
+	for (( settle = 0; settle < RESTART_ACTION_TIMEOUT * 4; settle++ )); do
+		[[ "$(btt_pid)" == "$pid" ]] || return 0
+		sleep 0.25
+	done
+	log "BTT ignored SIGTERM for ${RESTART_ACTION_TIMEOUT}s -- escalating to SIGKILL"
+	[[ "$(btt_pid)" == "$pid" ]] && kill -KILL "$pid" 2>/dev/null || true
+	for (( settle = 0; settle < 8; settle++ )); do
+		[[ "$(btt_pid)" == "$pid" ]] || return 0
+		sleep 0.25
+	done
+	return 1
+}
+
 restart_btt() {
+	# A stopped process is an intentional quit, not a freeze. Do not reopen BTT
+	# unless it is still running and has merely stopped dispatching widgets.
+	local btt_before
+	btt_before="$(btt_pid)"
+	if [[ -z "$btt_before" ]]; then
+		log "BTT is not running -- respecting quit"
+		return 1
+	fi
+
 	# Overdue deferrals stop being honoured, so a wedge cannot outlast the fix.
 	local overdue=0
 	(( DEFER_SINCE && EPOCHSECONDS - DEFER_SINCE >= RESTART_DEFER_MAX )) && overdue=1
@@ -391,63 +494,62 @@ restart_btt() {
 	# their own, so tearing it down while a modifier or button is down can leave
 	# the front app with a latched Shift or a phantom mouse-down that nothing
 	# clears -- a stuck drag overlay in the editor being the usual tell.
-	local held waited
-	for (( waited = 0; waited < RESTART_INPUT_WAIT * 4; waited++ )); do
-		held="$(input_held)" || break
-		sleep 0.25
-	done
-	if held="$(input_held)"; then
+	local input_reason deferral_age=0
+	(( DEFER_SINCE )) && deferral_age=$(( EPOCHSECONDS - DEFER_SINCE ))
+	if ! input_reason="$(restart_input_reason)"; then
 		if (( ! overdue )); then
-			defer_restart "input still held after ${RESTART_INPUT_WAIT}s (${held})"
+			defer_restart "$input_reason"
 			return 1
 		fi
-		log "restarting with input still held (${held}) -- deferred $(( EPOCHSECONDS - DEFER_SINCE ))s, past ${RESTART_DEFER_MAX}s deadline"
-	fi
-
-	# Belt to that braces: a keystroke may also be in flight but not yet landed.
-	local idle_nanoseconds
-	idle_nanoseconds="$(/usr/sbin/ioreg -c IOHIDSystem -d 4 -w 0 2>/dev/null | /usr/bin/awk -F'= ' '/"HIDIdleTime"/ { print $2; exit }')"
-	if [[ "$idle_nanoseconds" =~ ^[0-9]+$ ]] && (( idle_nanoseconds < RESTART_KEYBOARD_IDLE_SECONDS * 1000000000 )); then
-		if (( ! overdue )); then
-			defer_restart "keyboard activity within ${RESTART_KEYBOARD_IDLE_SECONDS}s"
-			return 1
-		fi
-		log "restarting during active typing -- deferred $(( EPOCHSECONDS - DEFER_SINCE ))s, past ${RESTART_DEFER_MAX}s deadline"
+		log "restarting despite ${input_reason} -- deferred $(( EPOCHSECONDS - DEFER_SINCE ))s, past ${RESTART_DEFER_MAX}s deadline"
 	fi
 
 	DEFER_SINCE=0
 	write_restart_marker
-	/usr/bin/osascript -e 'tell application "BetterTouchTool" to quit' >/dev/null 2>&1
-	sleep 3
-	# The quit above can itself be a no-op if BTT is deep enough into the wedge,
-	# so make sure it is actually gone before reopening. SIGTERM first: it still
-	# runs BTT's teardown, which unregisters the event tap and releases anything
-	# it was holding. SIGKILL cannot, so it is the last resort rather than the
-	# opening move.
-	local settle
-	killall BetterTouchTool BTTRelaunch >/dev/null 2>&1
-	for (( settle = 0; settle < 8; settle++ )); do
-		/usr/bin/pgrep -x BetterTouchTool >/dev/null 2>&1 || break
-		sleep 0.5
-	done
-	if /usr/bin/pgrep -x BetterTouchTool >/dev/null 2>&1; then
-		log "BTT ignored SIGTERM for 4s -- escalating to SIGKILL"
-		killall -9 BetterTouchTool BTTRelaunch >/dev/null 2>&1
+	# Prefer BTT's own documented restart action. It lets BTT tear down its
+	# event tap and coordinate with BTTRelaunch, avoiding a blind kill while
+	# still keeping the frontmost app in place.
+	local restart_mode="BTT restart action"
+	if ! request_btt_restart "$btt_before"; then
+		# A wedged main thread may never process the Apple Event. Re-check input
+		# immediately before the destructive fallback because the request above
+		# may have taken several seconds to time out.
+		if ! input_reason="$(restart_input_reason)"; then
+			if (( ! overdue )); then
+				defer_restart "$input_reason"
+				return 1
+			fi
+			log "fallback restart despite ${input_reason} -- deferred ${deferral_age}s, past ${RESTART_DEFER_MAX}s deadline"
+		fi
+		restart_mode="targeted signal fallback"
+		terminate_btt "$btt_before" || {
+			log "BTT PID ${btt_before} did not exit after SIGKILL"
+			return 1
+		}
 	fi
-	sleep 1
-	# Keep the current app in front, but do not launch BTT hidden: `-j` also
-	# hides its Touch Bar UI until the user manually reveals it.
-	/usr/bin/open -g -a "BetterTouchTool"
+
+	# Leave BTTRelaunch alive. If it notices the main process first, use its
+	# replacement; only call open when neither restart path produced one.
+	local launch_wait
+	for (( launch_wait = 0; launch_wait < RESTART_ACTION_TIMEOUT * 4; launch_wait++ )); do
+		btt_running && break
+		sleep 0.25
+	done
+	if ! btt_running; then
+		# Keep the current app in front, but do not launch BTT hidden: `-j` also
+		# hides its Touch Bar UI until the user manually reveals it.
+		/usr/bin/open -g -a "BetterTouchTool"
+	fi
 
 	# BTT can accept an Apple Event before its Touch Bar widget runner is
-	# ready. Retry the inexpensive redraw request while its startup finishes;
+	# ready. Retry the inexpensive redraw request at short, bounded intervals;
 	# each widget serializes real work with its refresh lock.
 	local delay
-	for delay in 5 5 5; do
+	for delay in 1 2 4; do
 		sleep "$delay"
-		refresh_widgets
+		refresh_widgets_bounded
 	done
-	log "restart refresh sequence complete -- waiting ${RESTART_STARTUP_GRACE}s before resuming probes"
+	log "${restart_mode} refresh sequence complete -- waiting ${RESTART_STARTUP_GRACE}s before resuming probes"
 	sleep "$RESTART_STARTUP_GRACE"
 	return 0
 }
@@ -486,6 +588,11 @@ while true; do
 	nudged=0
 
 	lyrics="$(lyrics_display_state)"
+	lyrics_cache="$(lyrics_cache_state)"
+	if [[ "$lyrics_cache" == "mismatch" ]]; then
+		log_verdict lyrics-cache-mismatch \
+			"lyrics cache mismatch -- value=${LYRICS_VALUE_FILE} last=${LYRICS_LAST_FILE}"
+	fi
 	case "$lyrics" in
 		overdue*|stalled*)
 			(( overdue_strikes++ ))
