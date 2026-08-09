@@ -2,3 +2,13 @@
 /logs
 /.venv
 /cache
+
+# consumer-only config and agent symlinks
+/.agents
+/.claude
+/.codex
+/.github
+/.mcp.json
+/AGENTS.md
+/tmp/codebase-memory
+/tmp/serena

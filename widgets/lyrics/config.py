@@ -206,8 +206,8 @@ TRANSIENT_HTTP_STATUS = {408, 425, 429, 500, 502, 503, 504}
 RETRY_NOT_FOUND_SECONDS = 6 * 60 * 60
 # Bump to invalidate every cached record: a stored "ok" is never refetched, so
 # records chosen before a provider or ranking change would otherwise persist.
-# 8: added the Apple Music TTML cache provider.
-MATCHER_VERSION = 8
+# 9: allow whole-second rounding in Apple Music TTML durations.
+MATCHER_VERSION = 9
 
 # Metadata aliases commonly used by streaming catalogs and community lyric
 # databases. Add your own groups in lyrics_aliases.json next to this script.
@@ -248,11 +248,10 @@ APPLE_MUSIC_CACHE_DB = Path(
 # Payloads above a few KB spill to a file named by the receiver_data column.
 APPLE_MUSIC_CACHE_FS_DIR = APPLE_MUSIC_CACHE_DB.with_name("fsCachedData")
 # AppleScript exposes no catalog ID, so the cached TTML is matched to the
-# playing track by its declared duration. Both numbers come from Apple and
-# agree to well under a millisecond in practice, so this stays tight: adjacent
-# tracks on one album can sit ~2s apart, and a loose window mistakes one for
-# the other. A near miss is not a near match here — it is a different song.
-APPLE_MUSIC_CACHE_DURATION_TOLERANCE = 0.05
+# playing track by its declared duration. TTML commonly rounds the duration to
+# whole seconds while AppleScript reports fractional seconds. Adjacent tracks
+# on one album can sit ~2s apart, so keep the window below that gap.
+APPLE_MUSIC_CACHE_DURATION_TOLERANCE = 1.0
 # Beyond a handful the query stops being free, and older rows are stale anyway.
 APPLE_MUSIC_CACHE_MAX_ROWS = 12
 
