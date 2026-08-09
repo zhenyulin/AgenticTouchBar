@@ -481,15 +481,31 @@ btt_color_at_progress() {
 btt_quota_color() {
     local text="${1-}"
     local cycle="${BTT_WIDGET_QUOTA_RESET_CYCLE_MINUTES:-0}"
+    local secondary_cycle="${BTT_WIDGET_QUOTA_SECONDARY_RESET_CYCLE_MINUTES:-0}"
 
-    if (( cycle <= 0 )); then
+    if (( cycle <= 0 && secondary_cycle <= 0 )); then
         printf '%s' "$BTT_WIDGET_COLOR"
         return 0
     fi
 
     local first_line="${text%%$'\n'*}"
     local used_percent="${first_line%%\%*}"
-    if [[ ! "$used_percent" =~ '^[0-9]+$' ]]; then
+    local selected_line="$first_line"
+    local reset_name="$BTT_WIDGET_NAME"
+
+    if (( secondary_cycle > 0 )) && [[ "$text" == *$'\n'* ]]; then
+        local secondary_line="${text#*$'\n'}"
+        secondary_line="${secondary_line%%$'\n'*}"
+        local secondary_used="${secondary_line%%\%*}"
+        if [[ "$secondary_used" =~ '^[0-9]+$' ]] && (( secondary_used >= 100 )); then
+            used_percent="$secondary_used"
+            cycle="$secondary_cycle"
+            selected_line="$secondary_line"
+            reset_name="${BTT_WIDGET_NAME}-secondary"
+        fi
+    fi
+
+    if (( cycle <= 0 )) || [[ ! "$used_percent" =~ '^[0-9]+$' ]]; then
         printf '%s' "$BTT_WIDGET_COLOR"
         return 0
     fi
@@ -498,7 +514,7 @@ btt_quota_color() {
     if (( used_percent < 100 )); then
         progress=$(( 100 - used_percent ))
     else
-        local remaining_label="${first_line#*%}"
+        local remaining_label="${selected_line#*%}"
         if [[ -z "$remaining_label" ]]; then
             remaining_label="${text#*$'\n'}"
             remaining_label="${remaining_label%%$'\n'*}"
@@ -508,7 +524,7 @@ btt_quota_color() {
 
         local remaining_minutes=0
         local reset_at
-        reset_at="$(btt_quota_reset_get)"
+    reset_at="$(btt_quota_reset_get "$reset_name")"
         if [[ "$reset_at" =~ '^[0-9]+$' ]]; then
             local now_seconds
             now_seconds="$(btt_now)"
