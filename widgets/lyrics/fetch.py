@@ -18,6 +18,7 @@ from .providers.apple_cache import apple_cache_record
 from .providers.local import local_lyrics_record
 from .providers.lrcapi import choose_lrcapi_candidate
 from .providers.lrclib import lrclib_record
+from .providers.netease import netease_record
 
 
 def fetch_lyrics_record(track: dict[str, Any]) -> dict[str, Any] | None:
@@ -35,14 +36,16 @@ def fetch_lyrics_record(track: dict[str, Any]) -> dict[str, Any] | None:
     if search_title:
         track = {**track, "search_title": search_title}
 
-    pool = ThreadPoolExecutor(max_workers=2)
+    pool = ThreadPoolExecutor(max_workers=3)
     try:
         lrcapi_future = pool.submit(choose_lrcapi_candidate, track)
+        netease_future = pool.submit(netease_record, track)
         lrclib_future = pool.submit(lrclib_record, track)
 
         # LrcAPI gets a bounded head start for its Chinese-catalog coverage;
-        # when it has not answered by then, LRCLIB's answer decides first and
-        # LrcAPI gets the remaining wait only if LRCLIB has nothing.
+        # when it has not answered by then, NetEase's timed LRC decides next,
+        # then LRCLIB's, and LrcAPI gets the remaining wait only if neither
+        # has anything.
         lrcapi_timed_out = False
         try:
             lrcapi = lrcapi_future.result(timeout=config.LRCAPI_PREFERENCE_SECONDS)
@@ -50,11 +53,20 @@ def fetch_lyrics_record(track: dict[str, Any]) -> dict[str, Any] | None:
             lrcapi_timed_out = True
             lrcapi = None
         except Exception as exc:
-            log_error(f"LrcAPI lookup failed; using LRCLIB: {exc}")
+            log_error(f"LrcAPI lookup failed; using NetEase: {exc}")
             lrcapi = None
 
         if lrcapi is not None:
             return lrcapi
+
+        try:
+            netease = netease_future.result()
+        except Exception as netease_exc:
+            log_error(f"NetEase lookup failed; using LRCLIB: {netease_exc}")
+            netease = None
+
+        if netease is not None:
+            return netease
 
         try:
             lrclib = lrclib_future.result()

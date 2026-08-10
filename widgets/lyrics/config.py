@@ -175,6 +175,15 @@ LRCAPI_PREFERENCE_SECONDS = max(
 LRCAPI_MAX_ADVANCE_QUERIES = int(os.environ.get("BTT_LYRICS_LRCAPI_MAX_ADVANCE", "4"))
 LRCAPI_MAX_SINGLE_QUERIES = int(os.environ.get("BTT_LYRICS_LRCAPI_MAX_SINGLE", "2"))
 LRCLIB_MAX_SEARCH_QUERIES = int(os.environ.get("BTT_LYRICS_LRCLIB_MAX_SEARCH", "7"))
+NETEASE_API_BASE = "https://music.163.com"
+ENABLE_NETEASE = os.environ.get("BTT_LYRICS_NETEASE", "1") not in {
+    "0",
+    "false",
+    "False",
+}
+NETEASE_TIMEOUT_SECONDS = float(os.environ.get("BTT_LYRICS_NETEASE_TIMEOUT", "4.0"))
+NETEASE_MAX_SEARCH_QUERIES = int(os.environ.get("BTT_LYRICS_NETEASE_MAX_SEARCH", "2"))
+NETEASE_MAX_LYRIC_FETCHES = int(os.environ.get("BTT_LYRICS_NETEASE_MAX_LYRIC", "3"))
 # Providers and their individual queries run concurrently so a slow public
 # endpoint does not serialize every title and artist variant.
 FETCH_WORKERS = max(int(os.environ.get("BTT_LYRICS_FETCH_WORKERS", "6")), 1)
