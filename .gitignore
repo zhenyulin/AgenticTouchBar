@@ -5,7 +5,6 @@
 /tmp
 
 # consumer-only config and agent symlinks
-/.agents
 /.claude
 /.codex
 /.github
