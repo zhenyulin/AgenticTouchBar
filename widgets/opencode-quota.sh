@@ -30,12 +30,11 @@ source "$HOME/Documents/BTT/widgets/lib/btt-widget.sh"
 BTT_WIDGET_NAME="opencode-quota"
 
 # OpenCode Go exposes a five-hour rolling quota (primary), a seven-day
-# weekly quota (secondary) and a monthly quota (tertiary). These bounds are
-# unrelated to how often BTT redraws the widget.
+# weekly quota (secondary) and a monthly quota (tertiary). This widget shows
+# only the weekly quota.
 VALUE_MAX_AGE="${OPENCODE_QUOTA_MAX_AGE:-300}"
 BTT_WIDGET_REFRESH_MAX_RUN=180
-BTT_WIDGET_QUOTA_RESET_CYCLE_MINUTES=300
-BTT_WIDGET_QUOTA_SECONDARY_RESET_CYCLE_MINUTES=10080
+BTT_WIDGET_QUOTA_RESET_CYCLE_MINUTES=10080
 
 REPO_DIR="${BTT_REPO_DIR:-$HOME/Documents/BTT}"
 LOG_DIR="${BTT_LOG_DIR:-$REPO_DIR/logs}"
@@ -84,9 +83,7 @@ compute_value() {
             (if type == "array" then . else [.] end)
             | map(
                 select(.provider == "opencodego" and .usage != null)
-                | (.usage.primary // .usage.secondary // .usage.tertiary)
-                | select(. != null)
-                | .resetsAt
+                | .usage.secondary.resetsAt
                 | if . == null then empty else fromdateiso8601 end
             )
             | first // empty
@@ -95,23 +92,6 @@ compute_value() {
     local reset_status=$?
     if (( reset_status == 0 )); then
         btt_quota_reset_put "$BTT_WIDGET_NAME" "$reset_at"
-    fi
-
-    local secondary_reset_at
-    secondary_reset_at="$(
-        printf '%s' "$json" | "$jq" -r '
-            (if type == "array" then . else [.] end)
-            | map(
-                select(.provider == "opencodego" and .usage != null)
-                | .usage.secondary.resetsAt
-                | if . == null then empty else fromdateiso8601 end
-            )
-            | first // empty
-        ' 2>>"$LOG"
-    )"
-    local secondary_reset_status=$?
-    if (( secondary_reset_status == 0 )); then
-        btt_quota_reset_put "${BTT_WIDGET_NAME}-secondary" "$secondary_reset_at"
     fi
 
     local text
@@ -138,41 +118,13 @@ compute_value() {
                       end
                 end;
 
-            # Zen balance: opencode.ai can answer with a balance-only payload
-            # carrying no quota windows, so surface it instead of "--".
-            def balance:
-                (.usage.providerCost // null) as $cost
-                | if $cost != null and $cost.currencyCode == "USD"
-                    and ($cost.used // 0) > 0
-                  then
-                    "$" + (($cost.used * 100 | round) / 100 | tostring)
-                  else
-                    null
-                  end;
-
             (if type == "array" then . else [.] end)
             | map(
-                if .provider == "opencodego" and .usage != null then
-                    .usage.primary as $primary
-                    | .usage.secondary as $secondary
-                    | .usage.tertiary as $tertiary
-                    | if $primary == null and $secondary == null then
-                        (balance // empty)
-                      elif $secondary == null or ($secondary.usedPercent // 0) >= 100 then
-                        ($tertiary // $secondary) as $long
-                        | used($long.usedPercent)
-                          + " " + until_reset($long.resetsAt)
-                          + "\n  " + used($primary.usedPercent)
-                          + " " + until_reset($primary.resetsAt)
-                      else
-                        used($primary.usedPercent)
-                          + " " + until_reset($primary.resetsAt)
-                          + "\n" + used($secondary.usedPercent)
-                          + " " + until_reset($secondary.resetsAt)
-                      end
-                else
-                    empty
-                end
+                                select(.provider == "opencodego" and .usage != null)
+                                | .usage.secondary as $window
+                                | select($window != null)
+                                | used($window.usedPercent)
+                                    + "\n" + until_reset($window.resetsAt)
             )
             | first // empty
         ' 2>>"$LOG"

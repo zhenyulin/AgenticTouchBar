@@ -105,8 +105,8 @@ def lyric_budget_px(track: dict[str, Any]) -> float:
 
     The Star widget (★/☆) only renders while Apple Music plays; with any
     other player it draws empty and BTT hides it, leaving the pair one
-    word's width more of the row. A track without a source marker reads
-    as Apple Music, so the extra never applies to unknown samples.
+        row slot (~95 px) more of the row. A track without a source marker
+        reads as Apple Music, so the extra never applies to unknown samples.
     """
     budget = config.LYRIC_WIDTH_BUDGET_PX
     if track.get("source", "apple_music") != "apple_music":
