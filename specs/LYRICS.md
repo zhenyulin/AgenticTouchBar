@@ -146,6 +146,7 @@ must not leave the widget permanently locked.
 | AppleScript fails for a reason other than permission denial | Keep the previous sample | The widget avoids replacing valid state with an unverified failure. |
 | MediaRemote changes title or artist | Reset its locally tracked position | Subsequent playback position starts from the new track's sample. |
 | MediaRemote reports a new raw elapsed time | Re-anchor the projected position to it | QQ Music refreshes this field on seek/pause/resume/restart, so in-player seeks are followed on the next sample. |
+| MediaRemote playback rate lies while paused | Use the framework's own isPlaying state (nowplaying-state helper) | QQ Music pushes playbackRate 1 even while paused, so the rate alone cannot distinguish pause from play; the helper reads the same source Control Center's Now Playing tile does, and the lyric holds instead of scrolling through a paused track. |
 
 Playback state is persisted atomically as a current snapshot. It is not a
 history of tracks; lyric history belongs in per-track cache records.

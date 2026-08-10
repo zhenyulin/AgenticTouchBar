@@ -123,6 +123,16 @@ ENABLE_MEDIA_REMOTE = os.environ.get("BTT_LYRICS_MEDIA_REMOTE", "1") not in {
 MEDIA_REMOTE_TIMEOUT_SECONDS = float(
     os.environ.get("BTT_LYRICS_MEDIA_REMOTE_TIMEOUT", "1.5")
 )
+# The compiled nowplaying-state helper (actions/nowplaying-state.m) reports
+# the true play/pause state of the system Now Playing app, which the raw
+# MediaRemote dictionary cannot: QQ Music pushes playbackRate 1 even while
+# paused. It lives beside hid-state in BTT's support directory; when it is
+# missing the sampler falls back to nowplaying-cli + playbackRate, which
+# scrolls through pauses.
+NOWPLAYING_STATE_BIN = os.environ.get(
+    "BTT_LYRICS_NOWPLAYING_STATE_BIN",
+    str(Path.home() / "Library" / "Application Support" / "BTT" / "nowplaying-state"),
+)
 NETWORK_TIMEOUT_SECONDS = float(os.environ.get("BTT_LYRICS_NETWORK_TIMEOUT", "4.0"))
 # Already covered by the direct AppleScript path, and better: MediaRemote
 # never reports Apple Music's live position, only a stale 0.

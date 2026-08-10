@@ -214,11 +214,18 @@ def sample_mode() -> int:
             return 1
 
         source = "apple_music"
-        if track.get("state") in {"not_running", "stopped"}:
+        if track.get("state") in {"not_running", "stopped", "paused"}:
             remote = _media_remote_fallback()
-            if remote is not None:
+            # A paused Music track must not blank the lyric while another
+            # player (QQ Music, a browser) is actually playing: follow
+            # MediaRemote whenever it reports playback. When it is paused
+            # too -- or silent -- Music's own paused state stays, which is
+            # the same blank either way, without churning the source.
+            if remote is not None and (
+                track.get("state") != "paused" or remote.get("state") == "playing"
+            ):
                 track, source = remote, "media_remote"
-            else:
+            elif remote is None:
                 previous_track, previous_age = read_state()
                 if (
                     previous_track is not None

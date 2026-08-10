@@ -4,8 +4,9 @@
 
 Behavioural limits and operational constraints of the BTT widget setup: the
 two freeze failure modes that have been measured in this environment, the
-rules they impose on any script change, and the guard and diagnostics that
-enforce them. Setup and usage live in the root [`README.md`](../README.md).
+rules they impose on any script change, the Touch Bar stacking constraint
+that bounds widget widths, and the guard and diagnostics that enforce them.
+Setup and usage live in the root [`README.md`](../README.md).
 
 ## Freeze failure modes
 
@@ -201,3 +202,27 @@ recurrence or regression:
   `BetterTouchToolShellScriptRunner` in parallel and saves the output to
   `logs/freeze-samples/<timestamp>/` — a real stack trace of the freeze while
   it's still happening. This is what caught the sample referenced above.
+
+## Touch Bar stacking
+
+BTT lays the Touch Bar out in three fixed zones: left-pinned
+(`BTTTouchBarItemPlacement` 0), scrollable middle (1), and right-pinned (2).
+The right-pinned zone always paints above the scrollable zone, and no
+configuration changes that — BTT's preset format has no z-order key.
+`BTTOrder` sorts items within a zone only; `BTTDisplayOrder` positions
+right-pinned items relative to the Control Strip; neither affects paint order
+across zones. Verified empirically (2026-08): reordering the Now Playing and
+Lyrics widgets after every right-pinned widget, giving them the lowest display
+order, and moving them into the right-pinned zone all left the stacking
+unchanged — placement 2 additionally right-aligned them, which is why the
+music widgets stay in the scrollable middle.
+
+**Constraint:** a scrollable widget whose frame reaches into the right-pinned
+zone is drawn *under* the latency and quota widgets — visible when the Now
+Playing widget is wide. Now Playing and Lyrics therefore share the scrollable
+width, and the row is budgeted to fit it: the lyrics viewport splits
+`LYRIC_WIDTH_BUDGET_PX` (485) between the two, and the Now Playing widget's
+own limits (`BTTTouchBarLine1MaxChars`, `BTTTouchBarLine2MaxChars`,
+`BTTTBWidgetWidth`) must keep its frame inside the scrollable area (~600 px on
+this bar). Extending Now Playing past that budget is what pushes content under
+the pinned group; it is a BTT layout rule, not a bug to work around.
