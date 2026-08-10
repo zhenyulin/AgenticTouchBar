@@ -144,6 +144,15 @@ def _payload(blob: Any, on_fs: int) -> dict[str, Any] | None:
 
 def apple_cache_record(track: dict[str, Any]) -> dict[str, Any] | None:
     """Return synced lyrics for the track if Apple Music has them cached."""
+    if track.get("source") != "apple_music":
+        # The TTML cache only ever holds tracks Music itself has played, and
+        # entries are matched by duration alone. When another player (QQ
+        # Music, a browser) is the source, reading it could caption the
+        # current track with a different same-length song, and every lookup
+        # pays for a copy of Music's cache DB for nothing. Only Apple Music
+        # samples are allowed to look.
+        return None
+
     track_duration = float(track.get("duration", 0.0) or 0.0)
     if not track_duration:
         # Without a duration there is nothing to match on, and picking the newest
