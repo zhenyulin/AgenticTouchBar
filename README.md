@@ -1,205 +1,137 @@
-# BTT
+# BTT — Touch Bar widgets for BetterTouchTool
 
-Personal BetterTouchTool configuration: Touch Bar widgets (`widgets/`), the
-tap/track-change actions they wire up to (`actions/`), and the exported
-preset (`bttpreset/`).
+Personal BetterTouchTool (BTT) configuration: Touch Bar script widgets
+(`widgets/`), the tap and track-change actions they wire to (`actions/`),
+and the exported preset (`bttpreset/`). Everything is plain shell and
+Python — no plugin, no daemon. The optional freeze guard is the only
+background service.
 
-## Known issue: tap-refresh freezes
+## Layout
 
-**Symptom:** widgets stop updating and tap-refresh does nothing until BTT
-restarts. Two distinct causes produce this, with different scopes: one only
-ever silences the Lyrics widget while everything else keeps ticking (fixed,
-see below); the other silences *every* widget at once, including ones with
-no network or Apple Music dependency at all (not fixable from this repo,
-mitigated by restarting BTT).
+| Path | Contents |
+| --- | --- |
+| `widgets/` | One script per widget, plus `lib/` (shared widget runtime, Clash helpers) and `lyrics/` (the Lyrics feature package) |
+| `actions/` | Helpers invoked by widget taps, media keys, and setup |
+| `bttpreset/` | Exported BTT preset (`Default.bttpreset`) and `backup.bttpreset` |
+| `cache/`, `logs/` | Runtime state and diagnostics, created automatically |
 
-### Root cause
+## Prerequisites
 
-`actions/track-changed.sh` backgrounds its Python helper
-(`widgets/now-playing-lyrics.sh --track-changed`) to keep BTT's shell-script
-runner from blocking on it.
-Both of those helpers call Apple Music over AppleScript
-(`read_apple_music()` in `widgets/lyrics/apple_music.py`), and until this was
-fixed, both backgrounded with a plain `nohup … &`.
+- BetterTouchTool with a Touch Bar (or Control Strip), with Automation
+  permission for BTT to drive the widgets.
+- `zsh`, `curl`, Python 3 (all ship with macOS); `jq` (`brew install jq`).
+- `codexbar` (`brew install codexbar`) for the Codex and Claude quota widgets.
+- A running Clash/Mihomo controller for the Clash widgets — defaults target
+  Clash Verge's Unix socket `/tmp/verge/verge-mihomo.sock` with the API at
+  `http://127.0.0.1:9097` (all tunable, see Configuration).
+- Apple Music for the Lyrics and Star widgets.
 
-That's not actually detached. In a non-interactive shell — which every BTT
-script action is — `cmd & disown` still leaves the child in the exact
-process group BTT launched for the script; `setopt monitor` needed for real
-job control fails without a controlling terminal. If BTT's single
-`BetterTouchToolShellScriptRunner` XPC service ever waits on or signals by
-process group rather than by the one pid it started, a child stuck in that
-group can block every future invocation of that same script behind it.
+## Quick start
 
-When Music.app stops answering Apple Events — which it does periodically in
-this environment, per `~/Library/Caches/BTTNowPlayingLyrics/error.log`
-(`Apple Music query timed out`, and Music.app itself crashed at least once) —
-killing the client-side `osascript` process on its own timeout doesn't
-guarantee it actually exits; it can be stuck in an uninterruptible wait on
-Music's reply. Left in BTT's shared process group, that's enough to wedge
-the lyrics widget's own ordinary 1-second tick behind it. Measured in the
-logs: a single incident silenced the lyrics widget's trace for **26
-minutes**, while every other widget kept ticking on schedule the entire
-time — proof this specific, 26-minute-long pattern was these two
-un-detached call sites, not the separate freeze below.
+1. Clone or copy this repo to `~/Documents/BTT` — every script defaults to
+   that path (`BTT_REPO_DIR` overrides).
+2. Install the prerequisites above.
+3. In BTT, import `bttpreset/Default.bttpreset`. (To configure widgets by
+   hand instead, the table below lists every script and its wiring.)
+4. Set the BTT widget UUID variables so taps and track changes can find the
+   widgets: `./actions/set-widget-variables.sh`.
+5. Verify: tap each widget — it greys out while its refresh runs, then
+   redraws; `widgets/now-playing-lyrics.sh --report` shows the shared trace.
+6. Optional: deploy the freeze guard (see below).
 
-### A second, unrelated freeze: BetterTouchTool's own main thread
+Widgets that appear in the preset but have no script in this repo — Weather,
+Weath Icon, Star — are configured natively in BTT.
 
-The fix above does not explain every freeze. `widgets/timer-widget.sh` timer
-widget has no network or Apple Music dependency: with every other widget
-disabled, it still froze
-— twice, for 312s and 174s — proving a second failure mode exists that has
-nothing to do with any script in this repo.
+## Widgets
 
-`actions/freeze-catch.sh` watches the shared trace and runs `sample` against
-both BetterTouchTool and its `BetterTouchToolShellScriptRunner` XPC helper
-the moment it goes silent, catching one of these live
-(`~/Library/Caches/btt-widgets/freeze-samples/20260808-180758/`). The
-runner's only thread was idle in `mach_msg2_trap`, waiting for a request that
-never arrived — it wasn't stuck on anything. BTT's own main thread was:
-100% of the sample's 2332 samples sat inside AppKit, recursing through
-`-[NSWindow recalculateKeyViewLoop]` → `NSPerformVisuallyAtomicChange` →
-`-[NSView _layoutSubtreeWithOldSize:]` dozens of frames deep while decoding
-a NIB. That blocks BTT's run loop — the same run loop that dispatches widget
-ticks to the shell-script runner — so nothing runs anywhere, for however
-long that layout pass takes, until it finishes or `BTTRelaunch` (BTT's own
-bundled watchdog) gives up and restarts it.
+| Widget | Shows | Script | Refresh | Tap action |
+| --- | --- | --- | --- | --- |
+| Lyrics | Synchronised lyrics + now playing | `widgets/now-playing-lyrics.sh` | 1 s | Repaint after a short delay |
+| Codex | Codex quota | `widgets/codex-quota.sh` | 120 s | `actions/tap-refresh.sh` |
+| Claude | Claude 5 h / 7 d quota | `widgets/claude-quota.sh` | 300 s | `actions/tap-refresh.sh` |
+| 🌐 | Selected Clash node's region flag | `widgets/clash-region.sh` | 300 s | `actions/tap-refresh.sh` (region + latency) |
+| Latency | Selected Clash node's latency | `widgets/clash-latency.sh` | 10 s | `actions/tap-refresh.sh` (region + latency) |
+| TIMER | BTT process uptime (diagnostics) | `widgets/timer-widget.sh` | 10 s | `actions/tap-refresh.sh` |
+| Star | Favourite (★/☆) | AppleScript in the preset | 5 s | Toggle favourite |
+| Weather | Temperature/humidity | BTT-native weather widget | BTT-managed | — |
 
-There is nothing to patch here: it's a performance bug in BetterTouchTool's
-own AppKit code, not in any script this repo controls. See "Stopgap" below
-for the mitigation, and "Diagnostics" for the two tools that isolated and
-captured it.
+Each widget script takes its BTT widget UUID as an optional first argument,
+which taps and detached refreshes use to address the widget. Refresh
+intervals above are as exported in the preset.
 
-### The real fix
+Media-key next/previous and the two-finger swipe triggers run
+`actions/track-changed.sh`, which hands the expensive lyric work to a
+detached process and then refreshes the Lyrics (and Star) widgets.
 
-`widgets/lib/btt-widget.sh` now exposes `btt_spawn_detached`, a small
-Python double-fork (`os.fork()` + `os.setsid()` + `os.execvp()`) that moves
-the child into its own session, out of BTT's process group, while staying in
-the same `BTT -> zsh -> python -> target` lineage BTT already has file
-access for (a `launchd` job would dodge the process-group issue too, but
-macOS's TCC blocks a `launchd`-spawned process from this repo's files under
-`~/Documents` — see the freeze-guard section below for where that bit us
-again). `btt_refresh_detached` (used by every other widget) already worked
-this way; `track-changed.sh` uses the same primitive instead of a bare
-`nohup … &`.
+## Actions
 
-### Stopgap: `actions/btt-freeze-guard.sh`
+| Script | Purpose |
+| --- | --- |
+| `actions/tap-refresh.sh` | Force one or more widgets to refresh now, even with a fresh cache |
+| `actions/track-changed.sh` | Track-change hook: detached lyrics pre-warm + widget refresh |
+| `actions/set-widget-variables.sh` | Sets the BTT persistent variables mapping widget names to UUIDs |
+| `actions/btt-freeze-guard.sh` | Freeze watchdog + preventive restart (below) |
+| `actions/freeze-catch.sh` | Manual freeze sampler for diagnostics |
+| `actions/hid-state.c` | Helper binary for the freeze guard (modifier/mouse state) |
 
-BTT already restarts itself on a freeze via `BTTRelaunch`, its own bundled
-watchdog — but on the AppKit freeze above, that took 4-5 minutes each time,
-which is where this guard earns its keep: a faster, logged restart. It runs
-every 5 seconds, actively refreshes the timer widget, and waits up to five
-seconds for a new timer trace row. If that probe fails, the guard treats BTT
-as unresponsive and restarts immediately. Responsive probes retain the
-separate three-minute preventive-restart cadence and may defer that restart
-once while macOS has seen keyboard or pointer activity in the prior 60
-seconds.
+## Configuration
 
-The shared trace remains useful for diagnostics and supplies the timer probe's
-evidence: a newer `timer-widget` row means BTT dispatched the refresh.
+Scripts read environment variables with built-in defaults; set them where
+BTT's shell actions can see them (BTT environment variables or `~/.zshenv`).
 
-- **Source of truth:** `actions/btt-freeze-guard.sh` in this repo.
-- **Deployed copy:** `~/Library/Application Support/BTT/btt-freeze-guard.sh`.
-  `launchd` runs the LaunchAgent below as its own TCC-authorized process,
-  which macOS blocks from reading `~/Documents` — the same restriction
-  `btt_spawn_detached`'s comment describes, hit again one level up. **After
-  editing the script in this repo, re-copy it to the deployed path:**
+| Variable | Default | Used by |
+| --- | --- | --- |
+| `BTT_REPO_DIR` | `~/Documents/BTT` | Every script (repo, cache, and log paths) |
+| `BTT_LOG_DIR` | `$BTT_REPO_DIR/logs` | Logging |
+| `CLASH_API`, `CLASH_SECRET`, `CLASH_SOCKET`, `CLASH_GROUP` | `http://127.0.0.1:9097`, `""`, `/tmp/verge/verge-mihomo.sock`, `PROXY` | Clash widgets (`widgets/lib/clash.sh`) |
+| `CLASH_ICON`, `CLASH_FONT_COLOR` | — | Icon and colour for the Clash widgets |
+| `CLASH_LATENCY_MIN_MS`, `CLASH_LATENCY_MAX_MS` | `150`, `500` | Latency colour bands |
+| `CLAUDE_QUOTA_MAX_AGE`, `CODEX_QUOTA_MAX_AGE` | `300` | Quota cache freshness (seconds) |
+| `BTT_LYRICS_*` | — | Lyrics tunables — see [`specs/LYRICS.md`](specs/LYRICS.md) |
 
-  ```sh
-  cp actions/btt-freeze-guard.sh ~/Library/Application\ Support/BTT/btt-freeze-guard.sh
-  ```
+## The Lyrics feature
 
-- **Helper binary:** `actions/hid-state.c`, deployed beside the script as
-  `~/Library/Application Support/BTT/hid-state` (same `~/Documents` block, so
-  it cannot be run from the repo). It reports whether a modifier or mouse
-  button is held right now, which is what the guard checks before terminating
-  BTT — killing its event tap mid-gesture is what leaves the front app with a
-  latched Shift or a phantom mouse-down. `HIDIdleTime` cannot answer this:
-  modifiers do not auto-repeat and a paused drag posts nothing, so both read
-  as idle within a second. Rebuild after editing:
-
-  ```sh
-  clang -O2 actions/hid-state.c -framework ApplicationServices \
-      -o ~/Library/Application\ Support/BTT/hid-state
-  ```
-
-- **Deferral is a delay, not a veto.** Both input checks above postpone a
-  restart rather than cancel it, and `BTT_RESTART_DEFER_MAX` (60s) caps how
-  long that can go on: past the deadline the restart proceeds and says so in
-  the log. Without the cap, typing through a freeze holds the restart off for
-  as long as the user keeps working — which is exactly when they want the
-  Touch Bar back, and is the same uncapped-defer failure recorded above. The
-  deadline is measured from the first deferral in a run and cleared the moment
-  a probe finds BTT healthy, so an old run cannot make a later restart skip
-  its checks. A modifier still reported held a minute on is already latched,
-  and restarting is as likely to clear it as to cause it.
-
-- **Scheduler:** `~/Library/LaunchAgents/com.zhenyulin.btt-freeze-guard.plist`,
-  `StartInterval` 5s, loaded via `launchctl bootstrap gui/$(id -u) …`.
-- **Logic:** refresh timer-widget every five seconds and wait up to
-  `BTT_TIMER_REFRESH_TIMEOUT` seconds for its trace row. A timeout restarts
-  BTT even during active input; a responsive BTT may still defer the separate
-  three-minute preventive restart for one interval (`MAX_CONSECUTIVE_DEFERS`).
-  After a restart, the guard reopens BTT without taking foreground focus and
-  retries `refresh_widget` for each script widget at 5, 10, and 15 seconds,
-  then allows a 30-second startup grace period before resuming probes.
-
-  The defer used to be uncapped: `freeze-guard.log` showed 43 consecutive
-  "deferred -- active user" checks in a row (2026-08-08 23:53 to 2026-08-09
-  01:06), and `trace.tsv` had a 603s freeze gap inside that exact window --
-  ordinary activity in some other app was being treated as evidence BTT
-  itself was fine, which it isn't. This is almost certainly why restarts
-  weren't happening reliably. The cap bounds the worst case to two 3-minute
-  intervals instead of running until an idle gap happens to appear.
-- **Logs:**
-  - `logs/freeze-guard.log` — records every five-second probe with its latest
-    complete `timer-widget` trace row, plus the final row observed before a
-    restart and every deferred preventive restart.
-  - `logs/freeze-catch.log` — records each manual probe with its latest timer
-    row; `logs/freeze-samples/<timestamp>/context.txt` preserves that final
-    row and the last 20 shared-trace records alongside live process samples.
-  - `~/Library/Caches/btt-widgets/freeze-guard.std{out,err}.log` — general
-    run output, for debugging the guard itself.
-
-Manage the LaunchAgent with:
+The Lyrics widget is the deepest feature: track sampling from Apple Music /
+MediaRemote, lyric lookup across local LRC files, Apple Music's cached TTML,
+LrcAPI and LRCLIB, and width-constrained rendering. Its behaviour contract
+and configuration live in [`specs/LYRICS.md`](specs/LYRICS.md). Diagnostics:
 
 ```sh
-# reload after editing the plist or redeploying the script
-launchctl bootout gui/$(id -u)/com.zhenyulin.btt-freeze-guard 2>/dev/null
-launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.zhenyulin.btt-freeze-guard.plist
-
-# check status
-launchctl print gui/$(id -u)/com.zhenyulin.btt-freeze-guard
-
-# remove entirely
-launchctl bootout gui/$(id -u)/com.zhenyulin.btt-freeze-guard
-rm ~/Library/LaunchAgents/com.zhenyulin.btt-freeze-guard.plist
+widgets/now-playing-lyrics.sh --report      # render + trace health
+widgets/now-playing-lyrics.sh --watch       # live tick stream
+widgets/now-playing-lyrics.sh --diagnose    # full diagnosis
 ```
 
-The lyrics-specific fix above means this guard should no longer see freezes
-caused by that call site. The AppKit freeze is a separate, open issue in
-BTT itself, so expect this to keep firing occasionally until upstream fixes
-it — its log is how you'd notice if it starts firing more often than that,
-which would mean a new cause.
+## Freeze guard (optional)
 
-### Diagnostics
+BTT occasionally stops updating widgets. Two causes have been measured and
+fixed or worked around; the details, evidence, and semantics are in
+[`specs/CONSTRAINTS.md`](specs/CONSTRAINTS.md). The mitigation is
+`actions/btt-freeze-guard.sh`: a LaunchAgent watchdog that restarts BTT
+quickly when it stops dispatching widget ticks, with a preventive restart
+every three minutes of uptime. Deploy it with:
 
-Two tools built to isolate and capture the AppKit freeze, kept for any
-future recurrence or regression:
+```sh
+cp actions/btt-freeze-guard.sh ~/Library/Application\ Support/BTT/btt-freeze-guard.sh
+clang -O2 actions/hid-state.c -framework ApplicationServices \
+    -o ~/Library/Application\ Support/BTT/hid-state
+launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.zhenyulin.btt-freeze-guard.plist
+```
 
-- **`widgets/timer-widget.sh`** — a Touch Bar timer widget with no network or
-  Apple Music dependency. It displays the elapsed time since the current BTT
-  process started, resetting to zero after a BTT restart. A tap still greys it
-  out for a few seconds (via the same refresh-lock coloring every widget uses,
-  see `widgets/lib/btt-widget.sh`) without resetting the timer. If the timer
-  stops while a next-song action still repaints the now-playing widget, the
-  action's detached path is alive but ordinary BTT widget dispatch or input
-  handling is not. Currently disabled in BTT (`BTTEnabled2: 0` in the preset)
-  — re-enable it to test again after a BTT update, or if tap-refresh misbehaves
-  in a new way.
-- **`actions/freeze-catch.sh`** — run manually in a terminal
-  (`./actions/freeze-catch.sh`) and left open. Actively probes timer-widget
-  every five seconds; the moment it fails to produce a trace row within its
-  timeout, it runs `sample` against both BetterTouchTool and
-  `BetterTouchToolShellScriptRunner` in parallel and saves the output to
-  `logs/freeze-samples/<timestamp>/` — a real stack trace of the freeze while
-  it's still happening. This is what caught the sample referenced above.
+After editing `actions/btt-freeze-guard.sh` or `actions/hid-state.c`,
+re-copy/re-build and reload the LaunchAgent as documented in
+[`specs/CONSTRAINTS.md`](specs/CONSTRAINTS.md).
+
+## Diagnostics
+
+- `widgets/timer-widget.sh` — network-free widget proving whether BTT itself
+  is dispatching ticks.
+- `actions/freeze-catch.sh` — run in a terminal and leave it open; captures
+  `sample` stack traces of BTT and its script runner the moment a freeze
+  starts (`logs/freeze-samples/<timestamp>/`).
+
+## Docs
+
+- [`specs/CONSTRAINTS.md`](specs/CONSTRAINTS.md) — freeze failure modes, the
+  freeze guard, and diagnostics.
+- [`specs/LYRICS.md`](specs/LYRICS.md) — Lyrics feature specification.

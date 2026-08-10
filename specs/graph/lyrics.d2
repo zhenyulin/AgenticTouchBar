@@ -1,0 +1,153 @@
+# cspell:ignore LRCLIB
+
+classes: {
+  entry: {
+    style.fill: "#E8F1FB"
+    style.stroke: "#32689A"
+    style.border-radius: 6
+  }
+  process: {
+    style.fill: "#EEF6EE"
+    style.stroke: "#4D7C4D"
+    style.border-radius: 6
+  }
+  state: {
+    style.fill: "#FFF6E5"
+    style.stroke: "#B47A1F"
+    style.border-radius: 6
+  }
+  external: {
+    style.fill: "#F3EDF8"
+    style.stroke: "#76539A"
+    style.border-radius: 6
+  }
+  diagnostic: {
+    style.fill: "#F7EEEE"
+    style.stroke: "#A34E4E"
+    style.border-radius: 6
+  }
+}
+
+btt: BTT integration {
+  btt_tick: "Periodic widget tick" { class: entry }
+  btt_action: "Track-change action" { class: entry }
+  btt_refresh: "refresh_widget(UUID)" { class: entry }
+  btt_output: "Touch Bar lyric frame" { class: entry }
+}
+
+runtime: Lyrics runtime {
+  shell: "now-playing-lyrics.sh" { class: process }
+  main: "lyrics.__main__.main" { class: process }
+  dispatch: "cli.main" { class: process }
+  widget: "render.widget_main" { class: process }
+  lock: "locking.acquire_widget_lock" { class: process }
+  tick: "render.render_tick" { class: process }
+  track: "apple_music.current_track" { class: process }
+  state_gate: "Playback-state gate" { class: process }
+  emit: "output.emit / last frame" { class: process }
+}
+
+storage: Persisted state {
+  sample: "lyrics/state.json" { class: state }
+  cache: "Per-track lyric JSON" { class: state }
+  viewport: "lyrics/viewport.json" { class: state }
+  locks: "widget / sampler / track locks" { class: state }
+}
+
+resolution: Lyric resolution {
+  key: "metadata.track_cache_key" { class: process }
+  viewport_measure: "viewport.ensure_viewport" { class: process }
+  cache_read: "cache.read_compatible_cache" { class: process }
+  revive: "Revive Apple-cache not_found" { class: process }
+  fetch_start: "fetch.start_background_fetch" { class: process }
+  fetch: "fetch.fetch_lyrics_record" { class: process }
+  local: "providers.local" { class: external }
+  apple_cache: "providers.apple_cache" { class: external }
+  catalog: "catalog.catalog_chinese_title" { class: external }
+  remote: "LrcAPI + LRCLIB" { class: external }
+  match: "matching.choose_candidate >= 0.60" { class: process }
+  cache_write: "cache.atomic_write_json" { class: state }
+}
+
+presentation: Lyric presentation {
+  parse: "lrc.parse_lrc" { class: process }
+  active: "layout.current_lyric_line" { class: process }
+  wrap: "layout.wrap_lyric / marquee" { class: process }
+  render: "render.render_widget" { class: process }
+}
+
+fallback: Playback and helpers {
+  sample_helper: "Detached --sample" { class: external }
+  media_remote: "MediaRemote fallback" { class: external }
+  text_width: "Detached JXA text measurement" { class: external }
+  fetch_helper: "Detached --fetch" { class: external }
+}
+
+diagnostics: Diagnostics {
+  receipt: "logs/lyrics/render.json" { class: diagnostic }
+  trace: "logs/lyrics/trace.tsv" { class: diagnostic }
+}
+
+btt.btt_tick -> runtime.shell
+runtime.shell -> runtime.main
+runtime.main -> runtime.dispatch
+runtime.dispatch -> runtime.widget
+runtime.widget -> runtime.lock
+runtime.lock -> runtime.tick: acquired
+runtime.lock -> runtime.emit: busy; reprint last frame {
+  style.stroke-dash: 4
+}
+runtime.tick -> runtime.track
+runtime.track -> storage.sample: read current snapshot
+runtime.track -> fallback.sample_helper: stale sample {
+  style.stroke-dash: 4
+}
+fallback.sample_helper -> storage.sample: atomic write
+runtime.track -> fallback.media_remote: Music stopped/unavailable {
+  style.stroke-dash: 4
+}
+runtime.track -> runtime.state_gate
+runtime.state_gate -> runtime.emit: denied / paused / idle / placeholder
+runtime.state_gate -> resolution.key: playing real track
+resolution.key -> resolution.viewport_measure
+resolution.viewport_measure -> storage.viewport: measure and persist {
+  style.stroke-dash: 4
+}
+resolution.key -> resolution.cache_read
+resolution.cache_read -> storage.cache: compatible record
+resolution.cache_read -> resolution.revive: cached not_found
+resolution.revive -> resolution.cache_write
+resolution.cache_read -> resolution.fetch_start: cache miss
+resolution.fetch_start -> fallback.fetch_helper: detached worker {
+  style.stroke-dash: 4
+}
+fallback.fetch_helper -> resolution.fetch
+resolution.fetch -> resolution.local: first source
+resolution.local -> resolution.apple_cache: no local match
+resolution.apple_cache -> resolution.catalog: no cache match
+resolution.catalog -> resolution.remote: search title when available
+resolution.remote -> resolution.match
+resolution.match -> resolution.cache_write: accepted candidate
+resolution.match -> resolution.cache_write: not_found / cache_error
+resolution.cache_write -> storage.cache
+resolution.cache_read -> presentation.parse: usable record
+resolution.cache_write -> presentation.parse: accepted record
+presentation.parse -> presentation.active
+presentation.active -> presentation.wrap
+presentation.wrap -> presentation.render
+presentation.render -> runtime.emit
+runtime.emit -> btt.btt_output
+runtime.widget -> diagnostics.receipt: outcome in finally
+runtime.widget -> diagnostics.trace: outcome and sample age
+
+btt.btt_action -> runtime.dispatch: --track-changed UUID
+runtime.dispatch -> runtime.track: follow samples until settled
+runtime.track -> resolution.fetch_start: pre-warm new track
+runtime.dispatch -> btt.btt_refresh: request final repaint {
+  style.stroke-dash: 4
+}
+btt.btt_refresh -> btt.btt_tick: next widget invocation {
+  style.stroke-dash: 4
+}
+
+runtime.emit -> diagnostics.trace: render outcome
