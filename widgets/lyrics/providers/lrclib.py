@@ -8,6 +8,7 @@ from typing import Any
 
 from .. import config
 from ..concurrency import fetch_seconds_remaining, map_concurrently
+from ..lrc import plain_to_lrc
 from ..matching import choose_candidate
 from ..metadata import metadata_variants, normalized, track_title_variants
 from ..output import log_error
@@ -102,7 +103,11 @@ def collect_search_candidates(track: dict[str, Any]) -> list[dict[str, Any]]:
             add_query({"q": f"{title} {artist}".strip()})
 
     attempted = queries[: max(config.LRCLIB_MAX_SEARCH_QUERIES, 0)]
-    if fetch_seconds_remaining() < config.FETCH_TIMEOUT_SECONDS:
+    # The fetch deadline is FETCH_TIMEOUT_SECONDS minus the SIGALRM margin
+    # (see fetch.background_fetch), so comparing against FETCH_TIMEOUT_SECONDS
+    # here would always skip the search. The search must run whenever there is
+    # still room for at least one request and its retries.
+    if fetch_seconds_remaining() < config.NETWORK_TIMEOUT_SECONDS:
         attempted = []
 
     errors: list[Exception] = []
@@ -139,7 +144,9 @@ def lrclib_exact_record(track: dict[str, Any]) -> dict[str, Any] | None:
         attempts=1,
     )
     if isinstance(exact, dict) and (
-        exact.get("syncedLyrics") or exact.get("instrumental")
+        exact.get("syncedLyrics")
+        or exact.get("plainLyrics")
+        or exact.get("instrumental")
     ):
         return dict(exact)
     return None
@@ -161,15 +168,22 @@ def lrclib_record(track: dict[str, Any]) -> dict[str, Any] | None:
         exact_error, exact = exc, None
 
     if exact is not None:
-        return as_lrclib_record(exact)
+        record = as_lrclib_record(exact)
+    else:
+        try:
+            selected = choose_candidate(track, collect_search_candidates(track))
+        except Exception as exc:
+            raise exact_error or exc
+        if selected is None:
+            if exact_error is not None:
+                raise exact_error
+            return None
+        record = as_lrclib_record(selected)
 
-    try:
-        selected = choose_candidate(track, collect_search_candidates(track))
-    except Exception as exc:
-        raise exact_error or exc
-
-    if selected is None:
-        if exact_error is not None:
-            raise exact_error
-        return None
-    return as_lrclib_record(selected)
+    if not record.get("syncedLyrics") and not record.get("instrumental"):
+        # Community syncs are missing for many older Chinese tracks; their
+        # plain text still identifies the song, so spread the lines across the
+        # duration rather than reporting "not found".
+        duration = float(record.get("duration") or track.get("duration") or 0.0)
+        record["syncedLyrics"] = plain_to_lrc(record.get("plainLyrics") or "", duration)
+    return record

@@ -53,14 +53,24 @@ def choose_candidate(
         item
         for item in candidates
         if isinstance(item, dict)
-        and (item.get("syncedLyrics") or item.get("instrumental"))
+        and (
+            item.get("syncedLyrics")
+            or item.get("plainLyrics")
+            or item.get("instrumental")
+        )
     ]
     if not usable:
         return None
-    ranked = sorted(
-        ((candidate_score(track, item), item) for item in usable),
-        key=lambda pair: pair[0],
-        reverse=True,
-    )
-    best_score, best = ranked[0]
+
+    # Timed lyrics beat plain text; an explicitly instrumental entry only
+    # wins when neither is available.
+    def priority(item: dict[str, Any]) -> int:
+        if item.get("syncedLyrics"):
+            return 2
+        if item.get("plainLyrics"):
+            return 1
+        return 0
+
+    best = max(usable, key=lambda item: (priority(item), candidate_score(track, item)))
+    best_score = candidate_score(track, best)
     return best if best_score >= 0.60 else None

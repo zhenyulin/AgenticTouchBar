@@ -14,15 +14,11 @@ def _contains_han(value: str) -> bool:
     return any("\u3400" <= character <= "\u9fff" for character in value)
 
 
-def _is_mandapop(track: dict[str, Any]) -> bool:
-    genre = str(track.get("genre") or "").casefold()
-    return "mandopop" in genre or "manda" in genre
-
-
 def _catalog_results(track: dict[str, Any]) -> list[dict[str, Any]]:
     import json
-    import subprocess
+    import urllib.error
     import urllib.parse
+    import urllib.request
 
     params = urllib.parse.urlencode(
         {
@@ -33,26 +29,22 @@ def _catalog_results(track: dict[str, Any]) -> list[dict[str, Any]]:
             "term": f"{track.get('artist', '')} {track.get('title', '')}".strip(),
         }
     )
-    result = subprocess.run(
-        [
-            "/usr/bin/curl",
-            "--fail",
-            "--silent",
-            "--show-error",
-            "--max-time",
-            f"{config.CATALOG_LOOKUP_TIMEOUT_SECONDS:g}",
-            "--user-agent",
-            config.USER_AGENT,
-            f"{ITUNES_SEARCH_API}?{params}",
-        ],
-        capture_output=True,
-        text=True,
-        timeout=config.CATALOG_LOOKUP_TIMEOUT_SECONDS + 1.0,
-        check=False,
+    request = urllib.request.Request(
+        f"{ITUNES_SEARCH_API}?{params}",
+        headers={"User-Agent": config.USER_AGENT, "Accept": "application/json"},
     )
-    if result.returncode:
-        raise RuntimeError(result.stderr.strip() or "iTunes catalog request failed")
-    payload = json.loads(result.stdout)
+    try:
+        with urllib.request.urlopen(
+            request, timeout=config.CATALOG_LOOKUP_TIMEOUT_SECONDS
+        ) as response:
+            payload = json.loads(response.read().decode("utf-8-sig"))
+    except urllib.error.HTTPError as exc:
+        raise RuntimeError(f"iTunes catalog returned HTTP {exc.code}") from exc
+    except urllib.error.URLError as exc:
+        raise RuntimeError(f"Could not reach the iTunes catalog: {exc.reason}") from exc
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise RuntimeError("iTunes catalog returned an invalid response") from exc
+
     results = payload.get("results") if isinstance(payload, dict) else None
     return (
         [item for item in results if isinstance(item, dict)]
@@ -63,7 +55,14 @@ def _catalog_results(track: dict[str, Any]) -> list[dict[str, Any]]:
 
 def catalog_chinese_title(track: dict[str, Any]) -> str:
     """Return a duration-matched Chinese catalog title for a Mandopop track."""
-    if track.get("search_title") or not _is_mandapop(track) or not track.get("title"):
+    title = str(track.get("title") or "").strip()
+    artist = str(track.get("artist") or "").strip()
+    # No sampler supplies a genre, so a Chinese artist is the reachable
+    # Mandopop signal. An already-Chinese title is the catalog title: looking
+    # it up again costs a round trip and returns the same characters.
+    if track.get("search_title") or not title or _contains_han(title):
+        return ""
+    if not _contains_han(artist):
         return ""
 
     try:

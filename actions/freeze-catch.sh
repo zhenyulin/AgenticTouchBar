@@ -27,7 +27,6 @@ set -u
 PATH="/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin"
 
 REPO_DIR="${BTT_REPO_DIR:-${0:A:h:h}}"
-CACHE_DIR="${BTT_WIDGET_CACHE_DIR:-$REPO_DIR/cache}"
 LOG_DIR="${BTT_LOG_DIR:-$REPO_DIR/logs}"
 TRACE="${BTT_WIDGET_TRACE_FILE:-$LOG_DIR/trace.tsv}"
 LOG="$LOG_DIR/freeze-catch.log"

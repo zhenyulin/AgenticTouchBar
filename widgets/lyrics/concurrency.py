@@ -5,6 +5,8 @@ from __future__ import annotations
 import time
 from typing import Any
 
+from . import config
+
 _FETCH_DEADLINE: float | None = None
 
 
@@ -43,6 +45,3 @@ def map_concurrently(
             except Exception as exc:
                 collected.append((None, exc))
         return collected
-
-
-from . import config

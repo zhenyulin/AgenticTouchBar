@@ -55,7 +55,6 @@ def now_playing_lines(track: dict[str, Any]) -> list[str]:
         title=str(track.get("title", "") or ""),
         album=str(track.get("album", "") or ""),
         artist=str(track.get("artist", "") or ""),
-        genre=str(track.get("genre", "") or ""),
     )
     return [
         line_format.format_map(fields)[: config.NOW_PLAYING_LINE_MAX_CHARS]

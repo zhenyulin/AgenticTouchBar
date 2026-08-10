@@ -37,38 +37,48 @@ def fetch_lyrics_record(track: dict[str, Any]) -> dict[str, Any] | None:
 
     pool = ThreadPoolExecutor(max_workers=2)
     try:
-        lrcapi_lookup = pool.submit(choose_lrcapi_candidate, track)
-        lrclib_lookup = pool.submit(lrclib_record, track)
+        lrcapi_future = pool.submit(choose_lrcapi_candidate, track)
+        lrclib_future = pool.submit(lrclib_record, track)
 
+        # LrcAPI gets a bounded head start for its Chinese-catalog coverage;
+        # when it has not answered by then, LRCLIB's answer decides first and
+        # LrcAPI gets the remaining wait only if LRCLIB has nothing.
+        lrcapi_timed_out = False
         try:
-            lrcapi = lrcapi_lookup.result(timeout=config.LRCAPI_PREFERENCE_SECONDS)
+            lrcapi = lrcapi_future.result(timeout=config.LRCAPI_PREFERENCE_SECONDS)
         except TimeoutError:
+            lrcapi_timed_out = True
             lrcapi = None
         except Exception as exc:
             log_error(f"LrcAPI lookup failed; using LRCLIB: {exc}")
             lrcapi = None
-        else:
-            if lrcapi is not None:
-                return lrcapi
-            return lrclib_lookup.result()
+
+        if lrcapi is not None:
+            return lrcapi
 
         try:
-            lrclib = lrclib_lookup.result()
-        except Exception as exc:
-            try:
-                lrcapi = lrcapi_lookup.result()
-            except Exception as lrcapi_exc:
-                log_error(f"LrcAPI lookup failed; using LRCLIB: {lrcapi_exc}")
-                raise exc
-            if lrcapi is not None:
-                return lrcapi
-            raise exc
+            lrclib = lrclib_future.result()
+        except Exception as lrclib_exc:
+            if lrcapi_timed_out:
+                # LrcAPI may still be running; its answer can still save the
+                # fetch from a transient LRCLIB failure.
+                try:
+                    lrcapi = lrcapi_future.result()
+                except Exception as lrcapi_exc:
+                    log_error(f"LrcAPI lookup failed; using LRCLIB: {lrcapi_exc}")
+                    raise lrclib_exc
+                if lrcapi is not None:
+                    return lrcapi
+            raise lrclib_exc
 
         if lrclib is not None:
             return lrclib
 
+        if not lrcapi_timed_out:
+            return None
+
         try:
-            return lrcapi_lookup.result()
+            return lrcapi_future.result()
         except Exception as exc:
             log_error(f"LrcAPI lookup failed; using LRCLIB: {exc}")
             return None

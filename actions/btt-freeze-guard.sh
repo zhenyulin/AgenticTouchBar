@@ -386,7 +386,6 @@ nudge_heartbeat() {
 	/usr/bin/osascript -e \
 		"tell application \"BetterTouchTool\" to refresh_widget \"$TIMER_WIDGET_UUID\"" \
 		>/dev/null 2>&1 &
-	NUDGE_PID=$!
 }
 
 # Whether a modifier or mouse button is being held right now, asked of the

@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/usr/bin/env zsh
 
 #
 # Shared BetterTouchTool Script Widget support.
@@ -78,9 +78,7 @@ BTT_WIDGET_TRACE="${BTT_WIDGET_TRACE:-1}"
 BTT_WIDGET_TRACE_MAX_BYTES="${BTT_WIDGET_TRACE_MAX_BYTES:-2000000}"
 
 # EPOCHREALTIME gives sub-second timestamps without forking `date`.
-if [[ -n "${ZSH_VERSION:-}" ]]; then
-    zmodload zsh/datetime 2>/dev/null || true
-fi
+zmodload zsh/datetime 2>/dev/null || true
 
 
 # ---------------------------------------------------------------------------
@@ -497,7 +495,7 @@ btt_quota_color() {
         local secondary_line="${text#*$'\n'}"
         secondary_line="${secondary_line%%$'\n'*}"
         local secondary_used="${secondary_line%%\%*}"
-        if [[ "$secondary_used" =~ '^[0-9]+$' ]] && (( secondary_used >= 100 )); then
+        if [[ "$secondary_used" =~ ^[0-9]+$ ]] && (( secondary_used >= 100 )); then
             used_percent="$secondary_used"
             cycle="$secondary_cycle"
             selected_line="$secondary_line"
@@ -505,7 +503,7 @@ btt_quota_color() {
         fi
     fi
 
-    if (( cycle <= 0 )) || [[ ! "$used_percent" =~ '^[0-9]+$' ]]; then
+    if (( cycle <= 0 )) || [[ ! "$used_percent" =~ ^[0-9]+$ ]]; then
         printf '%s' "$BTT_WIDGET_COLOR"
         return 0
     fi
@@ -525,7 +523,7 @@ btt_quota_color() {
         local remaining_minutes=0
         local reset_at
     reset_at="$(btt_quota_reset_get "$reset_name")"
-        if [[ "$reset_at" =~ '^[0-9]+$' ]]; then
+        if [[ "$reset_at" =~ ^[0-9]+$ ]]; then
             local now_seconds
             now_seconds="$(btt_now)"
             now_seconds="${now_seconds%%.*}"
@@ -560,7 +558,7 @@ btt_latency_color() {
     local first_line="${text%%$'\n'*}"
     local latency="${first_line%%ms*}"
 
-    if [[ ! "$min_ms" =~ '^[0-9]+$' || ! "$max_ms" =~ '^[0-9]+$' ]] || \
+    if [[ ! "$min_ms" =~ ^[0-9]+$ || ! "$max_ms" =~ ^[0-9]+$ ]] || \
         (( max_ms <= min_ms )); then
         printf '%s' "$BTT_WIDGET_COLOR"
         return 0
@@ -571,7 +569,7 @@ btt_latency_color() {
         return 0
     fi
 
-    if [[ ! "$latency" =~ '^[0-9]+$' ]]; then
+    if [[ ! "$latency" =~ ^[0-9]+$ ]]; then
         printf '%s' "$BTT_WIDGET_COLOR"
         return 0
     fi
