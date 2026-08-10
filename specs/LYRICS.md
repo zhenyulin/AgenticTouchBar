@@ -221,8 +221,8 @@ unaccepted.
 | Line is too wide | Break at punctuation, then spaces | Preserve readable rows up to the two-row limit. |
 | A row still exceeds width | Crop/marquee according to elapsed playback time | Scroll at the configured cell rate after the delay. |
 | Viewport measurement is pending or fails | Use the carried/stored width or fallback width | Lose measurement accuracy for the track, not all layout state. |
-| Track has no synchronized lyrics but is instrumental | Render the instrumental marker | Emit `♬`. |
-| Track is not found | Render the not-found marker | Emit `♩`. |
+| Track has no synchronized lyrics but is instrumental | Render the instrumental marker, faded with playback progress | Emit widget JSON `{"text": "♬", "font_color": "r,g,b,a"}` with `r=g=b` fading 255→80 gray over the track. |
+| Track is not found | Render the not-found marker, faded with playback progress | Emit widget JSON `{"text": "♩", "font_color": "r,g,b,a"}` with `r=g=b` fading 255→80 gray over the track. |
 | Cache/provider failure is persisted | Render the cache-error marker | Emit `⚠ Apple lyrics cache error`. |
 
 LRC parsing must preserve timestamp semantics: offsets, enhanced timestamps,

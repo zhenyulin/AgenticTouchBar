@@ -109,6 +109,12 @@ MAX_LYRIC_ROWS = int(os.environ.get("BTT_LYRICS_MAX_ROWS", "2"))
 # proportional font renders a symbol like "♪ " wider than two plain spaces,
 # so matching character-for-character still looks left-shifted in practice.
 CONTINUATION_INDENT = os.environ.get("BTT_LYRICS_INDENT", "       ")
+# A track with no lyrics keeps its status symbol (♬ instrumental, ♩ not
+# found) for the whole track, so it fades from MARKER_FADE_MAX white down
+# to MARKER_FADE_MIN gray as the track plays, following the playback
+# position rather than wall clock time.
+MARKER_FADE_MAX = int(os.environ.get("BTT_LYRICS_MARKER_FADE_MAX", "255"))
+MARKER_FADE_MIN = int(os.environ.get("BTT_LYRICS_MARKER_FADE_MIN", "80"))
 APPLE_MUSIC_TIMEOUT_SECONDS = float(
     os.environ.get("BTT_LYRICS_APPLE_MUSIC_TIMEOUT", "1.5")
 )

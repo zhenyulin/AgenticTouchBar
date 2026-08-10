@@ -46,6 +46,30 @@ _RECEIPT: dict[str, Any] = {"key": "", "state": "", "index": -1, "next_change_at
 REPRINT_OUTCOMES = {"no_sample", "locked", "crashed"}
 
 
+def marker_font_color(track: dict[str, Any]) -> str:
+    """The BTT font_color for the status markers, fading with playback.
+
+    A track with no lyrics keeps its symbol (♬ instrumental, ♩ not found)
+    on screen for the whole track, so it dims from white down to a quiet
+    gray as the track plays instead of staying a bright fixed symbol. The
+    fade follows the playback position, not wall clock time, so a seek
+    anywhere in the track lands on the matching shade. The value is the
+    comma-separated r,g,b,a string BTT's widget JSON expects, with the
+    widget's full alpha.
+    """
+    duration = float(track.get("duration", 0.0) or 0.0)
+    position = float(track.get("position", 0.0) or 0.0)
+    if duration <= 0:
+        progress = 0.0
+    else:
+        progress = max(0.0, min(position / duration, 1.0))
+    gray = round(
+        config.MARKER_FADE_MAX
+        + (config.MARKER_FADE_MIN - config.MARKER_FADE_MAX) * progress
+    )
+    return f"{gray},{gray},{gray},255"
+
+
 def write_render_receipt(outcome: str) -> None:
     """Record what went on screen this tick, for the freeze guard to check."""
     if outcome in REPRINT_OUTCOMES:
@@ -218,7 +242,14 @@ def render_tick() -> str:
         emit(render_widget(track, None, fetch_waiting_seconds(key)))
         return "retrying"
 
-    emit(render_widget(track, cached))
+    emit(
+        render_widget(track, cached),
+        font_color=(
+            marker_font_color(track)
+            if cached.get("status") in {"instrumental", "not_found"}
+            else None
+        ),
+    )
     return cached.get("status") or "ok"
 
 

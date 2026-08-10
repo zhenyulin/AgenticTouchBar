@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import time
 from typing import Any
@@ -9,12 +10,27 @@ from typing import Any
 from . import config
 
 
-def emit(text: str) -> None:
+def emit(text: str, font_color: str | None = None) -> None:
     """Print the widget text for BetterTouchTool, one row per line.
 
     Each row is whitespace-compacted independently so a wrapped lyric keeps its
     leading indent; every other message is still a single row.
+
+    A font_color turns the frame into the widget JSON BTT's script widgets
+    parse -- {"text": ..., "font_color": "r,g,b,a"} -- the same shape the
+    shell widgets emit via btt__emit_json (see widgets/lib/btt-widget.sh).
+    HTML color tags are not a BTT mechanism, so this JSON is the only way a
+    frame gets a color of its own; without one the widget renders in the
+    font color configured in the preset.
     """
+    if font_color is not None:
+        output = json.dumps(
+            {"text": text, "font_color": font_color}, ensure_ascii=False
+        )
+        print(output)
+        remember_output(output)
+        return
+
     rows: list[str] = []
     for raw_row in str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n"):
         indent = raw_row[: len(raw_row) - len(raw_row.lstrip(" "))]

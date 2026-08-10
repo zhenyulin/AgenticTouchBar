@@ -19,7 +19,8 @@ background service.
 
 - BetterTouchTool with a Touch Bar (or Control Strip), with Automation
   permission for BTT to drive the widgets.
-- `zsh`, `curl`, Python 3 (all ship with macOS); `jq` (`brew install jq`).
+- `zsh`, `curl`, Python 3 (all ship with macOS); `jq` and `nowplaying-cli`
+  (`brew install jq nowplaying-cli`).
 - `codexbar` (`brew install codexbar`) for the Codex, Claude and OpenCode
   quota widgets.
 - A running Clash/Mihomo controller for the Clash widgets — defaults target
@@ -54,7 +55,7 @@ Weath Icon, Star — are configured natively in BTT.
 | 🌐 | Selected Clash node's region flag | `widgets/clash-region.sh` | 300 s | `actions/tap-refresh.sh` (region + latency) |
 | Latency | Selected Clash node's latency | `widgets/clash-latency.sh` | 10 s | `actions/tap-refresh.sh` (region + latency) |
 | TIMER | BTT process uptime (diagnostics) | `widgets/timer-widget.sh` | 10 s | `actions/tap-refresh.sh` |
-| Star | Favourite (★/☆) | AppleScript in the preset | 5 s | Toggle favourite |
+| Star | Favourite (★/☆) — only while Apple Music holds Now Playing | AppleScript in the preset + `actions/now-playing-app.sh` | 5 s | Toggle favourite |
 | Weather | Temperature/humidity | BTT-native weather widget | BTT-managed | — |
 
 Each widget script takes its BTT widget UUID as an optional first argument,
@@ -71,6 +72,7 @@ detached process and then refreshes the Lyrics (and Star) widgets.
 | --- | --- |
 | `actions/tap-refresh.sh` | Force one or more widgets to refresh now, even with a fresh cache |
 | `actions/track-changed.sh` | Track-change hook: detached lyrics pre-warm + widget refresh |
+| `actions/now-playing-app.sh` | Prints the current Now Playing holder's bundle id (MediaRemote) — gates the Star widget |
 | `actions/set-widget-variables.sh` | Sets the BTT persistent variables mapping widget names to UUIDs |
 | `actions/btt-freeze-guard.sh` | Freeze watchdog + preventive restart (below) |
 | `actions/freeze-catch.sh` | Manual freeze sampler for diagnostics |
