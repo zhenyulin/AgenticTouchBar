@@ -50,7 +50,7 @@ Weath Icon, Star — are configured natively in BTT.
 | Lyrics | Synchronised lyrics + now playing | `widgets/now-playing-lyrics.sh` | 1 s | Repaint after a short delay |
 | Codex | Codex quota | `widgets/codex-quota.sh` | 120 s | `actions/tap-refresh.sh` |
 | Claude | Claude 5 h / 7 d quota | `widgets/claude-quota.sh` | 300 s | `actions/tap-refresh.sh` |
-| OpenCode | OpenCode Go 5 h / weekly / monthly quota | `widgets/opencode-quota.sh` | 300 s | `actions/tap-refresh.sh` |
+| OpenCode | OpenCode Go weekly quota | `widgets/opencode-quota.sh` | 300 s | `actions/tap-refresh.sh` |
 | 🌐 | Selected Clash node's region flag | `widgets/clash-region.sh` | 300 s | `actions/tap-refresh.sh` (region + latency) |
 | Latency | Selected Clash node's latency | `widgets/clash-latency.sh` | 10 s | `actions/tap-refresh.sh` (region + latency) |
 | TIMER | BTT process uptime (diagnostics) | `widgets/timer-widget.sh` | 10 s | `actions/tap-refresh.sh` |
