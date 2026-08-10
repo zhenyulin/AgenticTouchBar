@@ -45,6 +45,13 @@
 #      knowledge here to check. It is also self-scaling: a long instrumental
 #      break sets a deadline far out instead of tripping a fixed threshold.
 #
+# Every restart is also recorded in logs/restart.tsv: a `before` row the
+# instant a restart is triggered (with the reason), and a `first-tick` row
+# when the next timer/clash-latency tick lands after it -- the first proof
+# the Touch Bar is rendering again. Both rows share the trigger timestamp
+# as restart_id, so the ledger can be joined with logs/freeze-guard.log and
+# the `+` markers in the traces.
+#
 # Not every stuck display is BTT's fault, and restarting BTT does not fix the
 # ones that are not, so an overdue deadline is read together with the widget's
 # newest trace row before reaching for the kill. A "no_sample" tick means the
@@ -72,6 +79,10 @@ REPO_DIR="${BTT_REPO_DIR:-$HOME/Documents/BTT}"
 CACHE_DIR="${BTT_WIDGET_CACHE_DIR:-$REPO_DIR/cache}"
 LOG_DIR="${BTT_LOG_DIR:-$REPO_DIR/logs}"
 LOG="$LOG_DIR/freeze-guard.log"
+# Structured restart ledger. Append-only TSV; one row per phase of a restart
+# (see restart_log). Deliberately a separate file from freeze-guard.log so a
+# restart record is one awk pass away instead of a grep through prose.
+RESTART_LOG="${BTT_RESTART_LOG:-$LOG_DIR/restart.tsv}"
 
 # The shell widgets' shared trace, written by lib/btt-widget.sh.
 WIDGET_TRACE_FILE="${BTT_WIDGET_TRACE_FILE:-$LOG_DIR/trace.tsv}"
@@ -340,6 +351,36 @@ restart_duration() {
 	' "$file" 2>/dev/null || printf '0\n'
 }
 
+# Append one row to logs/restart.tsv, creating the header on first use.
+# Columns: phase, ts, restart_id, btt_pid, key, detail. restart_id is the
+# trigger timestamp, shared by the `before` and `first-tick` rows of one
+# restart so they can be joined.
+restart_log() {
+	local phase="$1" ts="$2" restart_id="$3" pid="$4" key="$5" detail="$6"
+	[[ -f "$RESTART_LOG" ]] || \
+		printf 'phase\tts\trestart_id\tbtt_pid\tkey\tdetail\n' > "$RESTART_LOG" 2>/dev/null || true
+	printf '%s\t%s\t%s\t%s\t%s\t%s\n' \
+		"$phase" "$ts" "$restart_id" "$pid" "$key" "$detail" \
+		>> "$RESTART_LOG" 2>/dev/null || true
+}
+
+# The first heartbeat widget tick strictly after `since`, as "<widget> <ts>",
+# or empty. Used to close the restart ledger: the first timer/clash-latency
+# render after a restart is the earliest proof the Touch Bar is moving again.
+first_heartbeat_after() {
+	local since="$1"
+	/usr/bin/awk -F '\t' -v since="$since" -v widgets="$HEARTBEAT_WIDGETS" '
+		BEGIN {
+			count = split(widgets, names, " ")
+			for (i = 1; i <= count; i++) watched[names[i]] = 1
+		}
+		$3 == "widget" && $1 ~ /^[0-9]+([.][0-9]+)?$/ && ($2 in watched) && ($1 + 0) > since {
+			printf "%s %s", $2, $1
+			exit
+		}
+	' "$WIDGET_TRACE_FILE" 2>/dev/null
+}
+
 write_restart_marker() {
 	local widget_duration lyrics_duration
 	widget_duration="$(restart_duration "$WIDGET_TRACE_FILE")"
@@ -411,6 +452,10 @@ btt_running() {
 # a restart and by the main loop the moment BTT looks healthy again, so an old
 # run never makes a later restart skip its checks.
 DEFER_SINCE=0
+# Epoch (sub-second) at which the current restart was triggered, or 0 when no
+# restart is awaiting its first heartbeat tick. Set by restart_btt and cleared
+# by the main loop the moment that tick lands.
+RESTART_TRIGGER_TS=0
 
 # Record a deferral and report whether the deadline has run out. Callers past
 # the deadline proceed anyway.
@@ -475,6 +520,9 @@ terminate_btt() {
 }
 
 restart_btt() {
+	# reason and detail name the signal that asked for this restart; both go
+	# into the structured ledger (logs/restart.tsv).
+	local reason="${1:-unknown}" detail="${2:-}"
 	# A stopped process is an intentional quit, not a freeze. Do not reopen BTT
 	# unless it is still running and has merely stopped dispatching widgets.
 	local btt_before
@@ -502,6 +550,13 @@ restart_btt() {
 		fi
 		log "restarting despite ${input_reason} -- deferred $(( EPOCHSECONDS - DEFER_SINCE ))s, past ${RESTART_DEFER_MAX}s deadline"
 	fi
+
+	# The restart is about to actually happen. Record it before triggering so
+	# the ledger survives even if the restart itself wedges everything.
+	local trigger_ts="$EPOCHREALTIME"
+	RESTART_TRIGGER_TS=$trigger_ts
+	restart_log before "$trigger_ts" "$trigger_ts" "$btt_before" "$reason" "$detail"
+	log "restarting BTT -- reason=${reason} ${detail}"
 
 	DEFER_SINCE=0
 	write_restart_marker
@@ -571,8 +626,24 @@ while true; do
 		overdue_strikes=0
 		log "no widget tick for ${beat}s -- max=${HEARTBEAT_TIMEOUT}s"
 		LAST_VERDICT=""
-		restart_btt && nudged=0
+		restart_btt heartbeat-timeout \
+			"no widget tick for ${beat}s -- max=${HEARTBEAT_TIMEOUT}s" && nudged=0
 		continue
+	fi
+
+	# Close an open restart in the ledger: the first heartbeat tick after the
+	# trigger proves the Touch Bar is rendering again. Checked before the
+	# nudge branch so the row is written even when the beat is still elevated.
+	if (( RESTART_TRIGGER_TS )); then
+		first_tick="$(first_heartbeat_after "$RESTART_TRIGGER_TS")"
+		if [[ -n "$first_tick" ]]; then
+			first=(${=first_tick})
+			lag="$(printf '%.1f' $(( ${first[2]} - RESTART_TRIGGER_TS )))"
+			restart_log first-tick "$EPOCHREALTIME" "$RESTART_TRIGGER_TS" \
+				"$(btt_pid)" "${first[1]}" "tick_ts=${first[2]} lag=${lag}s"
+			log "first heartbeat tick after restart: ${first[1]} ${lag}s after trigger (tick_ts=${first[2]})"
+			RESTART_TRIGGER_TS=0
+		fi
 	fi
 
 	# Halfway to the timeout, ask for a tick rather than waiting to accuse.
@@ -603,7 +674,8 @@ while true; do
 			log "lyrics display ${lyrics} while heartbeat is ${beat}s old -- restarting"
 			overdue_strikes=0
 			LAST_VERDICT=""
-			restart_btt
+			restart_btt "lyrics-${lyrics%% *}" \
+				"lyrics ${lyrics} while heartbeat is ${beat}s old"
 			;;
 		sampler-stale*|widget-locked*)
 			# BTT is dispatching ticks, so the widget is running and simply has
