@@ -19,6 +19,7 @@ from .providers.local import local_lyrics_record
 from .providers.lrcapi import choose_lrcapi_candidate
 from .providers.lrclib import lrclib_record
 from .providers.netease import netease_record
+from .providers.qqmusic import qqmusic_record
 
 
 def fetch_lyrics_record(track: dict[str, Any]) -> dict[str, Any] | None:
@@ -36,16 +37,35 @@ def fetch_lyrics_record(track: dict[str, Any]) -> dict[str, Any] | None:
     if search_title:
         track = {**track, "search_title": search_title}
 
-    pool = ThreadPoolExecutor(max_workers=3)
+    pool = ThreadPoolExecutor(max_workers=4)
     try:
-        lrcapi_future = pool.submit(choose_lrcapi_candidate, track)
+        qqmusic_future = pool.submit(qqmusic_record, track)
         netease_future = pool.submit(netease_record, track)
+        lrcapi_future = pool.submit(choose_lrcapi_candidate, track)
         lrclib_future = pool.submit(lrclib_record, track)
 
-        # LrcAPI gets a bounded head start for its Chinese-catalog coverage;
-        # when it has not answered by then, NetEase's timed LRC decides next,
-        # then LRCLIB's, and LrcAPI gets the remaining wait only if neither
-        # has anything.
+        # QQ Music and NetEase carry genuinely timed LRC for most Chinese
+        # tracks where LrcAPI is silent, so their answers decide first.
+        # LrcAPI then gets a bounded preference window over LRCLIB, and the
+        # remaining wait only if neither has anything.
+        try:
+            qqmusic = qqmusic_future.result()
+        except Exception as qqmusic_exc:
+            log_error(f"QQ Music lookup failed; using NetEase: {qqmusic_exc}")
+            qqmusic = None
+
+        if qqmusic is not None:
+            return qqmusic
+
+        try:
+            netease = netease_future.result()
+        except Exception as netease_exc:
+            log_error(f"NetEase lookup failed; using LrcAPI: {netease_exc}")
+            netease = None
+
+        if netease is not None:
+            return netease
+
         lrcapi_timed_out = False
         try:
             lrcapi = lrcapi_future.result(timeout=config.LRCAPI_PREFERENCE_SECONDS)
@@ -53,20 +73,11 @@ def fetch_lyrics_record(track: dict[str, Any]) -> dict[str, Any] | None:
             lrcapi_timed_out = True
             lrcapi = None
         except Exception as exc:
-            log_error(f"LrcAPI lookup failed; using NetEase: {exc}")
+            log_error(f"LrcAPI lookup failed; using LRCLIB: {exc}")
             lrcapi = None
 
         if lrcapi is not None:
             return lrcapi
-
-        try:
-            netease = netease_future.result()
-        except Exception as netease_exc:
-            log_error(f"NetEase lookup failed; using LRCLIB: {netease_exc}")
-            netease = None
-
-        if netease is not None:
-            return netease
 
         try:
             lrclib = lrclib_future.result()

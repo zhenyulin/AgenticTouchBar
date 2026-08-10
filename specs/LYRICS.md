@@ -66,7 +66,7 @@ Lyrics Touch Bar feature
 │   ├── Prefer local LRC files
 │   ├── Search Apple Music's cached TTML
 │   ├── Apply the Mandopop catalog title when available
-│   ├── Race LrcAPI, NetEase, and LRCLIB with bounded waiting
+│   ├── Race QQ Music, NetEase, LrcAPI, and LRCLIB with bounded waiting
 │   └── Accept only a sufficiently matched synchronized/instrumental result
 ├── Fit lyrics beside Now Playing
 │   ├── Measure BTT-like text width in a detached JXA helper
@@ -184,16 +184,18 @@ part of their refresh contract.
 | 3 | A local `.lrc` record matches | Use the local record without remote access. |
 | 4 | Apple Music's `Cache.db` contains matching recent TTML | Convert TTML to LRC and use it. |
 | 5 | A Chinese catalog title is available | Add it as the remote search title, without replacing the original track identity. |
-| 6 | LrcAPI returns an acceptable result within its preference window | Prefer LrcAPI. |
-| 7 | LrcAPI times out, fails, or returns no acceptable result | Await NetEase's timed LRC, then LRCLIB, then a later acceptable LrcAPI result if available. |
-| 8 | No provider returns an acceptable result | Persist `not_found` or `cache_error` according to the failure, then retry after its configured delay. |
+| 6 | QQ Music returns an acceptable result | Prefer QQ Music. |
+| 7 | QQ Music misses or fails | Await NetEase's timed LRC. |
+| 8 | NetEase misses or fails | Await LrcAPI within its preference window, then LRCLIB, then a later acceptable LrcAPI result if available. |
+| 9 | No provider returns an acceptable result | Persist `not_found` or `cache_error` according to the failure, then retry after its configured delay. |
 
-Provider lookup is bounded and concurrent. LrcAPI, NetEase, and LRCLIB are
-started together; provider-specific query retries must not turn the one-second
-widget tick into a blocking network request. NetEase fills the gap left when
-LRCLIB only carries plain text for a Chinese track (its even-spread LRC is a
-stopgap, never a sync) and LrcAPI is silent; NetEase's public lyric endpoint
-usually has genuinely timed LRC for those tracks.
+Provider lookup is bounded and concurrent. QQ Music, NetEase, LrcAPI, and
+LRCLIB are started together; provider-specific query retries must not turn the
+one-second widget tick into a blocking network request. QQ Music and NetEase
+fill the gap left when LRCLIB only carries plain text for a Chinese track (its
+even-spread LRC is a stopgap, never a sync) and LrcAPI is silent; their public
+lyric endpoints usually have genuinely timed LRC for those tracks. QQ Music's
+lyric endpoint rejects requests without a y.qq.com referer.
 
 ### Candidate Acceptance
 
@@ -267,7 +269,7 @@ missing lyric cache   -> previous stdout; trace outcome: pending
 **Input:** a real track metadata record and its versioned cache key.
 
 **Transformation:** local LRC -> Apple Music TTML cache -> catalog-assisted
-remote lookup -> concurrent LrcAPI/NetEase/LRCLIB candidate selection.
+remote lookup -> concurrent QQ Music/NetEase/LrcAPI/LRCLIB candidate selection.
 
 **Outputs:** an atomically written record with one of the supported outcomes:
 usable lyrics, instrumental, `not_found`, or `cache_error`.
@@ -318,7 +320,7 @@ cache records are keyed so one track cannot replace another track's lyrics.
 | Cache identity and atomic persistence | [`widgets/lyrics/cache.py`](../widgets/lyrics/cache.py#L1), [`widgets/lyrics/metadata.py`](../widgets/lyrics/metadata.py#L183) |
 | Provider order and bounded concurrency | [`widgets/lyrics/fetch.py`](../widgets/lyrics/fetch.py#L22), [`widgets/lyrics/concurrency.py`](../widgets/lyrics/concurrency.py#L1) |
 | Local LRC and Apple Music cache adapters | [`widgets/lyrics/providers/local.py`](../widgets/lyrics/providers/local.py#L1), [`widgets/lyrics/providers/apple_cache.py`](../widgets/lyrics/providers/apple_cache.py#L1) |
-| Remote provider adapters | [`widgets/lyrics/providers/lrcapi.py`](../widgets/lyrics/providers/lrcapi.py#L1), [`widgets/lyrics/providers/netease.py`](../widgets/lyrics/providers/netease.py#L1), [`widgets/lyrics/providers/lrclib.py`](../widgets/lyrics/providers/lrclib.py#L1) |
+| Remote provider adapters | [`widgets/lyrics/providers/qqmusic.py`](../widgets/lyrics/providers/qqmusic.py#L1), [`widgets/lyrics/providers/netease.py`](../widgets/lyrics/providers/netease.py#L1), [`widgets/lyrics/providers/lrcapi.py`](../widgets/lyrics/providers/lrcapi.py#L1), [`widgets/lyrics/providers/lrclib.py`](../widgets/lyrics/providers/lrclib.py#L1) |
 | Candidate normalization and acceptance | [`widgets/lyrics/metadata.py`](../widgets/lyrics/metadata.py#L48), [`widgets/lyrics/matching.py`](../widgets/lyrics/matching.py#L1) |
 | LRC parsing and active-line selection | [`widgets/lyrics/lrc.py`](../widgets/lyrics/lrc.py#L1), [`widgets/lyrics/layout.py`](../widgets/lyrics/layout.py#L1) |
 | Viewport measurement and persistence | [`widgets/lyrics/viewport.py`](../widgets/lyrics/viewport.py#L1), [`widgets/lyrics/text_width.js`](../widgets/lyrics/text_width.js#L1) |
@@ -338,7 +340,7 @@ checks around detached processes and BTT.
 | Last-frame preservation | Run a tick with no usable sample or a cache miss and verify stdout remains the prior output. |
 | Cache safety | Write valid, malformed, `not_found`, and `cache_error` records; verify atomic replacement, cleanup, and retry deadlines. |
 | Matching | Exercise aliases, CJK normalization, duration differences, instrumental candidates, and the `0.60` acceptance threshold. |
-| Provider fallback | Make local, Apple cache, LrcAPI, NetEase, and LRCLIB paths succeed/fail in order; verify the first acceptable result wins. |
+| Provider fallback | Make local, Apple cache, QQ Music, NetEase, LrcAPI, and LRCLIB paths succeed/fail in order; verify the first acceptable result wins. |
 | LRC timing | Parse offsets, enhanced timestamps, duplicate timestamps, and an empty/no-line interval. |
 | Layout | Verify punctuation/space wrapping, two-row limits, continuation indentation, and marquee delay/rate at narrow and fallback widths. |
 | Concurrency | Hold widget and per-track locks; verify the old frame is emitted and stale locks can be removed. |
@@ -357,7 +359,7 @@ These are observational checks, not substitutes for deterministic unit tests.
 - The exact BetterTouchTool scheduling and `refresh_widget` guarantees are
   external behavior. The repository can request a repaint but cannot prove BTT
   will dispatch it during an AppKit or shell-runner freeze.
-- Apple Music, `nowplaying-cli`, MediaRemote, LrcAPI, NetEase, LRCLIB, OpenCC, and
+- Apple Music, `nowplaying-cli`, MediaRemote, QQ Music, NetEase, LrcAPI, LRCLIB, OpenCC, and
   Apple Music's `Cache.db` are external dependency boundaries. Their response
   schemas, permissions, rate limits, and availability need integration checks.
 - `BTT_LYRICS_LOCAL_DIR`, widget UUID variables, cache paths, and timing values

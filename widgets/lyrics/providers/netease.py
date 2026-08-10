@@ -8,21 +8,13 @@ endpoints are public and token-free (song lyric downloads require no login).
 from __future__ import annotations
 
 import json
-import re
 from typing import Any
 
 from .. import config
 from ..concurrency import fetch_seconds_remaining, map_concurrently
+from ..lrc import strip_credit_lines
 from ..matching import candidate_score
 from ..metadata import metadata_variants, track_title_variants
-
-# NetEase LRCs carry one-line credit tags at song start (作词/作曲/编曲/制作人/...).
-# They have timestamps and would occupy the widget for the whole intro, so
-# drop lines whose text is only such a tag.
-NETEASE_METADATA_LINE_RE = re.compile(
-    r"^(?:作词|作曲|编曲|制作人|制作|混音|录音|母带|监制|企划|统筹|出品|发行|封面|OP|SP)"
-    r"(?:[：:]\s*|\s)"
-)
 
 
 def netease_request(path: str, params: dict[str, str]) -> Any:
@@ -112,11 +104,7 @@ def netease_lyrics(song_id: int) -> str:
     if not isinstance(payload, dict) or payload.get("code") != 200:
         return ""
     lyrics = str((payload.get("lrc") or {}).get("lyric") or "")
-    return "\n".join(
-        line
-        for line in lyrics.splitlines()
-        if not NETEASE_METADATA_LINE_RE.match(config.TIMESTAMP_RE.sub("", line).strip())
-    )
+    return strip_credit_lines(lyrics)
 
 
 def as_netease_record(song: dict[str, Any], lyrics: str) -> dict[str, Any]:

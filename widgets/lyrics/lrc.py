@@ -2,7 +2,27 @@
 
 from __future__ import annotations
 
+import re
+
 from . import config
+
+# One-line credit tags NetEase/QQ LRCs carry at song start (作词/作曲/词/曲/
+# 编曲/制作人/...). They have timestamps and would occupy the widget for the
+# whole intro, so drop lines whose text is only such a tag.
+CREDIT_LINE_RE = re.compile(
+    r"^(?:作词|作曲|编曲|制作人|制作|混音|录音|母带|监制|企划|统筹|出品|发行|封面|OP|SP)"
+    r"(?:[：:]\s*|\s)"
+    r"|^(?:词|曲)[：:]"
+)
+
+
+def strip_credit_lines(lyrics: str) -> str:
+    """Drop timestamped credit-tag lines from a provider LRC."""
+    return "\n".join(
+        line
+        for line in lyrics.splitlines()
+        if not CREDIT_LINE_RE.match(config.TIMESTAMP_RE.sub("", line).strip())
+    )
 
 
 def plain_to_lrc(plain_text: str, duration: float) -> str:

@@ -184,6 +184,15 @@ ENABLE_NETEASE = os.environ.get("BTT_LYRICS_NETEASE", "1") not in {
 NETEASE_TIMEOUT_SECONDS = float(os.environ.get("BTT_LYRICS_NETEASE_TIMEOUT", "4.0"))
 NETEASE_MAX_SEARCH_QUERIES = int(os.environ.get("BTT_LYRICS_NETEASE_MAX_SEARCH", "2"))
 NETEASE_MAX_LYRIC_FETCHES = int(os.environ.get("BTT_LYRICS_NETEASE_MAX_LYRIC", "3"))
+QQMUSIC_API_BASE = "https://c.y.qq.com"
+ENABLE_QQMUSIC = os.environ.get("BTT_LYRICS_QQMUSIC", "1") not in {
+    "0",
+    "false",
+    "False",
+}
+QQMUSIC_TIMEOUT_SECONDS = float(os.environ.get("BTT_LYRICS_QQMUSIC_TIMEOUT", "4.0"))
+QQMUSIC_MAX_SEARCH_QUERIES = int(os.environ.get("BTT_LYRICS_QQMUSIC_MAX_SEARCH", "2"))
+QQMUSIC_MAX_LYRIC_FETCHES = int(os.environ.get("BTT_LYRICS_QQMUSIC_MAX_LYRIC", "3"))
 # Providers and their individual queries run concurrently so a slow public
 # endpoint does not serialize every title and artist variant.
 FETCH_WORKERS = max(int(os.environ.get("BTT_LYRICS_FETCH_WORKERS", "6")), 1)
