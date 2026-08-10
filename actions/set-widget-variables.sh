@@ -8,6 +8,7 @@ tell application "BetterTouchTool"
     set_persistent_string_variable "BTT_WIDGET_CLAUDE_UUID" to "8C95B746-77DA-4B76-A966-6EBB10E755F4"
     set_persistent_string_variable "BTT_WIDGET_TIMER_UUID" to "E25C395A-FE13-4216-BC59-6317FD0454BF"
     set_persistent_string_variable "BTT_WIDGET_NOW_PLAYING_UUID" to "710F54C5-25B0-4A2C-B960-D9C0FE78B1B7"
+    set_persistent_string_variable "BTT_WIDGET_OPENCODE_UUID" to "AE01C9E2-9EC6-4329-8358-8389BFB850F8"
     set_persistent_string_variable "BTT_WIDGET_CODEX_UUID" to "508ECCA7-BAD5-469D-9418-94E2C370AE37"
     set_persistent_string_variable "BTT_WIDGET_DATE_TIME_UUID" to "0E55B8EC-C241-467A-A341-A1780D95047E"
     set_persistent_string_variable "BTT_WIDGET_LYRICS_UUID" to "E19BB023-5060-4A56-95C8-6E7402779870"
@@ -15,5 +16,7 @@ tell application "BetterTouchTool"
     set_persistent_string_variable "BTT_WIDGET_CLASH_REGION_UUID" to "CF76E4C0-5986-41F9-8F3E-00A6C8F160FE"
     set_persistent_string_variable "BTT_WIDGET_CLASH_LATENCY_UUID" to "59F8C568-022F-4BD9-B3EB-63A7676592DF"
     set_persistent_string_variable "BTT_WIDGET_STAR_UUID" to "A05C5D37-7EAA-4F7B-AC00-23183CC8C6A1"
+    -- Time/weather toggle: 0 = time shown, 1 = weather shown.
+    set_persistent_string_variable "BTT_SHOW_WEATHER" to "0"
 end tell
 APPLESCRIPT

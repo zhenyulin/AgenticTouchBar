@@ -20,7 +20,8 @@ background service.
 - BetterTouchTool with a Touch Bar (or Control Strip), with Automation
   permission for BTT to drive the widgets.
 - `zsh`, `curl`, Python 3 (all ship with macOS); `jq` (`brew install jq`).
-- `codexbar` (`brew install codexbar`) for the Codex and Claude quota widgets.
+- `codexbar` (`brew install codexbar`) for the Codex, Claude and OpenCode
+  quota widgets.
 - A running Clash/Mihomo controller for the Clash widgets — defaults target
   Clash Verge's Unix socket `/tmp/verge/verge-mihomo.sock` with the API at
   `http://127.0.0.1:9097` (all tunable, see Configuration).
@@ -49,6 +50,7 @@ Weath Icon, Star — are configured natively in BTT.
 | Lyrics | Synchronised lyrics + now playing | `widgets/now-playing-lyrics.sh` | 1 s | Repaint after a short delay |
 | Codex | Codex quota | `widgets/codex-quota.sh` | 120 s | `actions/tap-refresh.sh` |
 | Claude | Claude 5 h / 7 d quota | `widgets/claude-quota.sh` | 300 s | `actions/tap-refresh.sh` |
+| OpenCode | OpenCode Go 5 h / weekly / monthly quota | `widgets/opencode-quota.sh` | 300 s | `actions/tap-refresh.sh` |
 | 🌐 | Selected Clash node's region flag | `widgets/clash-region.sh` | 300 s | `actions/tap-refresh.sh` (region + latency) |
 | Latency | Selected Clash node's latency | `widgets/clash-latency.sh` | 10 s | `actions/tap-refresh.sh` (region + latency) |
 | TIMER | BTT process uptime (diagnostics) | `widgets/timer-widget.sh` | 10 s | `actions/tap-refresh.sh` |
@@ -86,7 +88,7 @@ BTT's shell actions can see them (BTT environment variables or `~/.zshenv`).
 | `CLASH_API`, `CLASH_SECRET`, `CLASH_SOCKET`, `CLASH_GROUP` | `http://127.0.0.1:9097`, `""`, `/tmp/verge/verge-mihomo.sock`, `PROXY` | Clash widgets (`widgets/lib/clash.sh`) |
 | `CLASH_ICON`, `CLASH_FONT_COLOR` | — | Icon and colour for the Clash widgets |
 | `CLASH_LATENCY_MIN_MS`, `CLASH_LATENCY_MAX_MS` | `150`, `500` | Latency colour bands |
-| `CLAUDE_QUOTA_MAX_AGE`, `CODEX_QUOTA_MAX_AGE` | `300` | Quota cache freshness (seconds) |
+| `CLAUDE_QUOTA_MAX_AGE`, `CODEX_QUOTA_MAX_AGE`, `OPENCODE_QUOTA_MAX_AGE` | `300` | Quota cache freshness (seconds) |
 | `BTT_LYRICS_*` | — | Lyrics tunables — see [`specs/LYRICS.md`](specs/LYRICS.md) |
 
 ## The Lyrics feature
