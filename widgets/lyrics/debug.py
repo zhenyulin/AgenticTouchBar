@@ -11,6 +11,7 @@ from .cache import cache_path, lock_path
 from .metadata import track_cache_key
 from .providers.apple_cache import apple_cache_record
 from .viewport import (
+    lyric_budget_px,
     lyric_width_px,
     now_playing_lines,
     now_playing_width_px,
@@ -31,12 +32,13 @@ def diagnose_current() -> int:
     print(json.dumps(track, ensure_ascii=False, indent=2))
     print(f"cache key: {track_cache_key(track)}")
     now_playing_px = now_playing_width_px(track)
-    lyric_px = lyric_width_px(now_playing_px)
+    budget_px = lyric_budget_px(track)
+    lyric_px = lyric_width_px(now_playing_px, budget_px)
     print(
         f"now playing rows: {now_playing_lines(track)} -> {now_playing_px:.0f}px, "
         f"leaving the lyric {lyric_px:.0f}px "
         f"({max(round(lyric_px / config.PIXELS_PER_CELL), 1)} cells) "
-        f"of {config.LYRIC_WIDTH_BUDGET_PX:.0f}px"
+        f"of {budget_px:.0f}px"
     )
     print(f"Apple Music lyrics cache: {config.APPLE_MUSIC_CACHE_DB}")
     apple_cached = apple_cache_record(track)

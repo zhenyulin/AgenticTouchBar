@@ -88,6 +88,10 @@ def read_apple_music() -> dict[str, Any]:
         "album": album.strip(),
         "duration": max(duration_value, 0.0),
         "position": max(position_value, 0.0),
+        # Which player this sample came from. The viewport budget grows by
+        # one word's width when the source is not Apple Music, because the
+        # Star widget beside the lyric only renders for Apple Music.
+        "source": "apple_music",
     }
     return track
 

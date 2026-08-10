@@ -6,11 +6,13 @@ Now Playing widget reads, so this is how the Lyrics widget follows QQ Music.
 
 Apple Music is read directly over AppleScript instead (see apple_music.py):
 that is faster and gives an exact playback position. MediaRemote does not --
-QQ Music, at least, never populates its elapsed-time field, which stays at 0
-for a track's entire run -- so position here is tracked by hand across
-samples: reset to zero on a title/artist change, held while paused, advanced
-by wall clock while playing. It will not follow a seek made inside the
-player itself, only play/pause and track changes.
+QQ Music's normalized fields report an elapsed time of 0, so position here
+is tracked by hand across samples: reset to zero on a title/artist change,
+held while paused, advanced by wall clock while playing. The raw Now
+Playing dictionary, however, does carry a real elapsed time that QQ Music
+refreshes on player events (seek, pause, resume, track restarts), so the
+hand-tracked clock re-anchors to it whenever the reported value changes --
+an in-player seek is followed on the next sample instead of being lost.
 """
 
 from __future__ import annotations
@@ -34,24 +36,32 @@ def _cli_path() -> str | None:
     return _CLI_PATH
 
 
+_RAW_FIELD_KEYS = {
+    "kMRMediaRemoteNowPlayingInfoTitle": "title",
+    "kMRMediaRemoteNowPlayingInfoArtist": "artist",
+    "kMRMediaRemoteNowPlayingInfoAlbum": "album",
+    "kMRMediaRemoteNowPlayingInfoDuration": "duration",
+    "kMRMediaRemoteNowPlayingInfoPlaybackRate": "playbackRate",
+    "kMRMediaRemoteNowPlayingInfoElapsedTime": "elapsedTime",
+    "kMRMediaRemoteNowPlayingInfoClientBundleIdentifier": "clientBundleIdentifier",
+}
+
+
 def _read_raw() -> dict[str, Any] | None:
+    """The raw MediaRemote Now Playing dictionary, mapped to plain keys.
+
+    ``nowplaying-cli get-raw`` returns the raw framework dictionary, which
+    is the only view where QQ Music reports its elapsed time: the
+    normalized ``get`` command always shows 0 for it. The raw dict also
+    carries everything else the fallback needs, so one call covers it all.
+    """
     cli = _cli_path()
     if cli is None:
         return None
 
     try:
         result = subprocess.run(
-            [
-                cli,
-                "get",
-                "--json",
-                "title",
-                "artist",
-                "album",
-                "duration",
-                "playbackRate",
-                "clientBundleIdentifier",
-            ],
+            [cli, "get-raw"],
             capture_output=True,
             text=True,
             timeout=config.MEDIA_REMOTE_TIMEOUT_SECONDS,
@@ -68,8 +78,14 @@ def _read_raw() -> dict[str, Any] | None:
     try:
         payload = json.loads(result.stdout)
     except json.JSONDecodeError as exc:
-        raise RuntimeError(f"Unexpected nowplaying-cli output: {result.stdout!r}") from exc
-    return payload if isinstance(payload, dict) else None
+        raise RuntimeError(
+            f"Unexpected nowplaying-cli output: {result.stdout!r}"
+        ) from exc
+    if not isinstance(payload, dict):
+        return None
+    return {
+        name: payload[key] for key, name in _RAW_FIELD_KEYS.items() if key in payload
+    }
 
 
 def _read_position_state() -> dict[str, Any]:
@@ -121,20 +137,38 @@ def read_media_remote() -> dict[str, Any]:
     now = time.time()
     identity = _track_identity(title, artist)
     saved = _read_position_state()
+    previous_elapsed = 0.0
+    position = 0.0
     if saved.get("identity") == identity:
-        position = float(saved.get("position", 0.0) or 0.0)
+        previous_elapsed = max(float(saved.get("elapsed_time", 0.0) or 0.0), 0.0)
+        position = max(float(saved.get("position", 0.0) or 0.0), 0.0)
         if playing:
             elapsed = max(now - float(saved.get("updated_at", now) or now), 0.0)
             position += elapsed * rate
-    else:
-        position = 0.0
+    try:
+        reported = max(float(raw.get("elapsedTime") or 0.0), 0.0)
+    except (TypeError, ValueError):
+        reported = 0.0
+    # QQ Music freezes the elapsed-time field during playback and only
+    # refreshes it on player events (seek, pause, resume, track restarts),
+    # so the hand-tracked clock drifts from reality after a seek. A change
+    # in the reported value is that event signal: re-anchor the clock to
+    # it. Players that report live elapsed times re-anchor every sample,
+    # which keeps them exact too.
+    if reported > 0 and abs(reported - previous_elapsed) >= 0.5:
+        position = reported
     if duration:
         position = min(position, duration)
     position = max(position, 0.0)
 
     atomic_write_json(
         config.MEDIA_REMOTE_POSITION_PATH,
-        {"identity": identity, "position": position, "updated_at": now},
+        {
+            "identity": identity,
+            "position": position,
+            "updated_at": now,
+            "elapsed_time": reported,
+        },
     )
 
     return {
@@ -144,4 +178,7 @@ def read_media_remote() -> dict[str, Any]:
         "album": album,
         "duration": duration,
         "position": position,
+        # Which player this sample came from; see viewport.lyric_budget_px
+        # for why the lyric budget grows for non-Apple Music sources.
+        "source": "media_remote",
     }

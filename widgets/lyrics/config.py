@@ -38,6 +38,12 @@ PIXELS_PER_CELL = float(os.environ.get("BTT_LYRICS_PX_PER_CELL", "7.0"))
 # Calibrated against the current 13 px lyrics widget: the existing track leaves
 # enough room for the next complete word without changing the widget font.
 LYRIC_WIDTH_BUDGET_PX = float(os.environ.get("BTT_LYRICS_WIDTH_BUDGET_PX", "485"))
+# The Star widget (★/☆) draws only while Apple Music is the player; with
+# QQ Music or anything else it renders empty and BTT hides it, freeing the
+# row for the Now Playing + lyric pair. They may then take one word's width
+# more: "word" measures ~30 px at the 13 pt lyrics font. The pair's budget
+# grows by this only for non-Apple Music tracks (see viewport.lyric_budget_px).
+LYRIC_EXTRA_WORD_PX = float(os.environ.get("BTT_LYRICS_EXTRA_WORD_PX", "30"))
 # Bounds on the lyric's own share. The floor stops a very long title from
 # squeezing the lyric down to a few characters -- past it the row overflows
 # the Touch Bar's right edge instead, which is at least still readable.

@@ -100,11 +100,25 @@ def now_playing_width_px(track: dict[str, Any]) -> float:
     return min(max(widths), config.NOW_PLAYING_MAX_TEXT_PX)
 
 
-def lyric_width_px(now_playing_px: float) -> float:
+def lyric_budget_px(track: dict[str, Any]) -> float:
+    """What the Now Playing + lyric pair may take for this track.
+
+    The Star widget (★/☆) only renders while Apple Music plays; with any
+    other player it draws empty and BTT hides it, leaving the pair one
+    word's width more of the row. A track without a source marker reads
+    as Apple Music, so the extra never applies to unknown samples.
+    """
+    budget = config.LYRIC_WIDTH_BUDGET_PX
+    if track.get("source", "apple_music") != "apple_music":
+        budget += config.LYRIC_EXTRA_WORD_PX
+    return budget
+
+
+def lyric_width_px(now_playing_px: float, budget_px: float) -> float:
     """The lyric's share of the budget the two widgets divide between them."""
     return min(
         max(
-            config.LYRIC_WIDTH_BUDGET_PX - now_playing_px,
+            budget_px - now_playing_px,
             config.MIN_LYRIC_WIDTH_PX,
         ),
         config.MAX_LYRIC_WIDTH_PX,
@@ -172,9 +186,11 @@ def ensure_viewport(key: str, track: dict[str, Any]) -> None:
         return
 
     stored = read_viewport()
+    budget = lyric_budget_px(track)
     if (
         stored.get("key") == key
         and stored.get("metrics_version") == CHARACTER_METRICS_VERSION
+        and stored.get("budget_px") == budget
     ):
         return
 
@@ -185,6 +201,7 @@ def ensure_viewport(key: str, track: dict[str, Any]) -> None:
         {
             "key": key,
             "lyric_px": carried,
+            "budget_px": budget,
             "measured": False,
             "at": time.time(),
         }
@@ -206,7 +223,8 @@ def store_measured_viewport(key: str, track: dict[str, Any]) -> None:
     started = time.monotonic()
     row_widths, character_widths = measure_track(track)
     now_playing_px = min(max(row_widths), config.NOW_PLAYING_MAX_TEXT_PX)
-    lyric_px = lyric_width_px(now_playing_px)
+    budget_px = lyric_budget_px(track)
+    lyric_px = lyric_width_px(now_playing_px, budget_px)
 
     # The track can change again while osascript is starting up. Landing a
     # stale measurement over the newer track's claim would leave the wrong
@@ -219,6 +237,7 @@ def store_measured_viewport(key: str, track: dict[str, Any]) -> None:
         {
             "key": key,
             "lyric_px": lyric_px,
+            "budget_px": budget_px,
             "now_playing_px": now_playing_px,
             "now_playing_rows_px": row_widths,
             "character_widths": character_widths,

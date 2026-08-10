@@ -145,7 +145,7 @@ must not leave the widget permanently locked.
 | Music is stopped or not running | Try MediaRemote | A non-Music player may supply the track; otherwise the widget becomes idle. |
 | AppleScript fails for a reason other than permission denial | Keep the previous sample | The widget avoids replacing valid state with an unverified failure. |
 | MediaRemote changes title or artist | Reset its locally tracked position | Subsequent playback position starts from the new track's sample. |
-| MediaRemote cannot observe an in-player seek | Keep its projected position | Seeking is a known limitation of this fallback. |
+| MediaRemote reports a new raw elapsed time | Re-anchor the projected position to it | QQ Music refreshes this field on seek/pause/resume/restart, so in-player seeks are followed on the next sample. |
 
 Playback state is persisted atomically as a current snapshot. It is not a
 history of tracks; lyric history belongs in per-track cache records.
@@ -369,9 +369,11 @@ These are observational checks, not substitutes for deterministic unit tests.
   those widgets do not call the shared shell marker consumer. The intended
   cleanup/ownership decision remains open: remove those marker writes for
   non-shell widgets or implement an explicit consumer.
-- MediaRemote cannot observe in-player seeks, and Apple Music placeholder
-  transitions are inherently asynchronous; callers must preserve `unknown`,
-  `timeout`, and unavailable states rather than inventing track identity.
+- MediaRemote seek observation relies on QQ Music refreshing the raw elapsed
+  time on player events; players that never refresh it keep the projected
+  clock, and Apple Music placeholder transitions are inherently asynchronous;
+  callers must preserve `unknown`, `timeout`, and unavailable states rather
+  than inventing track identity.
 - The README documents a BetterTouchTool/AppKit freeze outside this repository.
   The diagnostic traces can identify it, but no Lyrics implementation change
   can repair that upstream scheduling failure.
