@@ -162,7 +162,7 @@
     "BSTSnapAreaDefaultShowPictogram" : false,
     "BSTSnapAreaDefaultPictoDistanceFromBottom" : 0.10000000149011612
   },
-  "BTTPresetUUID" : "5837E58E-1998-44B0-9F89-36B526FA1EF0",
+  "BTTPresetUUID" : "30648B14-7168-4DB4-B76C-99510BA0CAA4",
   "BTTPresetContent" : [
     {
       "BTTAppBundleIdentifier" : "com.microsoft.VSCode",
@@ -202,7 +202,7 @@
       },
       "BTTTriggers" : [
         {
-          "BTTLastUpdatedAt" : 1786346021.584832,
+          "BTTLastUpdatedAt" : 1786346154.117651,
           "BTTTriggerType" : 642,
           "BTTTriggerTypeDescriptionReadOnly" : "Shell Script \/ Task Widget",
           "BTTTriggerTypeDescription" : "OpenCode",
@@ -313,7 +313,7 @@
           ]
         },
         {
-          "BTTLastUpdatedAt" : 1786346021.5849271,
+          "BTTLastUpdatedAt" : 1786346154.117754,
           "BTTTriggerType" : 642,
           "BTTTriggerTypeDescriptionReadOnly" : "Shell Script \/ Task Widget",
           "BTTTriggerTypeDescription" : "🌐",
@@ -365,7 +365,7 @@
           }
         },
         {
-          "BTTLastUpdatedAt" : 1786346021.5849152,
+          "BTTLastUpdatedAt" : 1786346154.1177421,
           "BTTTriggerType" : 642,
           "BTTTriggerTypeDescriptionReadOnly" : "Shell Script \/ Task Widget",
           "BTTTriggerTypeDescription" : "Latency",
@@ -509,7 +509,7 @@
           }
         },
         {
-          "BTTLastUpdatedAt" : 1786346021.5848908,
+          "BTTLastUpdatedAt" : 1786346154.117718,
           "BTTTriggerType" : 642,
           "BTTTriggerTypeDescriptionReadOnly" : "Shell Script \/ Task Widget",
           "BTTTriggerTypeDescription" : "TIMER",
@@ -753,7 +753,7 @@
           ]
         },
         {
-          "BTTLastUpdatedAt" : 1786346021.584904,
+          "BTTLastUpdatedAt" : 1786346154.1177301,
           "BTTTriggerType" : 642,
           "BTTTriggerTypeDescriptionReadOnly" : "Shell Script \/ Task Widget",
           "BTTTriggerTypeDescription" : "Lyrics",
@@ -810,7 +810,7 @@
           }
         },
         {
-          "BTTLastUpdatedAt" : 1786345832.782073,
+          "BTTLastUpdatedAt" : 1786346137.27722,
           "BTTTriggerType" : 652,
           "BTTTriggerTypeDescriptionReadOnly" : "Now Playing Widget",
           "BTTTriggerClass" : "BTTTriggerTypeTouchBar",
@@ -842,11 +842,11 @@
             }
           ],
           "BTTTriggerConfig" : {
-            "BTTTouchBarLine1MaxChars" : 68,
-            "BTTTouchBarFontColor" : "242.250000, 242.250000, 242.250000, 205.145550",
-            "BTTTouchBarIconTextOffset" : 5,
+            "BTTTouchBarButtonFontSize" : 12,
+            "BTTTouchBarHideCover" : 0,
+            "BTTTouchBarFreeSpaceAfterButton" : -5,
             "BTTTouchBarBringPlayerToFront" : 0,
-            "BTTTouchBarItemPadding" : -5,
+            "BTTTouchBarOnlyShowIcon" : false,
             "BTTTouchBarIconInvert" : false,
             "BTTTouchBarButtonColor" : "0.000000, 0.000000, 0.000000, 255.000000",
             "BTTTouchBarItemPlacement" : 0,
@@ -856,7 +856,7 @@
             "BTTTouchBarButtonHoverColor" : "248.880000, 146.115000, 128.010000, 181.050000",
             "BTTTouchBarButtonHeight" : 15,
             "BTTTouchBarButtonWidth" : 100,
-            "BTTTouchBarLine2Format" : "{artist} ❥ {album}",
+            "BTTTouchBarLine2Format" : "{artist}",
             "BTTTouchBarItemIconHeight" : 30,
             "BTTTouchBarButtonTextAlignment" : 0,
             "BTTTouchBarAlternateBackgroundColor" : "75.323769, 75.323769, 75.323769, 255.000000",
@@ -865,17 +865,17 @@
             "BTTTouchBarDefaultPlayer" : 0,
             "BTTTouchBarItemIconWidth" : 30,
             "BTTTouchBarLongPressActionName" : "Open Player",
-            "BTTTouchBarLine1Format" : "▸ {title}",
+            "BTTTouchBarLine1Format" : "{album} ❥ {title}",
+            "BTTTouchBarIconTextOffset" : 5,
+            "BTTTouchBarFontColor" : "242.250000, 242.250000, 242.250000, 205.145550",
+            "BTTTouchBarLine1MaxChars" : 68,
             "BTTTouchBarFreeSpaceBeforeButton" : 0,
             "BTTTouchBarHideWhenNoPlayer" : true,
-            "BTTTouchBarButtonFontSize" : 12,
-            "BTTTouchBarHideCover" : 0,
-            "BTTTouchBarFreeSpaceAfterButton" : -5,
-            "BTTTouchBarOnlyShowIcon" : false
+            "BTTTouchBarItemPadding" : -5
           }
         },
         {
-          "BTTLastUpdatedAt" : 1786346021.584867,
+          "BTTLastUpdatedAt" : 1786346154.1176901,
           "BTTTriggerType" : 639,
           "BTTTriggerTypeDescriptionReadOnly" : "Apple Script \/ JavaScript Widget",
           "BTTTriggerTypeDescription" : "Star",
@@ -1107,7 +1107,7 @@
           "BTTAutoAdaptToKeyboardLayout" : 0
         },
         {
-          "BTTLastUpdatedAt" : 1786346021.5848532,
+          "BTTLastUpdatedAt" : 1786346154.1176748,
           "BTTTriggerType" : 642,
           "BTTTriggerTypeDescriptionReadOnly" : "Shell Script \/ Task Widget",
           "BTTTriggerTypeDescription" : "Claude",
@@ -1159,7 +1159,7 @@
           }
         },
         {
-          "BTTLastUpdatedAt" : 1786346021.5848789,
+          "BTTLastUpdatedAt" : 1786346154.1177049,
           "BTTTriggerType" : 642,
           "BTTTriggerTypeDescriptionReadOnly" : "Shell Script \/ Task Widget",
           "BTTTriggerTypeDescription" : "Codex",
