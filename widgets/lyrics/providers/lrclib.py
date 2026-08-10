@@ -10,7 +10,7 @@ from .. import config
 from ..concurrency import fetch_seconds_remaining, map_concurrently
 from ..lrc import plain_to_lrc
 from ..matching import choose_candidate
-from ..metadata import metadata_variants, normalized, track_title_variants
+from ..metadata import normalized, track_artist_variants, track_title_variants
 from ..output import log_error
 
 
@@ -60,7 +60,7 @@ def lrclib_api_request(
 
 def collect_search_candidates(track: dict[str, Any]) -> list[dict[str, Any]]:
     title_variants = track_title_variants(track)[:4]
-    artist_variants = metadata_variants(track.get("artist", ""))[:6]
+    artist_variants = track_artist_variants(track)[:6]
     collected: list[dict[str, Any]] = []
     seen: set[str] = set()
 
@@ -126,7 +126,7 @@ def collect_search_candidates(track: dict[str, Any]) -> list[dict[str, Any]]:
 
 def lrclib_exact_record(track: dict[str, Any]) -> dict[str, Any] | None:
     title_variants = track_title_variants(track)[:3]
-    artist_variants = metadata_variants(track.get("artist", ""))[:5]
+    artist_variants = track_artist_variants(track)[:5]
     duration = round(float(track.get("duration", 0))) or None
 
     exact = lrclib_api_request(

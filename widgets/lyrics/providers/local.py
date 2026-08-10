@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from .. import config
-from ..metadata import metadata_variants, normalized, track_title_variants
+from ..metadata import normalized, track_artist_variants, track_title_variants
 from ..output import log_error
 
 
@@ -15,7 +15,7 @@ def local_lyrics_record(track: dict[str, Any]) -> dict[str, Any] | None:
         return None
 
     titles = track_title_variants(track, local=True)
-    artists = metadata_variants(track.get("artist", ""))
+    artists = track_artist_variants(track)
     candidate_paths: list[Path] = []
     seen: set[Path] = set()
 

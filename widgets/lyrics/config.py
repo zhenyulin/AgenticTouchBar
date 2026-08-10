@@ -222,18 +222,19 @@ RETRY_NOT_FOUND_SECONDS = 6 * 60 * 60
 # Bump this when provider behavior or cache-key inputs change. Apple-cache
 # records carry the current track metadata even when duration matching chose a
 # different cached TTML, so they cannot safely migrate across generations.
-CACHE_KEY_VERSION = 3
+# 4: the sampler supplies genre again, so the iTunes CN catalog lookup now
+# reaches English-titled Mandopop tracks — records fetched while it could not
+# (English-title searches picking near-duration lookalikes) are stale.
+# 5: the catalog lookup also serves Cantopop tracks; records fetched while it
+# only served Mandopop (e.g. "Unconditional" → "Unconditionally"/Katy Perry)
+# are stale.
+# 6: the catalog lookup now returns the CN artist name too (search_artist),
+# so records fetched while romanized artists searched untranslated are stale.
+CACHE_KEY_VERSION = 6
 
-BUILTIN_ALIAS_GROUPS = [
-    ["張懸", "张悬", "Deserts Chang", "安溥", "Anpu"],
-    [
-        "银河快递",
-        "銀河快遞",
-        "Galaxy Express",
-        "银河快递(Galaxy Express)",
-        "銀河快遞(Galaxy Express)",
-    ],
-]
+# Community/catalog aliases for artist and title metadata, as a JSON file of
+# alias groups next to this script — there are no built-in groups, so the file
+# is the single source of truth. Each group is a list of equivalent names.
 ALIASES_PATH = Path(
     os.environ.get(
         "BTT_LYRICS_ALIASES",
@@ -304,6 +305,12 @@ tell application "Music"
     end try
 
     try
+        set trackGenre to (genre of currentTrack) as text
+    on error
+        set trackGenre to ""
+    end try
+
+    try
         set albumName to (album of currentTrack) as text
     on error
         set albumName to ""
@@ -321,6 +328,6 @@ tell application "Music"
         set currentPosition to "0"
     end try
 
-    return currentState & sep & trackName & sep & artistName & sep & albumName & sep & trackDuration & sep & currentPosition
+    return currentState & sep & trackName & sep & artistName & sep & trackGenre & sep & albumName & sep & trackDuration & sep & currentPosition
 end tell
 """

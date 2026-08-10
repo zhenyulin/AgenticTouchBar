@@ -63,8 +63,8 @@ resolution: Lyric resolution {
   fetch: "fetch.fetch_lyrics_record" { class: process }
   local: "providers.local" { class: external }
   apple_cache: "providers.apple_cache" { class: external }
-  catalog: "catalog.catalog_chinese_title" { class: external }
-  remote: "LrcAPI + LRCLIB" { class: external }
+  catalog: "catalog.catalog_chinese_identity" { class: external }
+  remote: "QQ Music + NetEase + LrcAPI + LRCLIB" { class: external }
   match: "matching.choose_candidate >= 0.60" { class: process }
   cache_write: "cache.atomic_write_json" { class: state }
 }
@@ -125,7 +125,7 @@ fallback.fetch_helper -> resolution.fetch
 resolution.fetch -> resolution.local: first source
 resolution.local -> resolution.apple_cache: no local match
 resolution.apple_cache -> resolution.catalog: no cache match
-resolution.catalog -> resolution.remote: search title when available
+resolution.catalog -> resolution.remote: search title/artist when available
 resolution.remote -> resolution.match
 resolution.match -> resolution.cache_write: accepted candidate
 resolution.match -> resolution.cache_write: not_found / cache_error

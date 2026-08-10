@@ -44,6 +44,10 @@ VERSION_MARKERS = (
     "单曲版",
 )
 
+# Trailing parenthetical subtitles, e.g. "人生马拉松 (渣打香港马拉松
+# 二十周年主题曲)" or "因为爱情 (电影《将爱情进行到底》主题曲)".
+_SUBTITLE_RE = re.compile(r"\s*[\(（][^\(\)（）]+[\)）]\s*$")
+
 
 def strip_version_annotations(value: str) -> str:
     value = unicodedata.normalize("NFKC", value).strip()
@@ -78,7 +82,7 @@ def opencc_converters() -> tuple[Any, ...]:
 
 @cache
 def load_alias_groups() -> list[list[str]]:
-    groups = [list(group) for group in config.BUILTIN_ALIAS_GROUPS]
+    groups: list[list[str]] = []
     try:
         with config.ALIASES_PATH.open("r", encoding="utf-8") as handle:
             payload = json.load(handle)
@@ -134,9 +138,31 @@ def track_title_variants(track: dict[str, Any], *, local: bool = False) -> list[
     variant_builder = local_title_variants if local else metadata_variants
     for value in title_values:
         variants.update(variant_builder(value))
+        if not local:
+            stripped = _SUBTITLE_RE.sub("", value).strip()
+            if stripped:
+                variants.update(metadata_variants(stripped))
+    # Community catalogs usually keep just the subtitle-free title, so the
+    # primary search key is the primary title without its trailing
+    # parenthetical -- "人生马拉松" rather than
+    # "人生马拉松 (渣打香港马拉松二十周年主题曲)".
+    primary = _SUBTITLE_RE.sub("", title_values[0]).strip() or title_values[0]
     return sorted(
         variants,
-        key=lambda item: (item != title_values[0], len(item), item.casefold()),
+        key=lambda item: (item != primary, len(item), item.casefold()),
+    )
+
+
+def track_artist_variants(track: dict[str, Any]) -> list[str]:
+    artist_values = [
+        str(track.get(key) or "").strip() for key in ("search_artist", "artist")
+    ]
+    variants: set[str] = set()
+    for value in artist_values:
+        variants.update(metadata_variants(value))
+    return sorted(
+        variants,
+        key=lambda item: (item != artist_values[0], len(item), item.casefold()),
     )
 
 
@@ -171,7 +197,7 @@ def best_similarity(left: str, right: str) -> float:
 def local_title_variants(value: str) -> list[str]:
     variants = set(metadata_variants(value))
     for item in list(variants):
-        stripped = re.sub(r"\s*[\(（][^\(\)（）]+[\)）]\s*$", "", item).strip()
+        stripped = _SUBTITLE_RE.sub("", item).strip()
         if stripped:
             variants.add(stripped)
     return sorted(

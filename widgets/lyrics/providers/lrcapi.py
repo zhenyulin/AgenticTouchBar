@@ -9,7 +9,7 @@ from typing import Any
 from .. import config
 from ..concurrency import map_concurrently
 from ..matching import choose_candidate
-from ..metadata import local_title_variants, metadata_variants, track_title_variants
+from ..metadata import local_title_variants, track_artist_variants, track_title_variants
 
 
 def lrcapi_request(params: dict[str, Any]) -> Any:
@@ -98,7 +98,7 @@ def collect_lrcapi_candidates(track: dict[str, Any]) -> list[dict[str, Any]]:
         return []
 
     titles = track_title_variants(track, local=True)[:4]
-    artists = metadata_variants(track.get("artist", ""))[:6]
+    artists = track_artist_variants(track)[:6]
     album_variants = local_title_variants(track.get("album", ""))[:3]
     queries: list[dict[str, str]] = []
     query_signatures: set[tuple[tuple[str, str], ...]] = set()

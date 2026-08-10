@@ -14,7 +14,7 @@ from .. import config
 from ..concurrency import fetch_seconds_remaining, map_concurrently
 from ..lrc import strip_credit_lines
 from ..matching import candidate_score
-from ..metadata import metadata_variants, track_title_variants
+from ..metadata import track_artist_variants, track_title_variants
 
 QQMUSIC_REFERER = "https://y.qq.com/"
 
@@ -57,7 +57,7 @@ def qqmusic_request(path: str, params: dict[str, str]) -> Any:
 
 def qqmusic_search_results(track: dict[str, Any]) -> list[dict[str, Any]]:
     titles = track_title_variants(track)[:2]
-    artists = metadata_variants(track.get("artist", ""))[:2]
+    artists = track_artist_variants(track)[:2]
     if not titles:
         return []
 

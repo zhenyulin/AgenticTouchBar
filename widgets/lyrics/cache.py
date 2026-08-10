@@ -66,6 +66,10 @@ def read_compatible_cache(key: str, track: dict[str, Any]) -> dict[str, Any] | N
             record_duration = float(record.get("duration", 0.0) or 0.0)
         except (OSError, TypeError, ValueError):
             continue
+        # Records written under an older cache version were made by provider
+        # behavior that may not match this track anymore; never resurrect them.
+        if candidate.get("cache_version") != config.CACHE_KEY_VERSION:
+            continue
         if candidate.get("status") == "ok" and record.get("source") == "apple-cache":
             try:
                 path.unlink()

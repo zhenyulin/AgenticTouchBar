@@ -4,16 +4,17 @@ from __future__ import annotations
 
 from typing import Any
 
-from .metadata import best_similarity
+from .metadata import best_similarity, track_artist_variants, track_title_variants
 
 
 def candidate_score(track: dict[str, Any], candidate: dict[str, Any]) -> float:
     title_score = max(
-        best_similarity(track.get(title_key, ""), candidate.get("trackName", ""))
-        for title_key in ("search_title", "title")
+        best_similarity(variant, candidate.get("trackName", ""))
+        for variant in track_title_variants(track)
     )
-    artist_score = best_similarity(
-        track.get("artist", ""), candidate.get("artistName", "")
+    artist_score = max(
+        best_similarity(variant, candidate.get("artistName", ""))
+        for variant in track_artist_variants(track)
     )
     album_score = best_similarity(
         track.get("album", ""), candidate.get("albumName", "")

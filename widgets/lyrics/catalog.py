@@ -53,31 +53,54 @@ def _catalog_results(track: dict[str, Any]) -> list[dict[str, Any]]:
     )
 
 
-def catalog_chinese_title(track: dict[str, Any]) -> str:
-    """Return a duration-matched Chinese catalog title for a Mandopop track."""
+def catalog_chinese_identity(track: dict[str, Any]) -> tuple[str, str] | None:
+    """Return the duration-matched Chinese catalog (title, artist) pair.
+
+    The CN catalog's localized names are the programmatic source for
+    translating romanized metadata back into Chinese -- no alias table is
+    needed. Either field can drive the lookup: an English title (then the
+    Chinese title and artist are both returned) or a romanized artist on an
+    already-Chinese title (then the Chinese artist is returned). None when
+    the track is not worth a lookup or nothing matched.
+    """
     title = str(track.get("title") or "").strip()
     artist = str(track.get("artist") or "").strip()
-    # No sampler supplies a genre, so a Chinese artist is the reachable
-    # Mandopop signal. An already-Chinese title is the catalog title: looking
-    # it up again costs a round trip and returns the same characters.
-    if track.get("search_title") or not title or _contains_han(title):
-        return ""
-    if not _contains_han(artist):
-        return ""
+    genre = str(track.get("genre") or "").strip()
+    if track.get("search_title"):
+        return None
+    title_han = _contains_han(title)
+    artist_han = _contains_han(artist)
+    needs_title = bool(title) and not title_han
+    needs_artist = bool(artist) and not artist_han
+    if not needs_title and not needs_artist:
+        return None
+    if genre:
+        folded = genre.casefold()
+        if "manda" not in folded and "canto" not in folded:
+            return None
+    elif not ((needs_title and artist_han) or (needs_artist and title_han)):
+        # Without a genre, a Han character in either field is the Chinese
+        # signal; without it this is probably not a Chinese track, and a
+        # catalog round trip is wasted.
+        return None
 
     try:
         results = _catalog_results(track)
     except Exception as exc:
         log_error(f"China catalog title lookup failed: {exc}")
-        return ""
+        return None
 
     duration = float(track.get("duration", 0) or 0)
-    candidates: list[tuple[float, int, str]] = []
+    candidates: list[tuple[float, int, str, str]] = []
     for index, item in enumerate(results):
-        title = str(item.get("trackName") or "").strip()
+        item_title = str(item.get("trackName") or "").strip()
+        item_artist = str(item.get("artistName") or "").strip()
         candidate_duration = float(item.get("trackTimeMillis", 0) or 0) / 1000
         duration_error = abs(duration - candidate_duration) if duration else 0.0
-        if _contains_han(title) and (not duration or duration_error <= 12.0):
-            candidates.append((duration_error, index, title))
+        if _contains_han(item_title) and (not duration or duration_error <= 12.0):
+            candidates.append((duration_error, index, item_title, item_artist))
 
-    return min(candidates, default=(0.0, 0, ""))[2]
+    if not candidates:
+        return None
+    best = min(candidates, key=lambda item: (item[0], item[1]))
+    return best[2], best[3]

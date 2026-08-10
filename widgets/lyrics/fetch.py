@@ -9,7 +9,7 @@ from typing import Any
 
 from . import config
 from .cache import atomic_write_json, cache_path, lock_path
-from .catalog import catalog_chinese_title
+from .catalog import catalog_chinese_identity
 from .concurrency import set_fetch_deadline
 from .locking import acquire_lock, clear_lock, spawn_helper
 from .lrc import parse_lrc
@@ -33,9 +33,13 @@ def fetch_lyrics_record(track: dict[str, Any]) -> dict[str, Any] | None:
     if apple_cached is not None:
         return apple_cached
 
-    search_title = catalog_chinese_title(track)
-    if search_title:
-        track = {**track, "search_title": search_title}
+    identity = catalog_chinese_identity(track)
+    if identity is not None:
+        search_title, search_artist = identity
+        if search_title and search_title != track.get("title"):
+            track = {**track, "search_title": search_title}
+        if search_artist and search_artist != track.get("artist"):
+            track = {**track, "search_artist": search_artist}
 
     pool = ThreadPoolExecutor(max_workers=4)
     try:
@@ -120,12 +124,14 @@ def background_fetch(key: str, track: dict[str, Any]) -> None:
             if record is None:
                 payload = {
                     "status": "not_found",
+                    "cache_version": config.CACHE_KEY_VERSION,
                     "fetched_at": now,
                     "retry_after": now + config.RETRY_NOT_FOUND_SECONDS,
                 }
             elif record.get("instrumental"):
                 payload = {
                     "status": "instrumental",
+                    "cache_version": config.CACHE_KEY_VERSION,
                     "fetched_at": now,
                     "retry_after": now + config.RETRY_NOT_FOUND_SECONDS,
                     "record": record,
@@ -135,6 +141,7 @@ def background_fetch(key: str, track: dict[str, Any]) -> None:
                 record["parsedLines"] = parse_lrc(record.get("syncedLyrics") or "")
                 payload = {
                     "status": "ok",
+                    "cache_version": config.CACHE_KEY_VERSION,
                     "fetched_at": now,
                     "record": record,
                 }
@@ -154,6 +161,7 @@ def background_fetch(key: str, track: dict[str, Any]) -> None:
                 cache_path(key),
                 {
                     "status": "cache_error",
+                    "cache_version": config.CACHE_KEY_VERSION,
                     "message": str(exc),
                     "fetched_at": now,
                     "retry_after": now + config.RETRY_CACHE_ERROR_SECONDS,
