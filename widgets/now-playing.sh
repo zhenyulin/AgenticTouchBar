@@ -176,20 +176,19 @@ def artwork_icon(info, cache_dir):
 
 
 def play_icon(cache_dir, assets_dir):
-    """The paused-state icon: the repo's PNG asset, or a generated PNG.
+    """The paused-state icon: the repo's SVG asset, or a generated PNG.
 
-    A pre-rendered PNG (assets/now-playing-play.svg, a solid white
-    triangle matching the widget's small icon size) is preferred over the
-    SVG twin: BetterTouchTool rasterizes an SVG icon on every draw, and
-    this widget redraws once a second. If the asset is missing the
+    BetterTouchTool renders SVG icon_path files, so the checked-in
+    assets/now-playing-play.svg (a solid white triangle, matching the
+    widget's small icon size) is preferred. If the asset is missing the
     triangle is generated once into the cache, keeping the widget
     self-contained.
     """
-    png = Path(assets_dir) / "now-playing-play.svg"
-    if png.is_file():
-        return str(png)
+    svg = Path(assets_dir) / "now-playing-play.svg"
+    if svg.is_file():
+        return str(svg)
     directory = Path(cache_dir)
-    path = directory / "now-playing-play.svg"
+    path = directory / "now-playing-play.png"
     try:
         if not path.exists():
             directory.mkdir(parents=True, exist_ok=True)
