@@ -64,11 +64,12 @@ The Weather and Weath Icon widgets share the row with the Now Playing /
 Lyrics pair: while something plays they emit empty text and BTT hides them
 (the same rule as the Lyrics widget), and the Now Playing play/pause button
 flips them instantly by recording the state (`actions/weather-state.sh`) and
-refreshing both widgets. They render BTT's `get_weather` (Apple WeatherKit),
-since the BTT-native weather provider is unreachable on this network. Tapping
-either one forces a shared detached refresh (they cache one `weather.data`
-value): the tapped widget greys out while the refresh runs and the redraw
-that ends it restores the normal color with the new value.
+refreshing both widgets. Their refresh asks Open-Meteo first (no key, ~1 s,
+since the BTT-native weather provider is unreachable on this network) and
+falls back to BTT's `get_weather` (Apple WeatherKit). Tapping either one
+forces a shared detached refresh (they cache one `weather.data` value): the
+tapped widget greys out while the refresh runs and the redraw that ends it
+restores the normal color with the new value.
 
 The native BTT Now Playing widget cannot be told to ignore specific apps —
 it follows whichever app owns the system Now Playing session, browsers
@@ -79,7 +80,10 @@ are many and players are few) and prints nothing otherwise, which makes
 BTT hide it. The preset ships it in place of the native widget (same UUID,
 so `BTT_WIDGET_NOW_PLAYING_UUID` keeps working): 1 s refresh, tap toggles
 play/pause and refreshes the weather/lyrics pair, long-press opens the
-player.
+`Music` Touch Bar group (named trigger → `Open Touch Bar Group With Name`).
+Long-pressing the Lyrics widget opens the player (named trigger →
+`now-playing-app.sh`), which is where that action used to live on Now
+Playing.
 
 Each widget script takes its BTT widget UUID as an optional first argument,
 which taps and detached refreshes use to address the widget. Refresh

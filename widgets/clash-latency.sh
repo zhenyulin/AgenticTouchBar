@@ -58,7 +58,9 @@ compute_value() {
     delay="$(jq -r '.delay // 0' <<< "$delay_json" 2>/dev/null || printf '0')"
 
     if [[ "$delay" =~ ^[0-9]+$ ]] && (( delay > 0 )); then
-        printf '%sms\n %s' "$delay" "$(clash_proxy_label "$node")"
+        # The second row's alignment is the shared lib's job: btt_publish
+        # indents it whenever the first row opens with "1".
+        printf '%sms\n%s' "$delay" "$(clash_proxy_label "$node")"
     else
         printf 'Timeout'
     fi

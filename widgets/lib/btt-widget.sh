@@ -58,10 +58,10 @@ BTT_WIDGET_REFRESH_MAX_RUN="${BTT_WIDGET_REFRESH_MAX_RUN:-180}"
 BTT_WIDGET_COLOR="${BTT_WIDGET_COLOR:-255,255,255,255}"
 
 # The color shown while a refresh is in flight.
-BTT_WIDGET_DIM_COLOR="${BTT_WIDGET_DIM_COLOR:-125,125,125,255}"
+BTT_WIDGET_DIM_COLOR="${BTT_WIDGET_DIM_COLOR:-155,155,155,255}"
 
 # The dim color used when a quota is exhausted and waiting for reset.
-BTT_WIDGET_QUOTA_DIM_COLOR="${BTT_WIDGET_QUOTA_DIM_COLOR:-190,190,190,255}"
+BTT_WIDGET_QUOTA_DIM_COLOR="${BTT_WIDGET_QUOTA_DIM_COLOR:-205,205,205,255}"
 
 # Set by quota widgets to enable reset-progress coloring.
 BTT_WIDGET_QUOTA_RESET_CYCLE_MINUTES="${BTT_WIDGET_QUOTA_RESET_CYCLE_MINUTES:-0}"
@@ -677,6 +677,32 @@ JXA
 
 
 # ---------------------------------------------------------------------------
+# Public: keep a two-row value's second row aligned under the first
+#
+# BTT renders these rows in a proportional font in which "1" is the narrowest
+# digit, so a first row that opens with "1" -- an exhausted "100%" -- renders
+# narrower than the same row with any other digit, and the second row floats
+# out of line with it. The fix is presentation-only: two leading spaces on
+# the second row. Applied inside btt_publish so every widget shares the rule,
+# and no widget bakes padding into the value it caches.
+#
+#   btt_pad_second_row <text>
+# ---------------------------------------------------------------------------
+
+btt_pad_second_row() {
+    local text="${1-}"
+    local first_row="${text%%$'\n'*}"
+
+    [[ "$text" != *$'\n'* || "${first_row:0:1}" != "1" ]] && {
+        printf '%s' "$text"
+        return 0
+    }
+
+    printf '%s\n  %s' "$first_row" "${text#*$'\n'}"
+}
+
+
+# ---------------------------------------------------------------------------
 # Public: publish a finished widget value
 #
 # Terminal:
@@ -686,16 +712,24 @@ JXA
 #   emits widget JSON, dimmed while this widget's refresh is in flight.
 #   The color is always stated explicitly, so that a dimmed frame is cleared
 #   when the refresh finishes.
+#
+# Whatever the mode, a two-row value whose first row opens with "1" gets its
+# second row indented two spaces -- the alignment rule every widget shares.
 # ---------------------------------------------------------------------------
 
 btt_publish() {
     local result="${1-}"
+    local color
+    color="$(btt_current_color "$result")"
+
+    # The color rules read the unpadded value; padding is display-only.
+    result="$(btt_pad_second_row "$result")"
 
     if [[ -z "${BTT_WIDGET_UUID:-}" ]]; then
         printf '%s\n' "$result"
         return 0
     fi
 
-    btt__emit_json "$result" "$(btt_current_color "$result")"
+    btt__emit_json "$result" "$color"
 }
 

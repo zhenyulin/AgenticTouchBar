@@ -3,14 +3,16 @@
 # BetterTouchTool weather widgets.
 #
 # The BTT-native weather widgets fetch from a provider this network cannot
-# reach (Clash drops it), so these render BetterTouchTool's own get_weather
-# AppleScript command (Apple WeatherKit) instead, which works from here.
+# reach (Clash drops it), so these widgets fetch conditions themselves: the
+# refresh asks Open-Meteo first (no key, fast, reachable from here) and
+# falls back to BetterTouchTool's own get_weather AppleScript command
+# (Apple WeatherKit) when it cannot.
 #
 # Two instances, chosen by the mode flag:
 #   --text   "77°F" over "41%"      (the Weather widget)
 #   --icon   an emoji for the current conditions (the Weath Icon widget)
-#   --refresh   re-ask BTT (Apple WeatherKit) and refresh the cache; runs
-#               detached, never in the widget path
+#   --refresh   fetch conditions and refresh the cache; runs detached,
+#               never in the widget path
 #
 # A tap (actions/tap-refresh.sh) drops a force flag and re-runs the widget:
 # the widget starts a detached refresh even while its cache is fresh, and
@@ -21,7 +23,7 @@
 #
 # The widgets render only from cache/weather.data.value: a fresh value wins,
 # and a stale one still prints, so when a song ends they come back with the
-# previous values instantly while a detached refresh re-asks BTT.
+# previous values instantly while a detached refresh fetches new ones.
 #
 # While something plays they emit nothing, and BTT hides a script widget
 # whose text is empty -- the same rule that hides the Lyrics widget. The Now
@@ -71,18 +73,83 @@ SAMPLE_MAX_AGE="${BTT_WEATHER_SAMPLE_MAX_AGE:-8}"
 # slot to the Now Playing + Lyrics pair. Disabled for now: they always
 # render; set to 1 to re-enable the hide.
 HIDE_WHILE_PLAYING=0
-# How long a get_weather result is reused before asking BTT again.
+# How long a fetched result is reused before the sources are asked again.
 WEATHER_TTL="${BTT_WEATHER_TTL:-300}"
-# get_weather always returns Celsius, so the script converts when needed.
+# Both sources return Celsius, so the script converts when needed.
 UNIT="${BTT_WEATHER_UNIT:-celsius}"
+# Where to ask for conditions; the coordinates BTT's get_weather payload
+# carries (cache/weather.data.value .currently.metadata).
+WEATHER_LAT="${BTT_WEATHER_LAT:-38.5}"
+WEATHER_LON="${BTT_WEATHER_LON:-106.31}"
+
+# WMO weather code -> the icon names the render path below already maps to
+# emoji. is_day picks the night variant of clear/partly-cloudy.
+wmo_icon() {
+    local code="${1:-}" day="${2:-1}"
+    case "$code" in
+        0)    [[ "$day" == 1 ]] && printf 'clear-day' || printf 'clear-night' ;;
+        1|2)  [[ "$day" == 1 ]] && printf 'partly-cloudy-day' || printf 'partly-cloudy-night' ;;
+        3)    printf 'cloudy' ;;
+        45|48) printf 'fog' ;;
+        51|53|55|61|63|65|80|81|82) printf 'rain' ;;
+        56|57|66|67) printf 'sleet' ;;
+        71|73|75|77|85|86) printf 'snow' ;;
+        95)   printf 'thunderstorm' ;;
+        96|99) printf 'hail' ;;
+        *)    printf 'cloudy' ;;
+    esac
+}
+
+# Open-Meteo current conditions. Returns the same {"currently":
+# {temperature, humidity, icon}} shape BTT's payload had (humidity as a
+# 0-1 fraction), so the render path stays unchanged.
+fetch_open_meteo() {
+    local payload temp humidity code day
+    payload="$(curl -fsS --connect-timeout 2 --max-time 5 \
+        "https://api.open-meteo.com/v1/forecast?latitude=$WEATHER_LAT&longitude=$WEATHER_LON&current=temperature_2m,relative_humidity_2m,weather_code,is_day" 2>/dev/null)" || return 1
+    temp="$(jq -r '.current.temperature_2m' <<<"$payload" 2>/dev/null)"
+    humidity="$(jq -r '.current.relative_humidity_2m' <<<"$payload" 2>/dev/null)"
+    code="$(jq -r '.current.weather_code' <<<"$payload" 2>/dev/null)"
+    day="$(jq -r '.current.is_day' <<<"$payload" 2>/dev/null)"
+    [[ "$temp" =~ ^-?[0-9]+(\.[0-9]+)?$ ]] || return 1
+    [[ "$humidity" =~ ^[0-9]+(\.[0-9]+)?$ ]] || return 1
+    [[ "$code" =~ ^[0-9]+$ ]] || return 1
+    jq -cn --argjson t "$temp" --argjson h "$humidity" --arg icon "$(wmo_icon "$code" "$day")" \
+        '{currently: {temperature: $t, humidity: ($h / 100), icon: $icon}}'
+}
+
+# Fallback: BTT's get_weather (Apple WeatherKit). Bounded, because a wedged
+# BTT can make the call hang for minutes; osascript auto-launches a dead
+# BTT, so only query it while it is running.
+fetch_btt_weather() {
+    /usr/bin/pgrep -x BetterTouchTool >/dev/null 2>&1 || return 1
+    local tmp pid i
+    tmp="$(mktemp)" || return 1
+    (
+        /usr/bin/osascript -e 'tell application "BetterTouchTool" to get_weather' >"$tmp" 2>/dev/null &
+        pid=$!
+        for i in {1..24}; do
+            kill -0 "$pid" 2>/dev/null || break
+            /bin/sleep 0.5
+        done
+        kill "$pid" 2>/dev/null
+        wait "$pid" 2>/dev/null
+    )
+    cat "$tmp"
+    rm -f "$tmp"
+}
 
 if (( REFRESH_MODE )); then
-    # osascript auto-launches a dead BTT; only query it while it is running.
-    /usr/bin/pgrep -x BetterTouchTool >/dev/null 2>&1 || { btt_trace refresh "$STARTED" error "no-btt"; exit 1; }
-    json="$(osascript -e 'tell application "BetterTouchTool" to get_weather' 2>/dev/null)"
+    json="$(fetch_open_meteo)"
+    SOURCE=open-meteo
+    if [[ -z "$json" ]]; then
+        json="$(fetch_btt_weather)"
+        SOURCE=btt
+    fi
     if [[ -n "$json" ]] && jq -e . >/dev/null 2>&1 <<<"$json"; then
         btt_cache_put weather.data "$json"
-        btt_trace refresh "$STARTED" ok "value=$json"
+        summary="$(jq -r '"t=" + (.currently.temperature|tostring) + " h=" + ((.currently.humidity * 100)|round|tostring)' <<<"$json" 2>/dev/null || true)"
+        btt_trace refresh "$STARTED" ok "source=$SOURCE $summary"
         exit 0
     fi
     btt_trace refresh "$STARTED" error "bad-json"
@@ -121,11 +188,11 @@ fi
 
 # Render only from the cache: a fresh value wins, and a stale one still
 # prints, so a reveal after a long playback republishes the previous values
-# instantly, while a detached refresh re-asks BTT (Apple WeatherKit) -- the
-# widget path never blocks on AppleScript. A tap's force flag refreshes
-# even while the value is fresh: the widget greys out while the refresh
-# lock is held, and the redraw that ends the refresh restores white with
-# the new value.
+# instantly, while a detached refresh re-fetches conditions (Open-Meteo, or
+# BTT's Apple WeatherKit as a fallback) -- the widget path never blocks on
+# AppleScript or the network. A tap's force flag refreshes even while the
+# value is fresh: the widget greys out while the refresh lock is held, and
+# the redraw that ends the refresh restores white with the new value.
 VALUE="$(btt_cache_get weather.data "$WEATHER_TTL")"
 FRESH=$?
 FORCE=0; btt_force_pending && FORCE=1

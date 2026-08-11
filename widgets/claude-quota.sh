@@ -142,7 +142,7 @@ compute_value() {
                                         | if ($secondary.usedPercent // 0) >= 100 then
                                                 used($secondary.usedPercent)
                                                 + " " + until_reset($secondary.resetsAt)
-                                                + "\n  " + used($primary.usedPercent)
+                                                + "\n" + used($primary.usedPercent)
                                                 + " " + until_reset($primary.resetsAt)
                                             else
                                                 used($primary.usedPercent)
