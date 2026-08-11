@@ -161,7 +161,7 @@ compute_value() {
     local jq_status=$?
 
     if (( jq_status != 0 )) || [[ -z "$text" ]]; then
-        printf 'JSON ERR'
+        printf 'ERR'
         return 0
     fi
 

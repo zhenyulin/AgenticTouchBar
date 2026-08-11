@@ -41,8 +41,8 @@ background service.
    redraws; `widgets/now-playing-lyrics.sh --report` shows the shared trace.
 6. Optional: deploy the freeze guard (see below).
 
-Widgets that appear in the preset but have no script in this repo — Weather,
-Weath Icon, Star — are configured natively in BTT.
+The Star widget appears in the preset but has no script in this repo — it is
+configured natively in BTT.
 
 ## Widgets
 
@@ -56,7 +56,15 @@ Weath Icon, Star — are configured natively in BTT.
 | Latency | Selected Clash node's latency | `widgets/clash-latency.sh` | 10 s | `actions/tap-refresh.sh` (region + latency) |
 | TIMER | BTT process uptime (diagnostics) | `widgets/timer-widget.sh` | 10 s | `actions/tap-refresh.sh` |
 | Star | Favourite (★/☆) — only while Apple Music holds Now Playing | AppleScript in the preset + `actions/now-playing-app.sh` | 5 s | Toggle favourite |
-| Weather | Temperature/humidity | BTT-native weather widget | BTT-managed | — |
+| Weather | Temperature/humidity | `widgets/weather.sh --text` | 10 s | — (hidden while playing) |
+| Weath Icon | Conditions icon | `widgets/weather.sh --icon` | 10 s | — (hidden while playing) |
+
+The Weather and Weath Icon widgets share the row with the Now Playing /
+Lyrics pair: while something plays they emit empty text and BTT hides them
+(the same rule as the Lyrics widget), and the Now Playing play/pause button
+flips them instantly by recording the state (`actions/weather-state.sh`) and
+refreshing both widgets. They render BTT's `get_weather` (Apple WeatherKit),
+since the BTT-native weather provider is unreachable on this network.
 
 Each widget script takes its BTT widget UUID as an optional first argument,
 which taps and detached refreshes use to address the widget. Refresh
@@ -73,6 +81,7 @@ detached process and then refreshes the Lyrics (and Star) widgets.
 | `actions/tap-refresh.sh` | Force one or more widgets to refresh now, even with a fresh cache |
 | `actions/track-changed.sh` | Track-change hook: detached lyrics pre-warm + widget refresh |
 | `actions/now-playing-app.sh` | Prints the current Now Playing holder's bundle id (MediaRemote) — gates the Star widget |
+| `actions/weather-state.sh` | Records the playback state set by the Now Playing tap, so the weather widgets flip instantly |
 | `actions/set-widget-variables.sh` | Sets the BTT persistent variables mapping widget names to UUIDs |
 | `actions/btt-freeze-guard.sh` | Freeze watchdog + preventive restart (below) |
 | `actions/freeze-catch.sh` | Manual freeze sampler for diagnostics |
@@ -92,6 +101,7 @@ BTT's shell actions can see them (BTT environment variables or `~/.zshenv`).
 | `CLASH_LATENCY_MIN_MS`, `CLASH_LATENCY_MAX_MS` | `150`, `500` | Latency colour bands |
 | `CLAUDE_QUOTA_MAX_AGE`, `CODEX_QUOTA_MAX_AGE`, `OPENCODE_QUOTA_MAX_AGE` | `300` | Quota cache freshness (seconds) |
 | `BTT_LYRICS_*` | — | Lyrics tunables — see [`specs/LYRICS.md`](specs/LYRICS.md) |
+| `BTT_WEATHER_UNIT`, `BTT_WEATHER_TTL` | `celsius`, `300` | Weather widgets: unit (celsius/fahrenheit) and get_weather cache TTL (seconds) |
 
 ## The Lyrics feature
 
