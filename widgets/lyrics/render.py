@@ -114,9 +114,10 @@ def render_widget(
         return "♬"
     if status == "not_found":
         return "♩"
-    if status == "cache_error":
-        return "⚠ Apple lyrics cache error"
     if status != "ok":
+        # A cache_error is a provider failure; Apple-cache read problems are
+        # logged and degrade to a miss, so the marker must not read as an
+        # Apple Music problem -- least of all while Music is not running.
         return "♪ Lyrics unavailable"
 
     record = cached.get("record") or {}
@@ -209,7 +210,11 @@ def render_tick() -> str:
     now = time.time()
 
     if cached is not None and cached.get("status") == "not_found":
-        apple_record = apple_cache_record(track)
+        try:
+            apple_record = apple_cache_record(track)
+        except Exception as exc:
+            log_error(f"Apple lyrics cache lookup failed: {exc}")
+            apple_record = None
         if apple_record is not None:
             apple_record = dict(apple_record)
             apple_record["parsedLines"] = parse_lrc(

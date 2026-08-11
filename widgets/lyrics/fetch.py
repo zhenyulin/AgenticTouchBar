@@ -29,7 +29,14 @@ def fetch_lyrics_record(track: dict[str, Any]) -> dict[str, Any] | None:
     if local is not None:
         return local
 
-    apple_cached = apple_cache_record(track)
+    try:
+        apple_cached = apple_cache_record(track)
+    except Exception as exc:
+        # The TTML cache is a fast path, not a library. A broken or locked
+        # cache must not starve the remote providers, which may still have
+        # the lyrics; the failure stays in the error log.
+        log_error(f"Apple lyrics cache lookup failed: {exc}")
+        apple_cached = None
     if apple_cached is not None:
         return apple_cached
 

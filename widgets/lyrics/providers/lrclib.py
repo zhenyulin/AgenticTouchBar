@@ -45,7 +45,7 @@ def lrclib_api_request(
             ) as response:
                 return json.load(response)
         except urllib.error.HTTPError as exc:
-            if exc.code == 404:
+            if exc.code in {400, 404}:
                 return None
             last_error = RuntimeError(f"LRCLIB returned HTTP {exc.code}")
             if exc.code not in config.TRANSIENT_HTTP_STATUS:

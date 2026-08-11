@@ -9,12 +9,18 @@ from .metadata import best_similarity, track_artist_variants, track_title_varian
 
 def candidate_score(track: dict[str, Any], candidate: dict[str, Any]) -> float:
     title_score = max(
-        best_similarity(variant, candidate.get("trackName", ""))
-        for variant in track_title_variants(track)
+        (
+            best_similarity(variant, candidate.get("trackName", ""))
+            for variant in track_title_variants(track)
+        ),
+        default=0.0,
     )
     artist_score = max(
-        best_similarity(variant, candidate.get("artistName", ""))
-        for variant in track_artist_variants(track)
+        (
+            best_similarity(variant, candidate.get("artistName", ""))
+            for variant in track_artist_variants(track)
+        ),
+        default=0.0,
     )
     album_score = best_similarity(
         track.get("album", ""), candidate.get("albumName", "")

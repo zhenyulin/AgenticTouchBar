@@ -223,7 +223,7 @@ unaccepted.
 | Viewport measurement is pending or fails | Use the carried/stored width or fallback width | Lose measurement accuracy for the track, not all layout state. |
 | Track has no synchronized lyrics but is instrumental | Render the instrumental marker, faded with playback progress | Emit widget JSON `{"text": "♬", "font_color": "r,g,b,a"}` with `r=g=b` fading 255→80 gray over the track. |
 | Track is not found | Render the not-found marker, faded with playback progress | Emit widget JSON `{"text": "♩", "font_color": "r,g,b,a"}` with `r=g=b` fading 255→80 gray over the track. |
-| Cache/provider failure is persisted | Render the cache-error marker | Emit `⚠ Apple lyrics cache error`. |
+| A provider fetch fails | Render the unavailable marker | Emit `♪ Lyrics unavailable`; Apple-cache read failures are logged and degrade to a miss, so the marker never reads as an Apple Music problem. |
 
 LRC parsing must preserve timestamp semantics: offsets, enhanced timestamps,
 multiple timestamps on one line, sorting, and same-timestamp deduplication.
