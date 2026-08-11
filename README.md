@@ -79,11 +79,15 @@ it prints the track only when the holder's bundle id is in
 are many and players are few) and prints nothing otherwise, which makes
 BTT hide it. The preset ships it in place of the native widget (same UUID,
 so `BTT_WIDGET_NOW_PLAYING_UUID` keeps working): 1 s refresh, tap toggles
-play/pause and refreshes the weather/lyrics pair, long-press opens the
-`Music` Touch Bar group (named trigger → `Open Touch Bar Group With Name`).
-Long-pressing the Lyrics widget opens the player (named trigger →
-`now-playing-app.sh`), which is where that action used to live on Now
-Playing.
+play/pause and refreshes the weather/lyrics pair, long-press toggles the
+`Music` Touch Bar group. The toggle is a named trigger (`Toggle Music
+Group`) running AppleScript, because BTT has no toggle action: it asks
+`get_active_touch_bar_group` and then triggers either `Open Touch Bar Group
+With Name` (205) or `Close currently open Touch Bar group` (191). Now
+Playing is one of the widgets merged into groups, so the same long-press
+closes the group from inside it. Long-pressing the Lyrics widget opens the
+player (named trigger → `now-playing-app.sh`), which is where that action
+used to live on Now Playing.
 
 Each widget script takes its BTT widget UUID as an optional first argument,
 which taps and detached refreshes use to address the widget. Refresh
