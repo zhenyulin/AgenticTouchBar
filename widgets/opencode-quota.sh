@@ -140,4 +140,19 @@ compute_value() {
     printf '%s' "$text"
 }
 
+# While the Now Playing + Lyrics pair is short of space, the lyrics widget
+# hides this widget (BTT removes script widgets whose text is empty) so the
+# pair may use its slot -- see widgets/lyrics/render.update_opencode_visibility.
+# The hide signal is a flag the lyrics widget rewrites every tick it holds;
+# this function is called by the widget lib's BTT_WIDGET_HIDE_CHECK hook
+# just before publishing. The value is still refreshed in the background, so
+# it is fresh the moment the flag goes away.
+BTT_WIDGET_HIDE_CHECK="btt_opencode_hidden"
+
+btt_opencode_hidden() {
+    local flag
+    flag="${BTT_LYRICS_CACHE_DIR:-$REPO_DIR/cache/lyrics}/opencode-hide"
+    btt__is_fresh "$flag" "${BTT_LYRICS_OPENCODE_HIDE_MAX_AGE:-90}"
+}
+
 btt_cached_widget_main "$REFRESH_MODE" "$SELF" "$VALUE_MAX_AGE" compute_value

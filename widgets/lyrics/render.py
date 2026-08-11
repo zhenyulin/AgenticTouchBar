@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import subprocess
 import time
 from typing import Any
 
@@ -17,7 +18,7 @@ from .lrc import parse_lrc
 from .metadata import track_cache_key
 from .output import emit, emit_last_output, log_error, trace
 from .providers.apple_cache import apple_cache_record
-from .viewport import ensure_viewport, viewport_cells
+from .viewport import ensure_viewport, pair_short_of_space, viewport_cells
 
 # What this tick is putting on the Touch Bar, filled in as the tick renders
 # and written out once by widget_main. BetterTouchTool runs the widget as a
@@ -66,6 +67,58 @@ def marker_font_color(track: dict[str, Any]) -> str:
     return f"{gray},{gray},{gray},255"
 
 
+def update_opencode_visibility(cramped: bool) -> None:
+    """Hide the OpenCode widget while the pair is cramped, restore it after.
+
+    BetterTouchTool removes a script widget whose text is empty, so hiding
+    is the same `update_touch_bar_widget <uuid> text ""` the preset uses to
+    hide Lyrics when Music quits; restoring is a refresh_widget. Each call
+    is an osascript launch (~200 ms), so one runs only on a state change.
+    The flag file is the durable signal in between -- the OpenCode widget's
+    own tick honours it too, which also covers a kick that never lands.
+    """
+    path = config.OPENCODE_HIDE_PATH
+    hidden = path.is_file()
+    if cramped == hidden:
+        if cramped:
+            # The flag's age is how the OpenCode widget tells a live "hide"
+            # from a lyrics widget that stopped running; keep it fresh.
+            try:
+                path.touch()
+            except OSError as exc:
+                log_error(f"Could not touch {path}: {exc}")
+        return
+
+    try:
+        if cramped:
+            path.touch()
+        else:
+            path.unlink()
+    except OSError as exc:
+        log_error(f"Could not update {path}: {exc}")
+        return
+
+    action = "update_touch_bar_widget" if cramped else "refresh_widget"
+    text = ' text ""' if cramped else ""
+    _btt_osascript(
+        f'tell application "BetterTouchTool" to {action} '
+        f'"{config.OPENCODE_WIDGET_UUID}"{text}'
+    )
+
+
+def _btt_osascript(script: str) -> None:
+    """One AppleScript line for BetterTouchTool, detached and forgettable."""
+    try:
+        subprocess.Popen(
+            ["/usr/bin/osascript", "-e", script],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            start_new_session=True,
+        )
+    except OSError as exc:
+        log_error(f"osascript to BTT failed: {exc}")
+
+
 def write_render_receipt(outcome: str) -> None:
     """Record what went on screen this tick, for the freeze guard to check."""
     if outcome in REPRINT_OUTCOMES:
@@ -88,6 +141,48 @@ def write_render_receipt(outcome: str) -> None:
             temporary.unlink()
         except OSError:
             pass
+
+
+def last_rendered_key() -> str:
+    """The track key of the last frame that reached the Touch Bar, or ''.
+
+    The receipt is written by every tick that rendered a frame of its own
+    (see write_render_receipt), so it is the cheapest way for a fresh widget
+    process -- BetterTouchTool starts one every tick -- to know what is
+    actually on screen.
+    """
+    try:
+        with config.RENDER_PATH.open("r", encoding="utf-8") as handle:
+            return str(json.load(handle).get("key") or "")
+    except (OSError, ValueError):
+        return ""
+
+
+def cleared_while_sample_current(track: dict[str, Any]) -> bool:
+    """True when this sample is the one the closing sequence just cleared.
+
+    The event watcher (cli.py closing_sequence) clears the widget and writes
+    the cleared track's identity to cache/lyrics-cleared before writing the
+    state that ends it. The Lyrics widget's own state can still hold a fresh
+    sample of that same track for a moment -- the sampler and the widget
+    tick independently -- so without this check the external clear would be
+    undone by the very next tick. The hold ends the moment the sample moves
+    past the cleared identity (the new track, or the stopped state), or when
+    CLEAR_HOLD_SECONDS elapses after a watcher that died mid-sequence.
+    """
+    try:
+        marker = json.loads(config.CLEARED_MARKER_PATH.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return False
+    try:
+        if time.time() - float(marker.get("at", 0) or 0) > config.CLEAR_HOLD_SECONDS:
+            return False
+    except (TypeError, ValueError):
+        return False
+    return all(
+        str(marker.get(key) or "") == str(track.get(key) or "")
+        for key in ("title", "artist", "album")
+    )
 
 
 def render_widget(
@@ -175,8 +270,28 @@ def render_tick() -> str:
         emit_last_output()
         return "no_sample"
 
+    if cleared_while_sample_current(track):
+        # The Now Playing row just cleared or changed track, and this sample
+        # predates that: hold the widget empty instead of repainting a frame
+        # that no longer belongs beside the row.
+        emit("")
+        return "cleared"
+
     state = track.get("state")
     _RECEIPT["state"] = state or ""
+    # The Now Playing + Lyrics pair is on screen in exactly these states,
+    # so those are the only ones that can crowd the row. While it does,
+    # the OpenCode widget hides to hand its slot over; the decision is
+    # re-taken every tick and the kick only fires on a change. The hide is
+    # disabled for now (config.OPENCODE_HIDE_ENABLED), so cramped stays
+    # False: the first tick clears any flag the old behaviour left behind
+    # and restores the widget, then the call no-ops.
+    key = track_cache_key(track) if state in {"playing", "paused"} else None
+    update_opencode_visibility(
+        config.OPENCODE_HIDE_ENABLED
+        and key is not None
+        and pair_short_of_space(track, key)
+    )
     if state == "denied":
         emit("⚠ Allow BTT → Music")
         return "denied"
@@ -225,10 +340,16 @@ def render_tick() -> str:
             start_background_fetch(key, track)
         except Exception as exc:
             log_error(f"Could not start background fetch: {exc}")
-        # A lookup happens only at a track boundary. Preserve the preceding
-        # lyric frame until it completes, rather than replacing it with an
-        # intermediate pending state that makes the Touch Bar appear blank.
-        emit_last_output()
+        # A lookup happens only at a track boundary, and a frame from the
+        # previous key no longer belongs beside the Now Playing row, which
+        # already shows the new track. So the first pending tick for a new
+        # key clears the widget instead of holding the old lyric; the
+        # receipt it writes carries the new key, so later ticks of the same
+        # fetch reprint the (now empty) frame rather than clearing again.
+        if key != last_rendered_key():
+            emit("")
+        else:
+            emit_last_output()
         return "pending"
 
     retry_after = float(cached.get("retry_after", 0) or 0)

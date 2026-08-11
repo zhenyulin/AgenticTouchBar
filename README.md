@@ -57,15 +57,18 @@ configured natively in BTT.
 | Latency | Selected Clash node's latency | `widgets/clash-latency.sh` | 10 s | `actions/tap-refresh.sh` (region + latency) |
 | TIMER | BTT process uptime (diagnostics) | `widgets/timer-widget.sh` | 10 s | `actions/tap-refresh.sh` |
 | Star | Favourite (★/☆) — only while Apple Music holds Now Playing | AppleScript in the preset + `actions/now-playing-app.sh` | 5 s | Toggle favourite |
-| Weather | Temperature/humidity | `widgets/weather.sh --text` | 10 s | — (hidden while playing) |
-| Weath Icon | Conditions icon | `widgets/weather.sh --icon` | 10 s | — (hidden while playing) |
+| Weather | Temperature/humidity | `widgets/weather.sh --text` | 10 s | `actions/tap-refresh.sh` (text + icon) |
+| Weath Icon | Conditions icon | `widgets/weather.sh --icon` | 10 s | `actions/tap-refresh.sh` (text + icon) |
 
 The Weather and Weath Icon widgets share the row with the Now Playing /
 Lyrics pair: while something plays they emit empty text and BTT hides them
 (the same rule as the Lyrics widget), and the Now Playing play/pause button
 flips them instantly by recording the state (`actions/weather-state.sh`) and
 refreshing both widgets. They render BTT's `get_weather` (Apple WeatherKit),
-since the BTT-native weather provider is unreachable on this network.
+since the BTT-native weather provider is unreachable on this network. Tapping
+either one forces a shared detached refresh (they cache one `weather.data`
+value): the tapped widget greys out while the refresh runs and the redraw
+that ends it restores the normal color with the new value.
 
 The native BTT Now Playing widget cannot be told to ignore specific apps —
 it follows whichever app owns the system Now Playing session, browsers

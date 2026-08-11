@@ -318,6 +318,16 @@ btt_refresh_detached() {
 # The caller supplies its refresh-mode flag, absolute script path, cache age,
 # and a callback that prints the refreshed value. The shared lifecycle keeps
 # cache, forced-refresh, trace, and output behavior consistent.
+#
+# Two optional variables let a widget keep behavior of its own without
+# reimplementing the lifecycle:
+#
+#   BTT_WIDGET_REFRESH_HOOK   function called after a refresh has computed and
+#                             stored its value, as <hook> <started> <value>.
+#                             clash-latency.sh appends its latency history here.
+#   BTT_WIDGET_EMPTY_TEXT     what to publish when there is no cached value
+#                             yet; the default ellipsis suits a text widget,
+#                             clash-region.sh prefers its globe.
 # ---------------------------------------------------------------------------
 
 btt_cached_widget_main() {
@@ -334,12 +344,17 @@ btt_cached_widget_main() {
         btt_cache_put "$BTT_WIDGET_NAME" "$refreshed"
 
         local refresh_outcome
+        # "NO CODEXBAR" from the quota widgets, "No curl" from the Clash ones.
         case "$refreshed" in
-            "")            refresh_outcome=empty ;;
-            *ERR*|NO\ *)   refresh_outcome=error ;;
-            *)             refresh_outcome=ok ;;
+            "")                     refresh_outcome=empty ;;
+            *ERR*|NO\ *|No\ *)      refresh_outcome=error ;;
+            *)                      refresh_outcome=ok ;;
         esac
         btt_trace refresh "$started" "$refresh_outcome" "value=$refreshed"
+
+        if [[ -n "${BTT_WIDGET_REFRESH_HOOK:-}" ]]; then
+            "$BTT_WIDGET_REFRESH_HOOK" "$started" "$refreshed"
+        fi
         return 0
     fi
 
@@ -358,12 +373,25 @@ btt_cached_widget_main() {
             "$self" --refresh "$BTT_WIDGET_UUID"
     fi
 
+    # A widget may hide itself while another widget's condition holds:
+    # BTT_WIDGET_HIDE_CHECK names a function returning 0 when this widget
+    # must print nothing, which makes BTT remove it from the Touch Bar
+    # (the same empty-text mechanism the lyrics widget uses). The value
+    # was still refreshed above, so it is fresh when the widget comes
+    # back. Used by opencode-quota.sh: the lyrics widget hides OpenCode
+    # while the Now Playing + Lyrics pair is short of space.
+    if [[ -n "${BTT_WIDGET_HIDE_CHECK:-}" ]] && "$BTT_WIDGET_HIDE_CHECK"; then
+        btt_trace widget "$started" hidden
+        printf '\n'
+        return 0
+    fi
+
     outcome=cached
     (( fresh != 0 )) && outcome=stale
     (( force )) && outcome=forced
     [[ -n "$value" ]] || outcome=empty
     btt_trace widget "$started" "$outcome"
-    btt_publish "${value:-…}"
+    btt_publish "${value:-${BTT_WIDGET_EMPTY_TEXT:-…}}"
 }
 
 
@@ -598,6 +626,13 @@ btt_latency_color() {
 
 btt_current_color() {
     local text="${1-}"
+
+    # A widget may pin its own color and opt out of every state below,
+    # including the dim refresh frame -- the Clash widgets' CLASH_FONT_COLOR.
+    if [[ -n "${BTT_WIDGET_COLOR_OVERRIDE:-}" ]]; then
+        printf '%s' "$BTT_WIDGET_COLOR_OVERRIDE"
+        return 0
+    fi
 
     if btt_refresh_in_flight; then
         printf '%s' "$BTT_WIDGET_DIM_COLOR"

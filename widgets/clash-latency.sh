@@ -13,15 +13,22 @@ SELF="${0:A}"
 source "${SELF:h}/lib/btt-widget.sh"
 source "${SELF:h}/lib/clash.sh"
 
-STARTED="$(btt_now)"
-ICON_PATH="${CLASH_ICON:-}"
-BTT_WIDGET_ICON="$ICON_PATH"
 BTT_WIDGET_NAME="clash-latency"
-LATENCY_HISTORY_FILE="${BTT_LATENCY_HISTORY_FILE:-${BTT_LOG_DIR:-$BTT_REPO_DIR/logs}/latency-history.tsv}"
-VALUE_MAX_AGE="${CLASH_MAX_AGE:-30}"
+BTT_WIDGET_ICON="${CLASH_ICON:-}"
+BTT_WIDGET_COLOR_OVERRIDE="${CLASH_FONT_COLOR:-}"
 BTT_WIDGET_REFRESH_MAX_RUN=60
 BTT_WIDGET_LATENCY_MIN_MS="${CLASH_LATENCY_MIN_MS:-150}"
 BTT_WIDGET_LATENCY_MAX_MS="${CLASH_LATENCY_MAX_MS:-500}"
+# Every measurement is appended to a history file, so a slow period can be
+# reviewed afterwards; the shared lifecycle calls this once the refresh has
+# stored its value.
+BTT_WIDGET_REFRESH_HOOK=write_latency_history
+
+LATENCY_HISTORY_FILE="${BTT_LATENCY_HISTORY_FILE:-${BTT_LOG_DIR:-$BTT_REPO_DIR/logs}/latency-history.tsv}"
+VALUE_MAX_AGE="${CLASH_MAX_AGE:-30}"
+
+TEST_URL="${CLASH_TEST_URL:-https://cp.cloudflare.com/generate_204}"
+TIMEOUT_MS="${CLASH_TIMEOUT_MS:-3000}"
 
 write_latency_history() {
     local stamp="$1" value="$2" latency node
@@ -32,22 +39,6 @@ write_latency_history() {
     node="${node//$'\n'/ }"
     mkdir -p "${LATENCY_HISTORY_FILE:h}" 2>/dev/null || return 0
     printf '%s\t%s\t%s\n' "$stamp" "$latency" "$node" >> "$LATENCY_HISTORY_FILE" 2>/dev/null || true
-}
-
-TEST_URL="${CLASH_TEST_URL:-https://cp.cloudflare.com/generate_204}"
-TIMEOUT_MS="${CLASH_TIMEOUT_MS:-3000}"
-FONT_COLOR="${CLASH_FONT_COLOR:-}"
-
-emit_widget() {
-    local text="$1"
-    local color="${FONT_COLOR:-$(btt_current_color "$text")}"
-    if [[ -n "$ICON_PATH" && -f "$ICON_PATH" ]]; then
-        jq -cn --arg text "$text" --arg color "$color" --arg icon "$ICON_PATH" \
-            '{text: $text, font_color: $color, icon_path: $icon}'
-    else
-        jq -cn --arg text "$text" --arg color "$color" \
-            '{text: $text, font_color: $color}'
-    fi
 }
 
 compute_value() {
@@ -73,21 +64,4 @@ compute_value() {
     fi
 }
 
-if (( REFRESH_MODE )); then
-    REFRESHED="$(compute_value)"
-    btt_cache_put "$BTT_WIDGET_NAME" "$REFRESHED"
-    write_latency_history "$STARTED" "$REFRESHED"
-    case "$REFRESHED" in ""|*ERR*|No\ *) REFRESH_OUTCOME=error ;; *) REFRESH_OUTCOME=ok ;; esac
-    btt_trace refresh "$STARTED" "$REFRESH_OUTCOME" "value=$REFRESHED"
-    exit 0
-fi
-
-VALUE="$(btt_cache_get "$BTT_WIDGET_NAME" "$VALUE_MAX_AGE")"
-FRESH=$?
-FORCE=0; btt_force_pending && FORCE=1
-if (( FRESH != 0 || FORCE )); then
-    btt_refresh_detached "$BTT_WIDGET_NAME" "$BTT_WIDGET_REFRESH_MAX_RUN" "$SELF" --refresh "$BTT_WIDGET_UUID"
-fi
-OUTCOME=cached; (( FRESH != 0 )) && OUTCOME=stale; (( FORCE )) && OUTCOME=forced; [[ -n "$VALUE" ]] || OUTCOME=empty
-btt_trace widget "$STARTED" "$OUTCOME"
-emit_widget "${VALUE:-…}"
+btt_cached_widget_main "$REFRESH_MODE" "$SELF" "$VALUE_MAX_AGE" compute_value

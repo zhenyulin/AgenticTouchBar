@@ -150,6 +150,12 @@ evidence: a newer `timer-widget` row means BTT dispatched the refresh.
   weren't happening reliably. The cap bounds the worst case to two 3-minute
   intervals instead of running until an idle gap happens to appear.
 - **Logs:**
+  - `logs/restart.tsv` — structured restart ledger: `before`/`first-tick`
+    rows from the guard, and `manual-before`/`manual-first-tick` rows from
+    the Date/Time widget's tap-to-restart (`actions/tap-restart.sh`), each
+    restart joined by its restart_id. The manual rows carry the guard's
+    per-probe assessment at tap time (`logs/freeze-guard-state.json`) so
+    later analysis can see why the guard did not catch that freeze itself.
   - `logs/freeze-guard.log` — records every five-second probe with its latest
     complete `timer-widget` trace row, plus the final row observed before a
     restart and every deferred preventive restart.

@@ -85,15 +85,46 @@ NOW_PLAYING_LINE_FORMATS = (
 # Mirrored from the shell widgets in bttpreset/Default.bttpreset.
 LYRICS_FONT_SIZE = float(os.environ.get("BTT_LYRICS_FONT_SIZE", "13"))
 NOW_PLAYING_FONT_SIZE = float(os.environ.get("BTT_LYRICS_NOW_PLAYING_FONT", "11"))
-NOW_PLAYING_LINE_MAX_CHARS = int(
-    os.environ.get("BTT_LYRICS_NOW_PLAYING_MAX_CHARS", "90")
+# How much Now Playing text the widget can actually show before BTT
+# truncates it. Calibrated 2026-08-12 against the Saint-Saëns Organ
+# Symphony: both rows were visible through "Poco a" (row 1) and "No. 3"
+# (row 2), i.e. ~527 px of the 11 pt text -- far past the 400 pt box's
+# nominal 365 pt text budget (BTTTBWidgetWidth 400 minus the 30 pt cover
+# icon and 5 pt gap), so the box is not the limiter it looked like. The
+# prediction caps at the observed visible extent; a longer title truncates
+# rather than costing the lyric any more of the row.
+NOW_PLAYING_MAX_TEXT_PX = float(os.environ.get("BTT_LYRICS_NOW_PLAYING_MAX_PX", "527"))
+# The OpenCode quota widget (widgets/opencode-quota.sh), the row's last
+# item. While the Now Playing + Lyrics pair is short of space the lyrics
+# widget hides it (BTT removes script widgets whose text is empty) and the
+# pair's budget grows by the slot it frees: the widest of its two text
+# rows at OPENCODE_FONT_SIZE, plus the icon (BTTTouchBarItemIconWidth 22),
+# the gap after it (BTTTouchBarIconTextOffset 5), and the widget's own
+# negative item padding and free space, all from bttpreset/Default.bttpreset.
+OPENCODE_FONT_SIZE = float(os.environ.get("BTT_LYRICS_OPENCODE_FONT", "15"))
+OPENCODE_ICON_PX = float(os.environ.get("BTT_LYRICS_OPENCODE_ICON_PX", "22"))
+OPENCODE_ICON_OFFSET_PX = float(
+    os.environ.get("BTT_LYRICS_OPENCODE_ICON_OFFSET_PX", "5")
 )
-# BTT stops widening the widget at BTTTBWidgetWidth (400), of which the
-# cover icon (BTTTouchBarItemIconWidth 30) and the gap after it
-# (BTTTouchBarIconTextOffset 5) are not text. A longer title truncates
-# rather than taking more of the row, so it stops costing the lyric
-# anything either.
-NOW_PLAYING_MAX_TEXT_PX = float(os.environ.get("BTT_LYRICS_NOW_PLAYING_MAX_PX", "365"))
+OPENCODE_ITEM_PADDING_PX = float(os.environ.get("BTT_LYRICS_OPENCODE_PADDING_PX", "-5"))
+OPENCODE_FREE_SPACE_PX = float(
+    os.environ.get("BTT_LYRICS_OPENCODE_FREE_SPACE_PX", "-10")
+)
+# What the OpenCode widget shows before its first value, and the widest it
+# can plausibly ever show -- the default the slot calculation falls back to.
+OPENCODE_DEFAULT_TEXT = "100%\n7d"
+# How long an untouched hide flag is believed: the lyrics widget rewrites it
+# every tick while the pair is cramped, so an old flag belongs to a lyrics
+# widget that stopped running, and OpenCode comes back.
+OPENCODE_HIDE_MAX_AGE_SECONDS = float(
+    os.environ.get("BTT_LYRICS_OPENCODE_HIDE_MAX_AGE", "90")
+)
+# The OpenCode widget's BetterTouchTool UUID, for the update_touch_bar_widget
+# / refresh_widget kicks that hide and restore it. Mirrors
+# actions/set-widget-variables.sh (BTT_WIDGET_OPENCODE_UUID).
+OPENCODE_WIDGET_UUID = os.environ.get(
+    "BTT_WIDGET_OPENCODE_UUID", "AE01C9E2-9EC6-4329-8358-8389BFB850F8"
+)
 # Generous: this runs in the detached helper, never on the widget path, and
 # the only thing a tighter bound would buy is a missing measurement.
 MEASURE_TIMEOUT_SECONDS = float(os.environ.get("BTT_LYRICS_MEASURE_TIMEOUT", "8.0"))
@@ -175,6 +206,21 @@ LAST_TEXT_PATH = CACHE_DIR / "last.txt"
 # the --measure helper and read back by every tick. See viewport.py.
 VIEWPORT_PATH = CACHE_DIR / "viewport.json"
 VALUE_PATH = CACHE_DIR / "lyrics.value"
+# The quota value the OpenCode widget is drawing (cache/opencode-quota.value
+# lives beside the other widgets' values, not under cache/lyrics).
+OPENCODE_VALUE_PATH = Path(
+    os.environ.get(
+        "BTT_LYRICS_OPENCODE_VALUE", str(REPO_DIR / "cache" / "opencode-quota.value")
+    )
+)
+# Where the lyrics widget leaves the "pair is cramped" signal the OpenCode
+# widget's own tick honours; see render.update_opencode_visibility.
+OPENCODE_HIDE_PATH = CACHE_DIR / "opencode-hide"
+# The cramped-pair hide is disabled for now: the lyrics widget leaves the
+# OpenCode widget alone and never claims its slot. Set to True to hand the
+# slot back to the pair while it is short of space (see
+# render.update_opencode_visibility and viewport.effective_budget_px).
+OPENCODE_HIDE_ENABLED = False
 # What the last rendering tick put on screen, and when that frame is due to
 # change. Written only by ticks that render something of their own, so an
 # expired deadline in here is the freeze guard's evidence that the widget has
@@ -255,8 +301,26 @@ PENDING_HOURGLASS_SECONDS = float(os.environ.get("BTT_LYRICS_PENDING_WAIT", "1.5
 # settles on the new track, and how often it is checked meanwhile.
 TRACK_FOLLOW_SECONDS = float(os.environ.get("BTT_LYRICS_TRACK_FOLLOW", "3.0"))
 TRACK_FOLLOW_INTERVAL = float(os.environ.get("BTT_LYRICS_TRACK_FOLLOW_STEP", "0.15"))
-# The Lyrics widget's BTT UUID, so a track change can repaint it at once.
-LYRICS_WIDGET_UUID = os.environ.get("BTT_LYRICS_WIDGET_UUID", "")
+# The Lyrics and Now Playing widgets' BTT UUIDs, so the event watcher (the
+# --sample helper and the --track-changed follow in cli.py) can run the
+# closing sequence -- clear the lyric, then hide the row. Mirrors
+# actions/set-widget-variables.sh, like OPENCODE_WIDGET_UUID above.
+LYRICS_WIDGET_UUID = os.environ.get(
+    "BTT_LYRICS_WIDGET_UUID", "E19BB023-5060-4A56-95C8-6E7402779870"
+)
+NOW_PLAYING_WIDGET_UUID = os.environ.get(
+    "BTT_NOW_PLAYING_WIDGET_UUID", "710F54C5-25B0-4A2C-B960-D9C0FE78B1B7"
+)
+# Where the event watcher records the track the closing sequence cleared
+# (cache/lyrics-cleared, beside the other widgets' cache files). The Lyrics
+# widget holds its frame empty while its state sample still matches this
+# identity -- see render.cleared_while_sample_current.
+CLEARED_MARKER_PATH = REPO_DIR / "cache" / "lyrics-cleared"
+# The age cap on a closing marker. Normal markers are removed by the next
+# watcher run once the state moves past the cleared identity; this bounds a
+# marker left behind by a watcher that died mid-sequence, so a genuinely
+# playing track re-appears even then.
+CLEAR_HOLD_SECONDS = float(os.environ.get("BTT_LYRICS_CLEAR_HOLD", "15.0"))
 RETRY_CACHE_ERROR_SECONDS = 90
 RETRY_NOT_FOUND_SECONDS = 6 * 60 * 60
 # Bump this when provider behavior or cache-key inputs change. Apple-cache

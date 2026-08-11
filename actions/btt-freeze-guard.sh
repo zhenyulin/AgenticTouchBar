@@ -63,6 +63,15 @@
 # as restart_id, so the ledger can be joined with logs/freeze-guard.log and
 # the `+` markers in the traces.
 #
+# Manual restarts leave the same trail. Tapping the Date/Time widget runs
+# actions/tap-restart.sh (wired in bttpreset/Default.bttpreset) before BTT's
+# native restart action; it writes a `manual-before` row together with this
+# guard's per-probe assessment (logs/freeze-guard-state.json, written in the
+# main loop below), and the loop closes it with a `manual-first-tick` row.
+# The state file plus that closure is how later analysis answers "why didn't
+# the guard catch this earlier?" -- it records exactly what the guard
+# believed at the moment the user gave up and restarted by hand.
+#
 # Not every stuck display is BTT's fault, and restarting BTT does not fix the
 # ones that are not, so an overdue deadline is read together with the widget's
 # newest trace row before reaching for the kill. A "no_sample" tick means the
@@ -120,6 +129,10 @@ LYRICS_TRACE_FILE="${BTT_LYRICS_TRACE_FILE:-$LOG_DIR/lyrics/trace.tsv}"
 LYRICS_RENDER_FILE="${BTT_LYRICS_RENDER_FILE:-$LOG_DIR/lyrics/render.json}"
 LYRICS_VALUE_FILE="${BTT_LYRICS_VALUE_FILE:-$CACHE_DIR/lyrics.value}"
 LYRICS_LAST_FILE="${BTT_LYRICS_LAST_FILE:-$CACHE_DIR/last.txt}"
+# The guard's per-probe assessment, rewritten every loop iteration. The
+# tap-to-restart action (actions/tap-restart.sh) reads it to record what the
+# guard believed at the moment the user restarted by hand.
+STATE_FILE="${BTT_FREEZE_GUARD_STATE_FILE:-$LOG_DIR/freeze-guard-state.json}"
 
 number_or() {
 	local value="$1" fallback="$2"
@@ -347,6 +360,18 @@ lyrics_display_state() {
 		"$overdue" "$(( now - render_at ))")"
 }
 
+	# One-line JSON snapshot of the current assessment. Written at the top of
+	# every loop iteration, before any branch can skip it, so even a quiet or
+	# unknown heartbeat leaves a fresh file behind; the lyrics/verdict fields
+	# trail the loop by at most one probe.
+	write_state() {
+		printf '{"ts":%s,"heartbeat_age":%s,"lyrics":%s,"verdict":%s}\n' \
+			"$EPOCHREALTIME" "${beat:-unknown}" \
+			"$(printf '%s' "${lyrics:-unknown}" | /usr/bin/awk '{gsub(/["\\]/, ""); print}')" \
+			"${LAST_VERDICT:-none}" \
+			> "$STATE_FILE" 2>/dev/null || true
+	}
+
 # --- Restarting -------------------------------------------------------------
 
 restart_duration() {
@@ -371,8 +396,9 @@ restart_duration() {
 
 # Append one row to logs/restart.tsv, creating the header on first use.
 # Columns: phase, ts, restart_id, btt_pid, key, detail. restart_id is the
-# trigger timestamp, shared by the `before` and `first-tick` rows of one
-# restart so they can be joined.
+# trigger timestamp, shared by the `before`/`first-tick` rows of a guard
+# restart and the `manual-before`/`manual-first-tick` rows of a tap-to-
+# restart (actions/tap-restart.sh) so each can be joined.
 restart_log() {
 	local phase="$1" ts="$2" restart_id="$3" pid="$4" key="$5" detail="$6"
 	[[ -f "$RESTART_LOG" ]] || \
@@ -638,6 +664,7 @@ while true; do
 	sleep "$PROBE_INTERVAL"
 
 	beat="$(heartbeat_age)"
+	write_state
 	if [[ "$beat" == "unknown" ]]; then
 		log_verdict no-trace "no ${HEARTBEAT_WIDGETS// / or } tick on record -- nothing to watch"
 		continue
@@ -664,6 +691,39 @@ while true; do
 				"$(btt_pid)" "${first[1]}" "tick_ts=${first[2]} lag=${lag}s"
 			log "first heartbeat tick after restart: ${first[1]} ${lag}s after trigger (tick_ts=${first[2]})"
 			RESTART_TRIGGER_TS=0
+		fi
+	fi
+
+	# Manual restarts (actions/tap-restart.sh, wired to the Date/Time widget
+	# tap) write their own `before` row with restart_id = the tap's
+	# timestamp. Close every open row when the first heartbeat tick lands
+	# after the newest one -- that tick is then after all of them -- so a
+	# manual restart gets the same recovery-lag evidence as the guard's own.
+	manual_open="$(/usr/bin/awk -F '\t' '
+		NR == FNR {
+			if ($1 == "first-tick" || $1 == "manual-first-tick") closed[$3] = 1
+			next
+		}
+		$1 == "manual-before" && !closed[$3] && ($3 + 0) > newest { newest = $3 + 0 }
+		END { if (newest) printf "%.3f\n", newest }
+	' "$RESTART_LOG" "$RESTART_LOG" 2>/dev/null)"
+	if [[ -n "$manual_open" ]]; then
+		first_tick="$(first_heartbeat_after "$manual_open")"
+		if [[ -n "$first_tick" ]]; then
+			first=(${=first_tick})
+			tick_ts="${first[2]}"
+			while read -r open_id; do
+				lag="$(printf '%.1f' $(( tick_ts - open_id )))"
+				restart_log manual-first-tick "$EPOCHREALTIME" "$open_id" \
+					"$(btt_pid)" "${first[1]}" "tick_ts=${tick_ts} lag=${lag}s"
+				log "first heartbeat tick after manual restart: ${first[1]} ${lag}s after tap (restart_id=${open_id})"
+			done < <(/usr/bin/awk -F '\t' '
+				NR == FNR {
+					if ($1 == "first-tick" || $1 == "manual-first-tick") closed[$3] = 1
+					next
+				}
+				$1 == "manual-before" && !closed[$3] { print $3 }
+			' "$RESTART_LOG" "$RESTART_LOG" 2>/dev/null)
 		fi
 	fi
 

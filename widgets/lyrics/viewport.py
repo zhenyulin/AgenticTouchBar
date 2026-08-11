@@ -30,11 +30,12 @@ from typing import Any
 
 from . import config
 from .cache import atomic_write_json
+from .layout import display_width
 from .locking import spawn_helper
 from .output import log_error, trace
 
 MEASURE_SCRIPT = Path(__file__).resolve().with_name("text_width.js")
-CHARACTER_METRICS_VERSION = 2
+CHARACTER_METRICS_VERSION = 3
 MEASURED_CHARACTERS = " " + string.ascii_letters + string.digits + string.punctuation
 
 
@@ -80,8 +81,7 @@ def now_playing_lines(track: dict[str, Any]) -> list[str]:
         artist=str(track.get("artist", "") or ""),
     )
     return [
-        line_format.format_map(fields)[: config.NOW_PLAYING_LINE_MAX_CHARS]
-        for line_format in _now_playing_formats(fields)
+        line_format.format_map(fields) for line_format in _now_playing_formats(fields)
     ]
 
 
@@ -174,6 +174,87 @@ def lyric_width_px(now_playing_px: float, budget_px: float) -> float:
     )
 
 
+def opencode_rows() -> list[str]:
+    """The rows the OpenCode quota widget is drawing right now."""
+    try:
+        text = config.OPENCODE_VALUE_PATH.read_text(encoding="utf-8").strip()
+    except OSError:
+        text = config.OPENCODE_DEFAULT_TEXT
+    rows = [row for row in text.split("\n") if row][:2]
+    return rows or [config.OPENCODE_DEFAULT_TEXT.split("\n")[0]]
+
+
+def opencode_text_px() -> float:
+    """The widest OpenCode row, in points at the widget's own font size.
+
+    Scaled from the lyric font's stored glyph advances: the two widgets use
+    the same system font at different sizes, and Cocoa metrics scale
+    linearly.
+    """
+    scale = config.OPENCODE_FONT_SIZE / config.LYRICS_FONT_SIZE
+    return max(display_width(row) for row in opencode_rows()) * (
+        config.PIXELS_PER_CELL * scale
+    )
+
+
+def opencode_slot_px() -> float:
+    """The row slot the OpenCode widget occupies: text, icon and gaps.
+
+    The icon (BTTTouchBarItemIconWidth 22) and the gap after it
+    (BTTTouchBarIconTextOffset 5) add to the widest text row; the widget's
+    own negative item padding and free space pull its neighbours in, so
+    they subtract (bttpreset/Default.bttpreset).
+    """
+    return (
+        opencode_text_px()
+        + config.OPENCODE_ICON_PX
+        + config.OPENCODE_ICON_OFFSET_PX
+        + config.OPENCODE_ITEM_PADDING_PX
+        + config.OPENCODE_FREE_SPACE_PX
+    )
+
+
+def effective_budget_px(track: dict[str, Any]) -> float:
+    """The pair's budget right now, OpenCode slot included when hidden.
+
+    While the pair is cramped the lyrics widget hides the OpenCode widget,
+    so the pair may take that much more of the row. The hide flag is the
+    same signal the OpenCode widget's own tick honours, which keeps the
+    two sides of the bargain in step.
+    """
+    budget = lyric_budget_px(track)
+    if config.OPENCODE_HIDE_ENABLED and config.OPENCODE_HIDE_PATH.is_file():
+        budget += opencode_slot_px()
+    return budget
+
+
+def pair_short_of_space(track: dict[str, Any], key: str) -> bool:
+    """True while the Now Playing + Lyrics pair is cramped on the row.
+
+    The lyrics widget hides the OpenCode widget for as long as this holds
+    (render.update_opencode_visibility). Two signs, both from the stored
+    measurement: a Now Playing row whose text is past the visible budget
+    (BTT truncates it), or a pair that cannot give the lyric its minimum
+    width. Before the current track has been measured, the width carried
+    from the previous one is the only guide: a lyric squeezed to its floor
+    says the pair was cramped.
+    """
+    stored = read_viewport()
+    lyric_px = stored_lyric_px(stored)
+    if stored.get("key") != key:
+        return lyric_px is not None and lyric_px <= config.MIN_LYRIC_WIDTH_PX
+
+    rows = stored.get("now_playing_rows_px")
+    if not (isinstance(rows, list) and rows):
+        return lyric_px is not None and lyric_px <= config.MIN_LYRIC_WIDTH_PX
+    if any(float(width) > config.NOW_PLAYING_MAX_TEXT_PX for width in rows):
+        return True
+    now_playing_px = stored.get("now_playing_px")
+    return isinstance(
+        now_playing_px, (int, float)
+    ) and now_playing_px + config.MIN_LYRIC_WIDTH_PX > lyric_budget_px(track)
+
+
 @cache
 def read_viewport() -> dict[str, Any]:
     """The stored width. Cached: BTT runs a fresh process every tick, so this
@@ -235,7 +316,7 @@ def ensure_viewport(key: str, track: dict[str, Any]) -> None:
         return
 
     stored = read_viewport()
-    budget = lyric_budget_px(track)
+    budget = effective_budget_px(track)
     if (
         stored.get("key") == key
         and stored.get("metrics_version") == CHARACTER_METRICS_VERSION
@@ -272,7 +353,7 @@ def store_measured_viewport(key: str, track: dict[str, Any]) -> None:
     started = time.monotonic()
     row_widths, character_widths = measure_track(track)
     now_playing_px = min(max(row_widths), config.NOW_PLAYING_MAX_TEXT_PX)
-    budget_px = lyric_budget_px(track)
+    budget_px = effective_budget_px(track)
     lyric_px = lyric_width_px(now_playing_px, budget_px)
 
     # The track can change again while osascript is starting up. Landing a
