@@ -136,7 +136,7 @@ def render_widget(
     prefix = (
         "Ⅱ "
         if state == "paused"
-        else ("♪ " if record.get("source") == "apple-cache" else "♫ ")
+        else ("♪" if record.get("source") == "apple-cache" else "♫") + config.NOTE_GAP
     )
     if lyric is None:
         return prefix + title

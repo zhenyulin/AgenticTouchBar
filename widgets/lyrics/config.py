@@ -116,10 +116,15 @@ BREAK_ON_SPACE = os.environ.get("BTT_LYRICS_BREAK_ON_SPACE", "1") not in {
     "False",
 }
 MAX_LYRIC_ROWS = int(os.environ.get("BTT_LYRICS_MAX_ROWS", "2"))
-# Wider than the prefix's character count on purpose: the Touch Bar's
-# proportional font renders a symbol like "♪ " wider than two plain spaces,
-# so matching character-for-character still looks left-shifted in practice.
+# Row 2 carries no note symbol. Its line also renders at a smaller font than
+# the first -- BTT fits both rows into the widget's fixed height by drawing
+# the second around 10-11 pt, against the first row's 13 pt -- so spaces on
+# it are proportionally narrower and the calibrated indent is 7 of them.
 CONTINUATION_INDENT = os.environ.get("BTT_LYRICS_INDENT", "       ")
+# The gap after the first row's music-note symbol: a plain space. A text
+# widget cannot express an exact pixel gap, so a single space is the
+# calibrated separation before the lyric at the first row's 13 pt font.
+NOTE_GAP = " "
 # A track with no lyrics keeps its status symbol (♬ instrumental, ♩ not
 # found) for the whole track, so it fades from MARKER_FADE_MAX white down
 # to MARKER_FADE_MIN gray as the track plays, following the playback
