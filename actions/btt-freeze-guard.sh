@@ -45,6 +45,17 @@
 #      knowledge here to check. It is also self-scaling: a long instrumental
 #      break sets a deadline far out instead of tripping a fixed threshold.
 #
+# Tuning history (2026-08-11): the heartbeat timeout was raised from 45s to
+# 90s. The restart ledger showed ~7 restarts/hour over a 12h window, with the
+# median trigger at ~53s of silence and the median detected gap at 72s, while
+# genuine wedges ran 15-30min (p90 930s) and some 60-90s pauses resolved on
+# their own (one at 85s, under an input deferral). At 45s -- four missed 10s
+# ticks -- the guard was restarting BTT for pauses that were not wedges, and
+# every restart costs a Touch Bar outage, a timer-widget reset, and mid-gesture
+# input risk. 90s (nine missed ticks) still catches a real wedge an order of
+# magnitude sooner than it would end on its own, while sparing the short
+# pauses.
+#
 # Every restart is also recorded in logs/restart.tsv: a `before` row the
 # instant a restart is triggered (with the reason), and a `first-tick` row
 # when the next timer/clash-latency tick lands after it -- the first proof
@@ -120,8 +131,10 @@ number_or() {
 # How often the signals are read. Cheap: two awk passes over local files.
 PROBE_INTERVAL="$(number_or "${BTT_PROBE_INTERVAL:-10}" 10)"
 # How long the widget heartbeat may go quiet before BTT is considered wedged.
-# timer-widget ticks every 10s, so this is four missed ticks.
-HEARTBEAT_TIMEOUT="$(number_or "${BTT_HEARTBEAT_TIMEOUT:-45}" 45)"
+# timer-widget ticks every 10s, so this is nine missed ticks. Raised from 45s
+# on 2026-08-11: half of all detected pauses were <=72s and many resolved on
+# their own (see header).
+HEARTBEAT_TIMEOUT="$(number_or "${BTT_HEARTBEAT_TIMEOUT:-90}" 90)"
 # Slack on the lyrics deadline, covering a slow tick plus sampler jitter.
 LYRICS_OVERDUE_GRACE="$(number_or "${BTT_LYRICS_OVERDUE_GRACE:-3}" 3)"
 # Consecutive overdue probes before restarting. The heartbeat is proof BTT is
@@ -158,6 +171,11 @@ mkdir -p "$CACHE_DIR" "$LOG_DIR" 2>/dev/null
 log() {
 	echo "$(date '+%Y-%m-%d %H:%M:%S') $*" >> "$LOG"
 }
+
+# One line per process start, with the script's mtime: the deployed copy is
+# re-copied by hand and the agent kickstarted, so a start line whose mtime is
+# older than the repo file is the first sign a deployment was not finished.
+log "freeze-guard started -- script=${0:A} mtime=$(/usr/bin/stat -f '%Sm' "${0:A}" 2>/dev/null || echo unknown) pid=$$"
 
 # Only log a repeated verdict once, so a healthy day is a handful of lines
 # rather than one every probe interval. Deduplicated on a caller-supplied key
