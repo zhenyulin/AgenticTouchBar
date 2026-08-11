@@ -12,11 +12,7 @@ from .apple_music import _last_sample_age_ms, current_track, is_placeholder_trac
 from .cache import atomic_write_json, cache_path, read_compatible_cache
 from .fetch import start_background_fetch
 from .layout import crop_cells, current_lyric_line, display_width, marquee, wrap_lyric
-from .locking import (
-    acquire_widget_lock,
-    fetch_waiting_seconds,
-    release_widget_lock,
-)
+from .locking import acquire_widget_lock, fetch_waiting_seconds, release_widget_lock
 from .lrc import parse_lrc
 from .metadata import track_cache_key
 from .output import emit, emit_last_output, log_error, trace
@@ -210,11 +206,12 @@ def render_tick() -> str:
     now = time.time()
 
     if cached is not None and cached.get("status") == "not_found":
-        try:
-            apple_record = apple_cache_record(track)
-        except Exception as exc:
-            log_error(f"Apple lyrics cache lookup failed: {exc}")
-            apple_record = None
+        apple_record = None
+        if config.APPLE_CACHE_ENABLED:
+            try:
+                apple_record = apple_cache_record(track)
+            except Exception as exc:
+                log_error(f"Apple lyrics cache lookup failed: {exc}")
         if apple_record is not None:
             apple_record = dict(apple_record)
             apple_record["parsedLines"] = parse_lrc(

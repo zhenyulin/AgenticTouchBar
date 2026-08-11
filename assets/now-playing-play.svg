@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <!-- Solid white right-pointing play triangle, matching the widget's
+       previous generated icon so it renders at the same small size in
+      BTT's 30 px icon slot. Source for now-playing-play.svg; the widget
+      uses the PNG (BTT rasterizes SVG icons on every draw, and this
+      widget redraws once a second) -- see widgets/now-playing.sh -->
+  <path fill="#FFFFFF" d="M31.25 28.125 L68.75 50 L31.25 71.875 Z"/>
+</svg>

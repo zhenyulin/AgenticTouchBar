@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import base64
 import json
+import re
 import string
 import subprocess
 import time
@@ -49,11 +50,33 @@ class _TrackFields(dict):
         return ""
 
 
+_PARENS_STRIP_RE = re.compile(r"\([^)]*\)")
+_WS_COLLAPSE_RE = re.compile(r"\s+")
+
+
+def strip_parens(text: str) -> str:
+    """ "Song (feat. X)" -> "Song", collapsing the leftover gap.
+
+    The now-playing widget (widgets/now-playing.sh) strips the same way, so
+    the measured width stays the width the widget actually draws.
+    """
+    return _WS_COLLAPSE_RE.sub(" ", _PARENS_STRIP_RE.sub("", text)).strip()
+
+
+def display_album(text: str) -> str:
+    """Only the first work of a multi-work album, e.g. "X; Y" -> "X".
+
+    The now-playing widget (widgets/now-playing.sh) shows the same, so the
+    measured width stays the width the widget actually draws.
+    """
+    return strip_parens(text).split(";")[0].strip()
+
+
 def now_playing_lines(track: dict[str, Any]) -> list[str]:
     """The rows the Now Playing widget is drawing for this track."""
     fields = _TrackFields(
-        title=str(track.get("title", "") or ""),
-        album=str(track.get("album", "") or ""),
+        title=strip_parens(str(track.get("title", "") or "")),
+        album=display_album(str(track.get("album", "") or "")),
         artist=str(track.get("artist", "") or ""),
     )
     return [

@@ -53,6 +53,8 @@ timer_trace_row() {
 
 timer_widget_responsive() {
     local before after probe_pid elapsed
+    # The probe talks to BTT; osascript would auto-launch a dead one.
+    /usr/bin/pgrep -x BetterTouchTool >/dev/null 2>&1 || return 1
     before="$(timer_trace_stamp)"
     /usr/bin/osascript -e "tell application \"BetterTouchTool\" to refresh_widget \"$TIMER_WIDGET_UUID\"" >/dev/null 2>&1 &
     probe_pid=$!

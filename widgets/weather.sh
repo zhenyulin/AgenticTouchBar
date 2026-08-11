@@ -9,6 +9,12 @@
 # Two instances, chosen by the first argument:
 #   --text   "77°F" over "41%"      (the Weather widget)
 #   --icon   an emoji for the current conditions (the Weath Icon widget)
+#   --refresh   re-ask BTT (Apple WeatherKit) and refresh the cache; runs
+#               detached, never in the widget path
+#
+# The widgets render only from cache/weather.data.value: a fresh value wins,
+# and a stale one still prints, so when a song ends they come back with the
+# previous values instantly while a detached refresh re-asks BTT.
 #
 # While something plays they emit nothing, and BTT hides a script widget
 # whose text is empty -- the same rule that hides the Lyrics widget. The Now
@@ -26,6 +32,7 @@ MODE="${1:-text}"
 case "$MODE" in
     --text|text) MODE="text" ;;
     --icon|icon) MODE="icon" ;;
+    --refresh)   MODE="refresh" ;;
     *) exit 2 ;;
 esac
 
@@ -42,6 +49,17 @@ SAMPLE_MAX_AGE="${BTT_WEATHER_SAMPLE_MAX_AGE:-8}"
 WEATHER_TTL="${BTT_WEATHER_TTL:-300}"
 # get_weather always returns Celsius, so the script converts when needed.
 UNIT="${BTT_WEATHER_UNIT:-celsius}"
+
+if [[ "$MODE" == refresh ]]; then
+    # osascript auto-launches a dead BTT; only query it while it is running.
+    /usr/bin/pgrep -x BetterTouchTool >/dev/null 2>&1 || exit 1
+    json="$(osascript -e 'tell application "BetterTouchTool" to get_weather' 2>/dev/null)"
+    if [[ -n "$json" ]] && jq -e . >/dev/null 2>&1 <<<"$json"; then
+        btt_cache_put weather.data "$json"
+        exit 0
+    fi
+    exit 1
+fi
 
 playing_now() {
     local now st ts
@@ -69,20 +87,22 @@ playing_now() {
 }
 
 weather_json() {
-    # A fresh cache wins; otherwise ask BTT (Apple WeatherKit) and cache it.
-    if btt_cache_get weather.data "$WEATHER_TTL" >/dev/null 2>&1; then
-        btt_cache_get weather.data 999999999 2>/dev/null
-        return 0
+    # Render only from the cache: a fresh value wins, and a stale one still
+    # prints, so a reveal after a long playback republishes the previous
+    # values instantly. When the cache is stale or missing, a detached
+    # refresh re-asks BTT (Apple WeatherKit), so the widget path never
+    # blocks on AppleScript.
+    local json fresh
+    json="$(btt_cache_get weather.data "$WEATHER_TTL")"
+    fresh=$?
+
+    if (( fresh != 0 )); then
+        btt_refresh_detached weather "$BTT_WIDGET_REFRESH_MAX_RUN" "$SELF" --refresh
     fi
 
-    local json
-    json="$(osascript -e 'tell application "BetterTouchTool" to get_weather' 2>/dev/null)"
-    if [[ -n "$json" ]] && jq -e . >/dev/null 2>&1 <<<"$json"; then
-        btt_cache_put weather.data "$json"
-        print -r -- "$json"
-        return 0
-    fi
-    return 1
+    [[ -n "$json" ]] || return 1
+    print -r -- "$json"
+    return 0
 }
 
 if playing_now; then

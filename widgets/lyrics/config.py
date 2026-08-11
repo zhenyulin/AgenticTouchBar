@@ -35,9 +35,17 @@ PIXELS_PER_CELL = float(os.environ.get("BTT_LYRICS_PX_PER_CELL", "7.0"))
 # and shrinks with the title and album it is showing (see viewport.py).
 # LYRIC_WIDTH_BUDGET_PX is what the two of them may take together.
 #
-# Calibrated against the current 13 px lyrics widget: the existing track leaves
-# enough room for the next complete word without changing the widget font.
-LYRIC_WIDTH_BUDGET_PX = float(os.environ.get("BTT_LYRICS_WIDTH_BUDGET_PX", "485"))
+# Calibrated against the preset layout in bttpreset/Default.bttpreset: the
+# Now Playing widget's negative paddings -- BTTTouchBarItemPadding -5,
+# BTTTouchBarFreeSpaceAfterButton -10, and the Lyrics widget's own
+# BTTTouchBarItemPadding -5 -- let the pair's text use 20 px more than its
+# nominal slot sum, so the budget is text width plus that margin credit.
+# Measured at these settings (2026-08-11): a typical album/title row is
+# ~268 px at the 11 pt Now Playing font, and a nine-word lyric line is
+# ~284 px including the prefix at 13 pt; 570 leaves both on screen together
+# with headroom, where 485 wrapped the same line with visible free space to
+# its right.
+LYRIC_WIDTH_BUDGET_PX = float(os.environ.get("BTT_LYRICS_WIDTH_BUDGET_PX", "570"))
 # The Star widget (★/☆) draws only while Apple Music is the player; with
 # QQ Music or anything else it renders empty and BTT hides it, freeing its
 # row slot -- BTTTouchBarButtonWidth 100 minus the 5 px item padding -- for
@@ -49,8 +57,9 @@ LYRIC_EXTRA_WORD_PX = float(os.environ.get("BTT_LYRICS_EXTRA_WORD_PX", "95"))
 # Bounds on the lyric's own share. The floor stops a very long title from
 # squeezing the lyric down to a few characters -- past it the row overflows
 # the Touch Bar's right edge instead, which is at least still readable.
+# The cap is the Lyrics widget's own BTTTBWidgetWidth (400) in the preset.
 MIN_LYRIC_WIDTH_PX = float(os.environ.get("BTT_LYRICS_MIN_WIDTH_PX", "160"))
-MAX_LYRIC_WIDTH_PX = float(os.environ.get("BTT_LYRICS_MAX_WIDTH_PX", "390"))
+MAX_LYRIC_WIDTH_PX = float(os.environ.get("BTT_LYRICS_MAX_WIDTH_PX", "400"))
 # Used until a track has been measured, and by any track whose measurement
 # fails. Deliberately the conservative width this widget used before it
 # measured anything, so a broken measurement degrades to the old behaviour
@@ -63,25 +72,27 @@ VIEWPORT_WIDTH_OVERRIDE = (
     int(_viewport_width_override) if _viewport_width_override is not None else None
 )
 
-# The Now Playing widget's own settings, mirrored from its BTT trigger config
-# in bttpreset/Default.bttpreset -- BTTTouchBarLine1Format,
-# BTTTouchBarLine2Format, BTTTouchBarButtonFontSize and
-# BTTTouchBarLine1MaxChars. Nothing keeps these in step automatically, so a
-# change over in BTT belongs here too.
+# The Now Playing widget's own settings, mirrored from widgets/now-playing.sh
+# (the script widget that replaced BTT's native Now Playing widget in
+# bttpreset/Default.bttpreset). The script reads the same two format
+# variables, so display and measurement share one knob. Line 1 is album
+# first with the ▸ separator: for "What a Wonderful World" it reads
+# "What a Wonderful World ▸ What a Wonderful World" at 11 pt.
 NOW_PLAYING_LINE_FORMATS = (
-    os.environ.get("BTT_LYRICS_NOW_PLAYING_LINE1", "{title} - {album}"),
-    os.environ.get("BTT_LYRICS_NOW_PLAYING_LINE2", "{artist} "),
+    os.environ.get("BTT_LYRICS_NOW_PLAYING_LINE1", "{album} ▸ {title}"),
+    os.environ.get("BTT_LYRICS_NOW_PLAYING_LINE2", "{artist}"),
 )
-# Mirrored from the Lyrics shell widget in bttpreset/Default.bttpreset.
+# Mirrored from the shell widgets in bttpreset/Default.bttpreset.
 LYRICS_FONT_SIZE = float(os.environ.get("BTT_LYRICS_FONT_SIZE", "13"))
-NOW_PLAYING_FONT_SIZE = float(os.environ.get("BTT_LYRICS_NOW_PLAYING_FONT", "12"))
+NOW_PLAYING_FONT_SIZE = float(os.environ.get("BTT_LYRICS_NOW_PLAYING_FONT", "11"))
 NOW_PLAYING_LINE_MAX_CHARS = int(
-    os.environ.get("BTT_LYRICS_NOW_PLAYING_MAX_CHARS", "60")
+    os.environ.get("BTT_LYRICS_NOW_PLAYING_MAX_CHARS", "90")
 )
-# BTT stops widening that widget at BTTTBWidgetWidth (400), of which the
-# album cover (BTTTouchBarItemIconWidth 30) and the gap after it
-# (BTTTouchBarIconTextOffset 5) are not text. A longer title truncates rather
-# than taking more of the row, so it stops costing the lyric anything either.
+# BTT stops widening the widget at BTTTBWidgetWidth (400), of which the
+# cover icon (BTTTouchBarItemIconWidth 30) and the gap after it
+# (BTTTouchBarIconTextOffset 5) are not text. A longer title truncates
+# rather than taking more of the row, so it stops costing the lyric
+# anything either.
 NOW_PLAYING_MAX_TEXT_PX = float(os.environ.get("BTT_LYRICS_NOW_PLAYING_MAX_PX", "365"))
 # Generous: this runs in the detached helper, never on the widget path, and
 # the only thing a tighter bound would buy is a missing measurement.
@@ -274,9 +285,12 @@ LOCAL_LYRICS_DIR = Path(
 )
 
 # Apple Music caches the time-synced TTML it fetches for the catalog track it is
-# about to display, as an ordinary NSURLCache entry. Reading it costs one local
-# sqlite query, so it is worth trying before any network provider — but it is an
-# LRU cache holding only the last handful of played tracks, never a library.
+# about to display, as an ordinary NSURLCache entry. It is an LRU cache holding
+# only the last handful of played tracks, never a library. A lookup is NOT one
+# sqlite query: Music holds the DB open in WAL mode, so the reader copies the
+# whole Cache.db (+ -wal/-shm sidecars) to a temp dir first to see uncommitted
+# rows. The render path retries that copy on every tick while a track is
+# not_found, which can stall the widget tick.
 APPLE_MUSIC_CACHE_DB = Path(
     os.environ.get(
         "BTT_LYRICS_APPLE_CACHE_DB",
@@ -292,6 +306,12 @@ APPLE_MUSIC_CACHE_FS_DIR = APPLE_MUSIC_CACHE_DB.with_name("fsCachedData")
 APPLE_MUSIC_CACHE_DURATION_TOLERANCE = 2.0
 # Beyond a handful the query stops being free, and older rows are stale anyway.
 APPLE_MUSIC_CACHE_MAX_ROWS = 12
+
+# TEMPORARILY DISABLED (2026-08-11): each lookup copies Music's whole URL cache
+# DB to a temp dir, and the render path re-runs it every second while a track
+# is not_found. QQ Music/NetEase cover the tracks we care about. Flip back to
+# True to restore the Apple TTML fast path.
+APPLE_CACHE_ENABLED = False
 
 # While a stream starts, Apple Music reports a placeholder track with no
 # artist. Looking those up wastes a fetch and caches a miss under a key the

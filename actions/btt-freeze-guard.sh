@@ -442,6 +442,9 @@ refresh_widgets_bounded() {
 # which does no network or Apple Music work, so a tick that follows is proof
 # of dispatch rather than of anything else.
 nudge_heartbeat() {
+	# osascript auto-launches a dead BTT, undoing a manual quit; the nudge
+	# only makes sense while BTT is running.
+	[[ -n "$(btt_pid)" ]] || return 0
 	/usr/bin/osascript -e \
 		"tell application \"BetterTouchTool\" to refresh_widget \"$TIMER_WIDGET_UUID\"" \
 		>/dev/null 2>&1 &

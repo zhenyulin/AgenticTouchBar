@@ -61,7 +61,7 @@ BTT_WIDGET_COLOR="${BTT_WIDGET_COLOR:-255,255,255,255}"
 BTT_WIDGET_DIM_COLOR="${BTT_WIDGET_DIM_COLOR:-125,125,125,255}"
 
 # The dim color used when a quota is exhausted and waiting for reset.
-BTT_WIDGET_QUOTA_DIM_COLOR="${BTT_WIDGET_QUOTA_DIM_COLOR:-150,150,150,255}"
+BTT_WIDGET_QUOTA_DIM_COLOR="${BTT_WIDGET_QUOTA_DIM_COLOR:-190,190,190,255}"
 
 # Set by quota widgets to enable reset-progress coloring.
 BTT_WIDGET_QUOTA_RESET_CYCLE_MINUTES="${BTT_WIDGET_QUOTA_RESET_CYCLE_MINUTES:-0}"
@@ -300,6 +300,9 @@ btt_refresh_detached() {
             if [[ -n "$uuid" ]]; then
                 for delay in 0 0.5 2; do
                     (( delay > 0 )) && /bin/sleep "$delay"
+                    # osascript auto-launches a dead BTT, undoing a manual
+                    # quit; the redraw only makes sense while BTT is up.
+                    /usr/bin/pgrep -x BetterTouchTool >/dev/null 2>&1 || continue
                     /usr/bin/osascript -e "tell application \"BetterTouchTool\" to refresh_widget \"$uuid\"" >/dev/null 2>&1
                 done
             fi
