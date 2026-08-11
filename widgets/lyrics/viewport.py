@@ -81,8 +81,34 @@ def now_playing_lines(track: dict[str, Any]) -> list[str]:
     )
     return [
         line_format.format_map(fields)[: config.NOW_PLAYING_LINE_MAX_CHARS]
-        for line_format in config.NOW_PLAYING_LINE_FORMATS
+        for line_format in _now_playing_formats(fields)
     ]
+
+
+def _now_playing_formats(fields: _TrackFields) -> tuple[str, str]:
+    """The row formats the widget draws, balanced when they are the stock pair.
+
+    widgets/now-playing.sh swaps between ({album} ▸ {title}, {artist}) and
+    ({title}, {artist} ▸ {album}) on whichever has the smaller rendered
+    length delta; this mirrors that decision so the measured width stays
+    the width the widget actually draws. Custom formats always win.
+    """
+    line1_fmt, line2_fmt = config.NOW_PLAYING_LINE_FORMATS
+    if (
+        line1_fmt == "{album} ▸ {title}"
+        and line2_fmt == "{artist}"
+        and fields.get("artist")
+    ):
+        balanced = ("{title}", "{artist} ▸ {album}")
+        delta_stock = abs(
+            len(line1_fmt.format_map(fields)) - len(line2_fmt.format_map(fields))
+        )
+        delta_balanced = abs(
+            len(balanced[0].format_map(fields)) - len(balanced[1].format_map(fields))
+        )
+        if delta_balanced < delta_stock:
+            line1_fmt, line2_fmt = balanced
+    return line1_fmt, line2_fmt
 
 
 def measure_px(strings: list[str], font_size: float) -> list[float]:

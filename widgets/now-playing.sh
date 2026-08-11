@@ -35,6 +35,10 @@ ALLOWED_BUNDLE_IDS="${BTT_NOW_PLAYING_ALLOWED:-com.apple.Music com.tencent.qqmus
 # The two rows, matching what the Lyrics widget measures its viewport
 # against (BTT_LYRICS_NOW_PLAYING_LINE1/LINE2 in widgets/lyrics/config.py):
 # the formats live in one place so display and measurement stay in step.
+# With the stock pair the rows are balanced by rendered length -- the
+# split with the smaller row-length delta of ({album} ▸ {title}, {artist})
+# vs ({title}, {artist} ▸ {album}) -- and widgets/lyrics/viewport.py
+# mirrors that choice so the measured width stays the drawn width.
 # zsh brace expansion would mangle {album} inside a ${VAR:-default}, so the
 # defaults are applied in the Python below instead.
 LINE1_FMT="${BTT_LYRICS_NOW_PLAYING_LINE1:-}"
@@ -226,6 +230,21 @@ except (TypeError, ValueError):
 icon = artwork_icon(info, cache_dir) if rate > 0 else play_icon(cache_dir, assets_dir)
 
 fields = {"title": title, "artist": artist, "album": album}
+# Balance the rows when the stock pair is in use: of ({album} ▸ {title},
+# {artist}) and ({title}, {artist} ▸ {album}), keep the layout whose two
+# rows are closer in rendered length (ties keep the stock order). The
+# Lyrics viewport mirrors this (widgets/lyrics/viewport.py); custom
+# BTT_LYRICS_NOW_PLAYING_* formats are used verbatim.
+if line1_fmt == "{album} ▸ {title}" and line2_fmt == "{artist}" and artist:
+    balanced = ("{title}", "{artist} ▸ {album}")
+    delta_stock = abs(
+        len(line1_fmt.format(**fields)) - len(line2_fmt.format(**fields))
+    )
+    delta_balanced = abs(
+        len(balanced[0].format(**fields)) - len(balanced[1].format(**fields))
+    )
+    if delta_balanced < delta_stock:
+        line1_fmt, line2_fmt = balanced
 rows = [line1_fmt.format(**fields)]
 if artist:
     rows.append(line2_fmt.format(**fields))
