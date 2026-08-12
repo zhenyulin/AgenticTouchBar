@@ -7,7 +7,7 @@ import os
 import time
 from typing import Any
 
-from . import config
+from .. import config
 
 
 def emit(text: str, font_color: str | None = None) -> None:

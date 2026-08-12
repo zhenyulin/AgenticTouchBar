@@ -8,12 +8,12 @@ import time
 from typing import Any
 
 from . import config
-from .cache import atomic_write_json, cache_path, lock_path
-from .catalog import catalog_chinese_identity
-from .concurrency import set_fetch_deadline
-from .locking import acquire_lock, clear_lock, spawn_helper
-from .lrc import parse_lrc
-from .output import log_error, trace
+from .runtime.cache import atomic_write_json, cache_path, lock_path
+from .text.catalog import catalog_chinese_identity
+from .runtime.concurrency import set_fetch_deadline
+from .runtime.locking import acquire_lock, clear_lock, spawn_helper
+from .text.lrc import parse_lrc
+from .runtime.output import log_error, trace
 from .providers.apple_cache import apple_cache_record
 from .providers.local import local_lyrics_record
 from .providers.lrcapi import choose_lrcapi_candidate

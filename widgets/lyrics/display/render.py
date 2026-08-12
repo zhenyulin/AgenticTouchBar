@@ -8,16 +8,16 @@ import subprocess
 import time
 from typing import Any
 
-from . import config
-from .apple_music import _last_sample_age_ms, current_track, is_placeholder_track
-from .cache import atomic_write_json, cache_path, read_compatible_cache
-from .fetch import start_background_fetch
+from .. import config
+from ..sources.apple_music import _last_sample_age_ms, current_track, is_placeholder_track
+from ..runtime.cache import atomic_write_json, cache_path, read_compatible_cache
+from ..fetch import start_background_fetch
 from .layout import crop_cells, current_lyric_line, display_width, marquee, wrap_lyric
-from .locking import acquire_widget_lock, fetch_waiting_seconds, release_widget_lock
-from .lrc import parse_lrc
-from .metadata import track_cache_key
-from .output import emit, emit_last_output, log_error, trace
-from .providers.apple_cache import apple_cache_record
+from ..runtime.locking import acquire_widget_lock, fetch_waiting_seconds, release_widget_lock
+from ..text.lrc import parse_lrc
+from ..text.metadata import track_cache_key
+from ..runtime.output import emit, emit_last_output, log_error, trace
+from ..providers.apple_cache import apple_cache_record
 from .viewport import ensure_viewport, pair_short_of_space, viewport_cells
 
 # What this tick is putting on the Touch Bar, filled in as the tick renders

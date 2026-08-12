@@ -6,8 +6,8 @@ from pathlib import Path
 from typing import Any
 
 from .. import config
-from ..metadata import normalized, track_artist_variants, track_title_variants
-from ..output import log_error
+from ..text.metadata import normalized, track_artist_variants, track_title_variants
+from ..runtime.output import log_error
 
 
 def local_lyrics_record(track: dict[str, Any]) -> dict[str, Any] | None:

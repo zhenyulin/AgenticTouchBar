@@ -5,12 +5,12 @@ from __future__ import annotations
 
 import json
 
-from . import config
-from .apple_music import read_apple_music
-from .cache import cache_path, lock_path
-from .metadata import track_cache_key
-from .providers.apple_cache import apple_cache_record
-from .viewport import (
+from .. import config
+from ..sources.apple_music import read_apple_music
+from ..runtime.cache import cache_path, lock_path
+from ..text.metadata import track_cache_key
+from ..providers.apple_cache import apple_cache_record
+from ..display.viewport import (
     lyric_budget_px,
     lyric_width_px,
     now_playing_lines,

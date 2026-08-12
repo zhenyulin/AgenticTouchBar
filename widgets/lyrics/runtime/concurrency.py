@@ -5,7 +5,7 @@ from __future__ import annotations
 import time
 from typing import Any
 
-from . import config
+from .. import config
 
 _FETCH_DEADLINE: float | None = None
 

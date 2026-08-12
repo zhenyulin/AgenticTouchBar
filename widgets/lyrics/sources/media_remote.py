@@ -31,9 +31,9 @@ import subprocess
 import time
 from typing import Any
 
-from . import config
-from .cache import atomic_write_json
-from .output import log_error
+from .. import config
+from ..runtime.cache import atomic_write_json
+from ..runtime.output import log_error
 
 _CLI_PATH: str | None = ""  # "" means not resolved yet; None means missing.
 _STATE_BIN_PATH: str | None = ""  # "" means not resolved yet; None means missing.

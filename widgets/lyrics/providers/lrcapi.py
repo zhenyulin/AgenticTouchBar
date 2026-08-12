@@ -7,9 +7,9 @@ import json
 from typing import Any
 
 from .. import config
-from ..concurrency import map_concurrently
-from ..matching import choose_candidate
-from ..metadata import local_title_variants, track_artist_variants, track_title_variants
+from ..runtime.concurrency import map_concurrently
+from ..text.matching import choose_candidate
+from ..text.metadata import local_title_variants, track_artist_variants, track_title_variants
 
 
 def lrcapi_request(params: dict[str, Any]) -> Any:

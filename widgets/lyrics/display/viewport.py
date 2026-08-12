@@ -28,11 +28,11 @@ from functools import cache
 from pathlib import Path
 from typing import Any
 
-from . import config
-from .cache import atomic_write_json
+from .. import config
+from ..runtime.cache import atomic_write_json
 from .layout import display_width
-from .locking import spawn_helper
-from .output import log_error, trace
+from ..runtime.locking import spawn_helper
+from ..runtime.output import log_error, trace
 
 MEASURE_SCRIPT = Path(__file__).resolve().with_name("text_width.js")
 CHARACTER_METRICS_VERSION = 3

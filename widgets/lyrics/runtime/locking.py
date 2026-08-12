@@ -8,7 +8,7 @@ import sys
 import time
 from pathlib import Path
 
-from . import config
+from .. import config
 from .cache import lock_path
 
 
@@ -64,8 +64,12 @@ def spawn_helper(arguments: list[str]) -> None:
 
 
 def _package_root() -> Path:
-    """The directory `lyrics` needs on PYTHONPATH to be importable by name."""
-    return Path(__file__).resolve().parent.parent
+    """The directory `lyrics` needs on PYTHONPATH to be importable by name.
+
+    This module lives in `lyrics/runtime/`, so the directory holding the
+    package is two levels up -- keep this in step if the module ever moves.
+    """
+    return Path(__file__).resolve().parents[2]
 
 
 def acquire_widget_lock() -> bool:

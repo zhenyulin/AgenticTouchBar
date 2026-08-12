@@ -7,7 +7,7 @@ import subprocess
 import time
 from typing import NamedTuple
 
-from . import config
+from .. import config
 
 
 def watch_mode(arguments: list[str]) -> int:

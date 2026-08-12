@@ -10,8 +10,8 @@ from difflib import SequenceMatcher
 from functools import cache
 from typing import Any
 
-from . import config
-from .output import log_error
+from .. import config
+from ..runtime.output import log_error
 
 VERSION_MARKERS = (
     "remaster",

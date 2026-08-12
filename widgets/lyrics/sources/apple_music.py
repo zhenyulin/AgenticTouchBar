@@ -19,10 +19,10 @@ import subprocess
 import time
 from typing import Any
 
-from . import config
-from .cache import atomic_write_json
-from .fetch import start_sampler
-from .output import log_error
+from .. import config
+from ..runtime.cache import atomic_write_json
+from ..fetch import start_sampler
+from ..runtime.output import log_error
 
 
 def music_is_running() -> bool:

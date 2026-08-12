@@ -11,10 +11,10 @@ import json
 from typing import Any
 
 from .. import config
-from ..concurrency import fetch_seconds_remaining, map_concurrently
-from ..lrc import strip_credit_lines
-from ..matching import candidate_score
-from ..metadata import track_artist_variants, track_title_variants
+from ..runtime.concurrency import fetch_seconds_remaining, map_concurrently
+from ..text.lrc import strip_credit_lines
+from ..text.matching import candidate_score
+from ..text.metadata import track_artist_variants, track_title_variants
 
 
 def netease_request(path: str, params: dict[str, str]) -> Any:

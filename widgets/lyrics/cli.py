@@ -11,17 +11,17 @@ import time
 from typing import Any
 
 from . import config
-from .apple_music import is_placeholder_track, read_apple_music, read_state, write_state
-from .cache import atomic_write_json, lock_path, read_cache
-from .debug import clear_current_cache, diagnose_current
-from .diagnostics import report_mode, watch_mode
+from .sources.apple_music import is_placeholder_track, read_apple_music, read_state, write_state
+from .runtime.cache import atomic_write_json, lock_path, read_cache
+from .diag.debug import clear_current_cache, diagnose_current
+from .diag.diagnostics import report_mode, watch_mode
 from .fetch import background_fetch, start_background_fetch
-from .locking import clear_lock
-from .media_remote import read_media_remote
-from .metadata import track_cache_key
-from .output import log_error, trace
-from .render import widget_main
-from .viewport import store_measured_viewport
+from .runtime.locking import clear_lock
+from .sources.media_remote import read_media_remote
+from .text.metadata import track_cache_key
+from .runtime.output import log_error, trace
+from .display.render import widget_main
+from .display.viewport import store_measured_viewport
 
 
 def fetch_mode(arguments: list[str]) -> int:

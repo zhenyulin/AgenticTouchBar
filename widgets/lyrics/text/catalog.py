@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from . import config
-from .output import log_error
+from .. import config
+from ..runtime.output import log_error
 
 ITUNES_SEARCH_API = "https://itunes.apple.com/search"
 

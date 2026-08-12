@@ -6,7 +6,7 @@ from __future__ import annotations
 import bisect
 import unicodedata
 
-from . import config
+from .. import config
 
 
 def character_width(character: str) -> float:

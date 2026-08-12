@@ -24,7 +24,7 @@ from typing import Any
 from xml.etree import ElementTree
 
 from .. import config
-from ..output import log_error
+from ..runtime.output import log_error
 
 TTML_NS = "{http://www.w3.org/ns/ttml}"
 XML_LANG = "{http://www.w3.org/XML/1998/namespace}lang"

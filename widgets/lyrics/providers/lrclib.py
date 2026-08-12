@@ -7,11 +7,11 @@ import time
 from typing import Any
 
 from .. import config
-from ..concurrency import fetch_seconds_remaining, map_concurrently
-from ..lrc import plain_to_lrc
-from ..matching import choose_candidate
-from ..metadata import normalized, track_artist_variants, track_title_variants
-from ..output import log_error
+from ..runtime.concurrency import fetch_seconds_remaining, map_concurrently
+from ..text.lrc import plain_to_lrc
+from ..text.matching import choose_candidate
+from ..text.metadata import normalized, track_artist_variants, track_title_variants
+from ..runtime.output import log_error
 
 
 def lrclib_api_request(

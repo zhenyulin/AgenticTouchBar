@@ -7,8 +7,8 @@ import os
 from pathlib import Path
 from typing import Any
 
-from . import config
-from .metadata import normalized
+from .. import config
+from ..text.metadata import normalized
 from .output import log_error
 
 
