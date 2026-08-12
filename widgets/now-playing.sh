@@ -23,9 +23,10 @@
 # player -- see sampled_track below.
 #
 # Usage: now-playing.sh [widget-uuid]
-# BTT: JSON {"text": "<album> ▸ <title>\n<artist>", "font_color": ...,
+# BTT: JSON {"text": "<title>\n<artist> ‣ <album>" or "<album> ‣ <title>\n<artist>",
+#            whichever has the narrower widest row, "font_color": ...,
 #            "icon_path": <album cover | player app icon | play icon>}
-# Terminal: plain "<album> ▸ <title>\n<artist>"
+# Terminal: plain text of the same chosen layout
 # Nothing when no allowed player holds Now Playing.
 #
 
@@ -48,8 +49,9 @@ ALLOWED_BUNDLE_IDS="${BTT_NOW_PLAYING_ALLOWED:-com.apple.Music com.tencent.QQMus
 # that has not been re-imported.
 LYRICS_UUID="${BTT_LYRICS_WIDGET_UUID:-E19BB023-5060-4A56-95C8-6E7402779870}"
 
-CACHE_DIR="${BTT_WIDGET_CACHE_DIR:-${BTT_REPO_DIR:-$HOME/Documents/BTT}/cache}"
-ASSETS_DIR="${BTT_REPO_DIR:-$HOME/Documents/BTT}/assets"
+REPO_DIR="${BTT_REPO_DIR:-$HOME/Documents/BTT}"
+CACHE_DIR="${BTT_WIDGET_CACHE_DIR:-$REPO_DIR/cache}"
+ASSETS_DIR="$REPO_DIR/assets"
 # The Lyrics sampler's state, consulted when the session holder is not one of
 # ours. Mirrors CACHE_DIR / STATE_PATH in widgets/lyrics/config.py.
 SAMPLER_STATE="${BTT_LYRICS_CACHE_DIR:-${BTT_REPO_DIR:-$HOME/Documents/BTT}/cache/lyrics}/state.json"
@@ -112,7 +114,7 @@ RAW="$(raw_state)" || RAW=""
 
 python3 - "$RAW" "$ALLOWED_BUNDLE_IDS" "$CACHE_DIR" "$BTT_WIDGET_UUID" \
     "$ASSETS_DIR" "$LYRICS_UUID" \
-    "$SAMPLER_STATE" "$HELPER" <<'PY'
+    "$SAMPLER_STATE" "$HELPER" "$REPO_DIR" <<'PY'
 import base64
 import hashlib
 import json
@@ -123,6 +125,7 @@ import struct
 import subprocess
 import sys
 import time
+import unicodedata
 import zlib
 from pathlib import Path
 
@@ -185,6 +188,73 @@ def display_album(text):
     # "Mozart: Piano Concerto No. 23 K. 488; Piano Sonata K. 333" -- the
     # Touch Bar is too short for both, so only the first work is shown.
     return strip_parens(text).split(";")[0].strip()
+
+
+def display_width(text):
+    """Estimated row width in layout cells: combining marks 0, CJK/wide 2,
+    everything else 1.
+
+    The same cell model the Lyrics widget measures with
+    (widgets/lyrics/display/layout.py), so both widgets of the pair agree.
+    """
+    return sum(
+        0
+        if unicodedata.combining(ch)
+        else 2
+        if unicodedata.east_asian_width(ch) in {"W", "F", "A"}
+        else 1
+        for ch in text
+    )
+
+
+def join_parts(*parts):
+    return " ▸ ".join(part for part in parts if part)
+
+
+# Music occasionally publishes a streaming item with real duration and an
+# iTunes Store id but empty title/artist/album. The metadata is recovered
+# from the public iTunes Store lookup keyed by the adam id; the records
+# live at now-playing-adam-<id>.json in the widget cache dir and are shared
+# with the Lyrics sampler (widgets/lyrics/sources/store_lookup.py) -- keep
+# the file shape and these TTLs in sync with it.
+RESOLVED_TTL = 30 * 24 * 3600
+ERROR_TTL = 15 * 60
+
+
+def read_adam_cache(adam_id, cache_dir):
+    """The cached iTunes lookup for the id, or None when absent/stale."""
+    path = Path(cache_dir) / f"now-playing-adam-{adam_id}.json"
+    try:
+        record = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    try:
+        fetched = float(record.get("fetched_at") or 0.0)
+    except (TypeError, ValueError):
+        return None
+    ttl = ERROR_TTL if record.get("error") else RESOLVED_TTL
+    if time.time() - fetched > ttl or record.get("error"):
+        return None
+    return {key: str(record.get(key) or "") for key in ("title", "artist", "album", "genre")}
+
+
+def spawn_adam_lookup(adam_id, repo_dir, cache_dir):
+    """A detached iTunes lookup: this tick runs on BTT's shared script
+    runner and must never block on the network. The lyrics CLI writes the
+    same cache file this widget reads next tick."""
+    env = dict(os.environ)
+    env["PYTHONPATH"] = os.path.join(repo_dir, "widgets")
+    try:
+        subprocess.Popen(
+            ["/usr/bin/env", "python3", "-m", "lyrics", "--adam-lookup", str(adam_id)],
+            env=env,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            start_new_session=True,
+        )
+    except OSError:
+        pass
 
 
 def artwork_icon(info, cache_dir):
@@ -553,7 +623,8 @@ def clear_lyrics_for_change(identity, cache_dir, lyrics_uuid):
     lyrics_uuid,
     state_path,
     helper_payload,
-) = sys.argv[1:9]
+    repo_dir,
+) = sys.argv[1:10]
 try:
     info = json.loads(payload)
 except (json.JSONDecodeError, UnicodeDecodeError):
@@ -606,8 +677,30 @@ else:
 title = strip_parens(identity["title"])
 artist = identity["artist"]
 album = display_album(identity["album"])
-if not title:
-    sys.exit(0)
+if not title or not artist:
+    # Music withholds a streaming item's metadata (empty title/artist/
+    # album) while publishing its real duration and iTunes Store id;
+    # recover the fields from the cached lookup keyed by that adam id. A
+    # missing cache spawns a detached lookup and renders nothing until it
+    # lands, rather than blocking the shared script runner.
+    adam_id = (
+        info.get("kMRMediaRemoteNowPlayingInfoiTunesStoreSubscriptionAdamIdentifier")
+        or info.get("kMRMediaRemoteNowPlayingInfoiTunesStoreIdentifier")
+    )
+    if adam_id is None:
+        sys.exit(0)
+    resolved = read_adam_cache(adam_id, cache_dir)
+    if resolved is None:
+        spawn_adam_lookup(adam_id, repo_dir, cache_dir)
+        sys.exit(0)
+    identity["title"] = resolved.get("title") or identity["title"]
+    identity["artist"] = resolved.get("artist") or identity["artist"]
+    identity["album"] = resolved.get("album") or identity["album"]
+    title = strip_parens(identity["title"])
+    artist = identity["artist"]
+    album = display_album(identity["album"])
+    if not title:
+        sys.exit(0)
 
 # A terminal run prints a row and touches nothing else.
 if widget_uuid:
@@ -624,10 +717,22 @@ else:
     icon = play_icon(cache_dir, assets_dir) or player_icon(player, cache_dir)
 
 fields = {"title": title, "artist": artist, "album": album}
-rows = ["{album} ▸ {title}".format(**fields)]
-if artist:
-    rows.append("{artist}".format(**fields))
-text = "\n".join(rows)
+# Album placement is a minimax over the two row layouts -- the layout whose
+# wider row is narrower wins:
+#   A: {title} over {artist} ‣ {album}
+#   B: {album} ‣ {title} over {artist}
+# Row widths are estimated in layout cells (display_width above); BTT's
+# fixed 22 px two-row block renders row 1 at 13 px and row 2 at 9 px, and
+# its own BTTTBWidgetWidth bounds each row.
+layout_a = [title, join_parts(artist, album)]
+layout_b = [join_parts(album, title), artist]
+if max(display_width(row) for row in layout_a) <= max(
+    display_width(row) for row in layout_b
+):
+    rows = layout_a
+else:
+    rows = layout_b
+text = "\n".join(row for row in rows if row)
 if not widget_uuid:
     print(text)
 else:
