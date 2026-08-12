@@ -15,7 +15,10 @@ set -u
 
 PATH="/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin"
 
-source "$HOME/Documents/BTT/widgets/lib/btt-widget.sh"
+# This action lives in actions/, so the repo is its parent directory.
+REPO_DIR="${BTT_REPO_DIR:-${0:A:h:h}}"
+
+source "$REPO_DIR/widgets/lib/btt-widget.sh"
 
 LYRICS_UUID="${1:-${BTT_LYRICS_WIDGET_UUID:-}}"
 STAR_UUID="${2:-${BTT_STAR_WIDGET_UUID:-}}"
@@ -32,12 +35,12 @@ STAR_UUID="${2:-${BTT_STAR_WIDGET_UUID:-}}"
 #
 
 if [[ -n "$LYRICS_UUID" ]]; then
-    btt_spawn_detached "$HOME/Documents/BTT/widgets/now-playing-lyrics.sh" \
+    btt_spawn_detached "$REPO_DIR/widgets/now-playing-lyrics.sh" \
         --track-changed "$LYRICS_UUID"
 
     UUIDS=("$LYRICS_UUID")
     [[ -n "$STAR_UUID" ]] && UUIDS+=("$STAR_UUID")
-    "$HOME/Documents/BTT/actions/tap-refresh.sh" --delay-ms 600 "${UUIDS[@]}"
+    "$REPO_DIR/actions/tap-refresh.sh" --delay-ms 600 "${UUIDS[@]}"
 fi
 
 exit 0

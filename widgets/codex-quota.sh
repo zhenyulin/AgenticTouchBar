@@ -24,7 +24,7 @@ fi
 # and BTT may well have started it by a relative path.
 SELF="${0:A}"
 
-source "$HOME/Documents/BTT/widgets/lib/btt-widget.sh"
+source "${SELF:h}/lib/btt-widget.sh"
 
 BTT_WIDGET_NAME="codex-quota"
 
