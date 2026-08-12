@@ -157,5 +157,5 @@ action → `btt-quit.sh`).
   control.
 - [`specs/CONSTRAINTS.md`](specs/CONSTRAINTS.md) — the layout and stacking
   constraints every widget must respect.
-- [`specs/KNOWLEDGE.md`](specs/KNOWLEDGE.md) — promoted repo learnings:
-  empirical layout keys, preset rules, and correction patterns.
+- [`specs/NOTE.md`](specs/NOTE.md) — promoted repo learnings: empirical
+  layout keys, preset rules, and correction patterns.
