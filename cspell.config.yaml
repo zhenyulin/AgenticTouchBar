@@ -1,0 +1,34 @@
+language: en-GB
+words:
+  - argjson
+  - bttpreset
+  - diag
+  - codepoint
+  - codepoints
+  - elif
+  - hong
+  - kong
+  - hongkong
+  - korea
+  - lrcapi
+  - lrclib
+  - mandopop
+  - netease
+  - mihomo
+  - nowplaying
+  - noproxy
+  - opencode
+  - osascript
+  - qqmusic
+  - referer
+  - relauncher
+  - resurrector
+  - singapore
+  - stdlib
+  - taiwan
+  - ttml
+  - zhenyu
+
+  - uninterpolated
+  - unroutable
+  - xxms
