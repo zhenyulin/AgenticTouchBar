@@ -3,8 +3,7 @@
 Personal BetterTouchTool (BTT) configuration: Touch Bar script widgets
 (`widgets/`), the tap and track-change actions they wire to (`actions/`),
 and the exported preset (`bttpreset/`). Everything is plain shell and
-Python — no plugin, no daemon. The optional freeze guard is the only
-background service.
+Python — no plugin, no daemon, no background service.
 
 ## Layout
 
@@ -39,7 +38,6 @@ background service.
    widgets: `./actions/set-widget-variables.sh`.
 5. Verify: tap each widget — it greys out while its refresh runs, then
    redraws; `widgets/now-playing-lyrics.sh --report` shows the shared trace.
-6. Optional: deploy the freeze guard (see below).
 
 The Star widget appears in the preset but has no script in this repo — it is
 configured natively in BTT.
@@ -106,9 +104,8 @@ detached process and then refreshes the Lyrics (and Star) widgets.
 | `actions/now-playing-app.sh` | Prints the current Now Playing holder's bundle id (MediaRemote) — gates the Star widget |
 | `actions/weather-state.sh` | Records the playback state set by the Now Playing tap, so the weather widgets flip instantly |
 | `actions/set-widget-variables.sh` | Sets the BTT persistent variables mapping widget names to UUIDs |
-| `actions/btt-freeze-guard.sh` | Freeze watchdog + preventive restart (below) |
+| `actions/tap-restart.sh` | Date/Time widget tap: marks the traces before BTT's own restart action |
 | `actions/freeze-catch.sh` | Manual freeze sampler for diagnostics |
-| `actions/hid-state.c` | Helper binary for the freeze guard (modifier/mouse state) |
 | `actions/btt-quit.sh` | Quit BTT for real — survives a wedged BTT and BTTRelaunch (below) |
 
 ## Configuration
@@ -141,34 +138,29 @@ widgets/now-playing-lyrics.sh --watch       # live tick stream
 widgets/now-playing-lyrics.sh --diagnose    # full diagnosis
 ```
 
-## Freeze guard (optional)
+## Freezes (historical)
 
-BTT occasionally stops updating widgets. Two causes have been measured and
-fixed or worked around; the details, evidence, and semantics are in
-[`specs/CONSTRAINTS.md`](specs/CONSTRAINTS.md). The mitigation is
-`actions/btt-freeze-guard.sh`: a LaunchAgent watchdog that restarts BTT
-quickly when it stops dispatching widget ticks, with a preventive restart
-every three minutes of uptime. Deploy it with:
-
-```sh
-cp actions/btt-freeze-guard.sh ~/Library/Application\ Support/BTT/btt-freeze-guard.sh
-clang -O2 actions/hid-state.c -framework ApplicationServices \
-    -o ~/Library/Application\ Support/BTT/hid-state
-launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.zhenyulin.btt-freeze-guard.plist
-```
-
-After editing `actions/btt-freeze-guard.sh` or `actions/hid-state.c`,
-re-copy/re-build and reload the LaunchAgent as documented in
+BTT used to stop updating widgets. Two causes were measured; one was this
+repo's own (undetached background work — fixed here), the other an AppKit
+bug in BTT itself. The evidence and semantics are in
 [`specs/CONSTRAINTS.md`](specs/CONSTRAINTS.md).
+
+The AppKit one was worked around by `actions/btt-freeze-guard.sh`, a
+LaunchAgent watchdog that restarted BTT whenever it stopped dispatching
+widget ticks. **Retired on 2026-08-12** — the BTT upgrade fixed the
+underlying bug, so the guard, its `hid-state` helper, and the
+`com.zhenyulin.btt-freeze-guard` LaunchAgent are all gone. Nothing in this
+repo runs in the background any more; `actions/freeze-catch.sh` remains as
+an on-demand sampler if freezes ever come back.
 
 Quitting BTT from its own menu does not stick when BTT is wedged: the quit
 Apple Event never gets processed, and BTTRelaunch (BTT's own relauncher)
 brings the process back if it dies without a graceful quit. Use
 `actions/btt-quit.sh` to quit for real — it kills BTTRelaunch, then asks BTT
-to quit and escalates to TERM/KILL if it hangs. The freeze guard keeps
-working normally afterwards; the next launch of BTT re-creates BTTRelaunch.
-The preset wires the Date Time widget to it: tap restarts BTT (BTT's own
-restart action), long-press quits for real (named action → `btt-quit.sh`).
+to quit and escalates to TERM/KILL if it hangs. The next launch of BTT
+re-creates BTTRelaunch. The preset wires the Date Time widget to it: tap
+restarts BTT (BTT's own restart action), long-press quits for real (named
+action → `btt-quit.sh`).
 
 ## Diagnostics
 
@@ -181,5 +173,5 @@ restart action), long-press quits for real (named action → `btt-quit.sh`).
 ## Docs
 
 - [`specs/CONSTRAINTS.md`](specs/CONSTRAINTS.md) — freeze failure modes, the
-  freeze guard, and diagnostics.
+  retired freeze guard, and diagnostics.
 - [`specs/LYRICS.md`](specs/LYRICS.md) — Lyrics feature specification.

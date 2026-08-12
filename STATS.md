@@ -1,5 +1,11 @@
 # Freeze-guard stats
 
+**Historical.** The freeze guard was retired on 2026-08-12 when the BTT
+upgrade fixed the AppKit freeze it existed for (see
+[`specs/CONSTRAINTS.md`](specs/CONSTRAINTS.md)); nothing has written to
+`logs/freeze-guard.log` since. This report is kept as the record of what the
+guard did while it ran, and of how its thresholds were arrived at.
+
 Analysis of `logs/freeze-guard.log`, `logs/latency-history.tsv`, and
 `logs/trace.tsv`.
 

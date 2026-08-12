@@ -179,9 +179,9 @@ MEDIA_REMOTE_TIMEOUT_SECONDS = float(
 # The compiled nowplaying-state helper (actions/nowplaying-state.m) reports
 # the true play/pause state of the system Now Playing app, which the raw
 # MediaRemote dictionary cannot: QQ Music pushes playbackRate 1 even while
-# paused. It lives beside hid-state in BTT's support directory; when it is
-# missing the sampler falls back to nowplaying-cli + playbackRate, which
-# scrolls through pauses.
+# paused. It lives in BTT's support directory, compiled there by hand; when
+# it is missing the sampler falls back to nowplaying-cli + playbackRate,
+# which scrolls through pauses.
 NOWPLAYING_STATE_BIN = os.environ.get(
     "BTT_LYRICS_NOWPLAYING_STATE_BIN",
     str(Path.home() / "Library" / "Application Support" / "BTT" / "nowplaying-state"),
@@ -222,15 +222,15 @@ OPENCODE_HIDE_PATH = CACHE_DIR / "opencode-hide"
 # render.update_opencode_visibility and viewport.effective_budget_px).
 OPENCODE_HIDE_ENABLED = False
 # What the last rendering tick put on screen, and when that frame is due to
-# change. Written only by ticks that render something of their own, so an
-# expired deadline in here is the freeze guard's evidence that the widget has
-# stopped producing frames -- see render.write_render_receipt.
+# change. Written only by ticks that render something of their own -- see
+# render.write_render_receipt -- and read back by render.last_rendered_key,
+# which is how the next tick's fresh process knows what is already up there.
 #
-# It lives beside the trace rather than in CACHE_DIR because its only reader
-# is actions/btt-freeze-guard.sh, which runs under launchd. That process gets
-# EPERM opening anything under cache/ -- macOS gates ~/Documents, and only
-# logs/ carries the com.apple.macl grant that lets it through. The widget
-# itself runs under BetterTouchTool, which has the consent to write either.
+# It lives beside the trace rather than in CACHE_DIR because the freeze guard
+# (retired 2026-08-12, see specs/CONSTRAINTS.md) read it from launchd, which
+# gets EPERM opening anything under cache/. Nothing outside the widget reads
+# it now; the path stays put because moving it would only strand the receipt
+# a fresh widget process expects to find.
 RENDER_PATH = LOG_DIR / "lyrics" / "render.json"
 TRACE_PATH = LOG_DIR / "lyrics" / "trace.tsv"
 WATCH_PATH = LOG_DIR / "lyrics" / "watch.tsv"

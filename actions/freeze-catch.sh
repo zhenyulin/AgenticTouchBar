@@ -1,7 +1,7 @@
 #!/usr/bin/env zsh
 #
-# Live capture for the tap-refresh/freeze issue (see actions/btt-freeze-guard.sh
-# and widgets/timer-widget.sh). Retroactive `log show` mining after a freeze has
+# Live capture for the tap-refresh/freeze issue (see specs/CONSTRAINTS.md and
+# widgets/timer-widget.sh). Retroactive `log show` mining after a freeze has
 # already ended turns up nothing conclusive -- by the time you look, the
 # evidence is gone. This instead watches the shared widget trace in real time
 # and, the moment it goes quiet for too long, runs `sample` against BTT's main

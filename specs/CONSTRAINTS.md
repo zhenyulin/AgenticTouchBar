@@ -5,7 +5,7 @@
 Behavioural limits and operational constraints of the BTT widget setup: the
 two freeze failure modes that have been measured in this environment, the
 rules they impose on any script change, the Touch Bar stacking constraint
-that bounds widget widths, and the guard and diagnostics that enforce them.
+that bounds widget widths, and the diagnostics that catch them.
 Setup and usage live in the root [`README.md`](../README.md).
 
 ## Freeze failure modes
@@ -16,7 +16,7 @@ distinct causes produce this, with different scopes:
 | | Cause A: undetached background children | Cause B: BTT's own main thread |
 | --- | --- | --- |
 | Scope | Lyrics widget only; everything else keeps ticking | Every widget at once, including ones with no network or Apple Music dependency |
-| Fixable in this repo | Yes — fixed via `btt_spawn_detached` | No — BTT's AppKit code; mitigated by the freeze guard |
+| Fixable in this repo | Yes — fixed via `btt_spawn_detached` | No — BTT's AppKit code; worked around by the freeze guard until the 2026-08-12 BTT upgrade fixed it upstream |
 
 ### Cause A: undetached background children
 
@@ -53,7 +53,7 @@ own session, out of BTT's process group, while staying in the same
 `BTT -> zsh -> python -> target` lineage BTT already has file access for.
 Never use a bare `nohup … &`. A `launchd` job would dodge the process-group
 issue too, but macOS's TCC blocks a `launchd`-spawned process from this
-repo's files under `~/Documents` — see the freeze-guard section below for
+repo's files under `~/Documents` — see the retired freeze guard below for
 where that bit us again. `btt_refresh_detached` (used by every other widget)
 already worked this way; `track-changed.sh` uses the same primitive.
 
@@ -79,112 +79,70 @@ long that layout pass takes, until it finishes or `BTTRelaunch` (BTT's own
 bundled watchdog) gives up and restarts it.
 
 **Constraint:** nothing to patch in this repo — a performance bug in
-BetterTouchTool's own AppKit code. Mitigated by the freeze guard below.
+BetterTouchTool's own AppKit code. Fixed upstream: the BTT version running
+since 2026-08-12 no longer shows it, which is why the guard below is
+retired. If widgets start freezing together again, that is the signal to
+bring it back rather than to look for a new cause in this repo.
 
-## Stopgap: `actions/btt-freeze-guard.sh`
+## Retired stopgap: the freeze guard
 
-BTT already restarts itself on a freeze via `BTTRelaunch`, its own bundled
-watchdog — but on the AppKit freeze above, that took 4-5 minutes each time,
-which is where this guard earns its keep: a faster, logged restart. It runs
-every 5 seconds, actively refreshes the timer widget, and waits up to five
-seconds for a new timer trace row. If that probe fails, the guard treats BTT
-as unresponsive and restarts immediately. Responsive probes retain the
-separate three-minute preventive-restart cadence and may defer that restart
-once while macOS has seen keyboard or pointer activity in the prior 60
-seconds.
+**Retired 2026-08-12**, when BTT was upgraded to a version that no longer
+shows the AppKit freeze above. `actions/btt-freeze-guard.sh`, its
+`actions/hid-state.c` helper, the deployed copies under
+`~/Library/Application Support/BTT/`, and the
+`com.zhenyulin.btt-freeze-guard` LaunchAgent were all removed; the script is
+recoverable from git history if the freeze ever returns. What it did and
+what it taught, kept because both bound any future attempt:
 
-The shared trace remains useful for diagnostics and supplies the timer probe's
-evidence: a newer `timer-widget` row means BTT dispatched the refresh.
+- **What it was.** A LaunchAgent watchdog, probing every 10s, that restarted
+  BTT when the Touch Bar stopped moving. BTT already restarts itself on a
+  freeze via `BTTRelaunch`, its own bundled watchdog — but that took 4-5
+  minutes each time, which is where a faster, logged restart earned its keep.
+- **Why it lived outside the repo.** `launchd` ran it as its own
+  TCC-authorized process, which macOS blocks from reading `~/Documents` —
+  the same restriction `btt_spawn_detached`'s comment describes, hit again
+  one level up. So the source of truth lived here and the running copy at
+  `~/Library/Application Support/BTT/btt-freeze-guard.sh`, re-copied by hand
+  after every edit. Any future background service inherits that constraint,
+  and with it the deploy step that is easy to forget.
+- **Two independent signals, because one was not enough.** The widget
+  heartbeat (newest `timer-widget`/`clash-latency` row in `logs/trace.tsv`)
+  proved BTT was dispatching ticks at all; the lyrics render deadline
+  (`logs/lyrics/render.json`) proved the display was still changing, since a
+  widget that reprints its previous frame is indistinguishable from a
+  healthy one in the heartbeat alone. An earlier probe that forced a Clash
+  latency refresh and watched its history file restarted BTT roughly every
+  two minutes while BTT was demonstrably fine — that file only gets a row
+  after a network round trip, so every slow probe read as a freeze.
+- **Thresholds have to be measured, not guessed.** The heartbeat timeout was
+  raised from 45s to 90s on 2026-08-11: the restart ledger showed ~7
+  restarts/hour over 12h with a median detected gap of 72s, while genuine
+  wedges ran 15-30min (p90 930s) and some 60-90s pauses resolved on their
+  own. Every restart costs a Touch Bar outage, a timer-widget reset, and
+  mid-gesture input risk.
+- **Never terminate BTT mid-gesture.** Its event tap sits between the
+  hardware and every other app, so killing it while a modifier or button is
+  held can leave the front app with a latched Shift or a phantom mouse-down.
+  `HIDIdleTime` cannot answer "is something held right now" — modifiers do
+  not auto-repeat and a paused drag posts nothing, so both read as idle
+  within a second — which is why `hid-state.c` asked the window server
+  directly.
+- **A deferral is a delay, not a veto.** The input checks postponed a
+  restart rather than cancelling it, capped at 60s. Uncapped, the log showed
+  43 consecutive "deferred -- active user" checks (2026-08-08 23:53 to
+  2026-08-09 01:06) around a 603s freeze gap in `trace.tsv`: activity in
+  some *other* app was being read as evidence BTT was fine.
+- **Not every stuck display was BTT's fault.** A `no_sample` or `locked`
+  lyrics tick means the Apple Music sampler or the widget's own lock is
+  stuck; restarting BTT fixes neither and costs an outage, so those were
+  logged and left alone.
 
-- **Source of truth:** `actions/btt-freeze-guard.sh` in this repo.
-- **Deployed copy:** `~/Library/Application Support/BTT/btt-freeze-guard.sh`.
-  `launchd` runs the LaunchAgent below as its own TCC-authorized process,
-  which macOS blocks from reading `~/Documents` — the same restriction
-  `btt_spawn_detached`'s comment describes, hit again one level up. **After
-  editing the script in this repo, re-copy it to the deployed path:**
-
-  ```sh
-  cp actions/btt-freeze-guard.sh ~/Library/Application\ Support/BTT/btt-freeze-guard.sh
-  ```
-
-- **Helper binary:** `actions/hid-state.c`, deployed beside the script as
-  `~/Library/Application Support/BTT/hid-state` (same `~/Documents` block, so
-  it cannot be run from the repo). It reports whether a modifier or mouse
-  button is held right now, which is what the guard checks before terminating
-  BTT — killing its event tap mid-gesture is what leaves the front app with a
-  latched Shift or a phantom mouse-down. `HIDIdleTime` cannot answer this:
-  modifiers do not auto-repeat and a paused drag posts nothing, so both read
-  as idle within a second. Rebuild after editing:
-
-  ```sh
-  clang -O2 actions/hid-state.c -framework ApplicationServices \
-      -o ~/Library/Application\ Support/BTT/hid-state
-  ```
-
-- **Deferral is a delay, not a veto.** Both input checks above postpone a
-  restart rather than cancel it, and `BTT_RESTART_DEFER_MAX` (60s) caps how
-  long that can go on: past the deadline the restart proceeds and says so in
-  the log. Without the cap, typing through a freeze holds the restart off for
-  as long as the user keeps working — which is exactly when they want the
-  Touch Bar back, and is the same uncapped-defer failure recorded above. The
-  deadline is measured from the first deferral in a run and cleared the moment
-  a probe finds BTT healthy, so an old run cannot make a later restart skip
-  its checks. A modifier still reported held a minute on is already latched,
-  and restarting is as likely to clear it as to cause it.
-
-- **Scheduler:** `~/Library/LaunchAgents/com.zhenyulin.btt-freeze-guard.plist`,
-  `StartInterval` 5s, loaded via `launchctl bootstrap gui/$(id -u) …`.
-- **Logic:** refresh timer-widget every five seconds and wait up to
-  `BTT_TIMER_REFRESH_TIMEOUT` seconds for its trace row. A timeout restarts
-  BTT even during active input; a responsive BTT may still defer the separate
-  three-minute preventive restart for one interval (`MAX_CONSECUTIVE_DEFERS`).
-  After a restart, the guard reopens BTT without taking foreground focus and
-  retries `refresh_widget` for each script widget at 5, 10, and 15 seconds,
-  then allows a 30-second startup grace period before resuming probes.
-
-  The defer used to be uncapped: `freeze-guard.log` showed 43 consecutive
-  "deferred -- active user" checks in a row (2026-08-08 23:53 to 2026-08-09
-  01:06), and `trace.tsv` had a 603s freeze gap inside that exact window --
-  ordinary activity in some other app was being treated as evidence BTT
-  itself was fine, which it isn't. This is almost certainly why restarts
-  weren't happening reliably. The cap bounds the worst case to two 3-minute
-  intervals instead of running until an idle gap happens to appear.
-- **Logs:**
-  - `logs/restart.tsv` — structured restart ledger: `before`/`first-tick`
-    rows from the guard, and `manual-before`/`manual-first-tick` rows from
-    the Date/Time widget's tap-to-restart (`actions/tap-restart.sh`), each
-    restart joined by its restart_id. The manual rows carry the guard's
-    per-probe assessment at tap time (`logs/freeze-guard-state.json`) so
-    later analysis can see why the guard did not catch that freeze itself.
-  - `logs/freeze-guard.log` — records every five-second probe with its latest
-    complete `timer-widget` trace row, plus the final row observed before a
-    restart and every deferred preventive restart.
-  - `logs/freeze-catch.log` — records each manual probe with its latest timer
-    row; `logs/freeze-samples/<timestamp>/context.txt` preserves that final
-    row and the last 20 shared-trace records alongside live process samples.
-  - `~/Library/Caches/btt-widgets/freeze-guard.std{out,err}.log` — general
-    run output, for debugging the guard itself.
-
-Manage the LaunchAgent with:
-
-```sh
-# reload after editing the plist or redeploying the script
-launchctl bootout gui/$(id -u)/com.zhenyulin.btt-freeze-guard 2>/dev/null
-launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.zhenyulin.btt-freeze-guard.plist
-
-# check status
-launchctl print gui/$(id -u)/com.zhenyulin.btt-freeze-guard
-
-# remove entirely
-launchctl bootout gui/$(id -u)/com.zhenyulin.btt-freeze-guard
-rm ~/Library/LaunchAgents/com.zhenyulin.btt-freeze-guard.plist
-```
-
-The lyrics-specific fix means the guard should no longer see freezes caused
-by that call site. The AppKit freeze is a separate, open issue in BTT
-itself, so expect this to keep firing occasionally until upstream fixes it —
-its log is how you'd notice if it starts firing more often than that, which
-would mean a new cause.
+Its logs are left in place as the historical record: `logs/freeze-guard.log`
+(per-probe verdicts), `logs/restart.tsv` (the structured restart ledger),
+`logs/freeze-guard-state.json` (last per-probe assessment), and
+`~/Library/Caches/btt-widgets/freeze-guard.std{out,err}.log`. `STATS.md`
+analyses them. Nothing writes to any of these any more — the manual restart
+and quit actions now log to `logs/btt-control.log`.
 
 ## Diagnostics
 

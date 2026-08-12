@@ -96,8 +96,8 @@ class RememberOutput(OutputTestCase):
         self.assertEqual(printed(emit_last_output), "♪")
 
     def test_reprinting_refreshes_the_file_mtime(self):
-        # The file's age is how the freeze guard tells "BTT stopped running the
-        # widget" from "the widget keeps drawing the same thing".
+        # The file's age is what tells "BTT stopped running the widget" from
+        # "the widget keeps drawing the same thing".
         remember_output("previous")
         old = 1_000_000.0
         import os

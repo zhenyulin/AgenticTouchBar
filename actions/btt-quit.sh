@@ -6,32 +6,31 @@
 #   btt-quit.sh
 #
 # Why this exists: BTT's own quit only works while its main thread is
-# healthy. The AppKit layout bug this repo tracks (see btt-freeze-guard.sh)
-# leaves BTT alive but unable to process the quit Apple Event, and BTT's own
+# healthy. A wedged main thread (see specs/CONSTRAINTS.md, Cause B) leaves
+# BTT alive but unable to process the quit Apple Event, and BTT's own
 # relauncher, BTTRelaunch, brings the process back whenever it dies without
-# a graceful quit. The result is that quitting a wedged BTT never sticks --
-# either the freeze-guard restarts the still-alive process 90s later, or
-# force-quitting it lets BTTRelaunch resurrect it.
+# a graceful quit. The result is that quitting a wedged BTT never sticks:
+# force-quitting it just lets BTTRelaunch resurrect it.
 #
 # So quitting BTT from here does three things, in order:
 #   1. Kill BTTRelaunch -- the only thing that can resurrect BTT after death.
 #   2. Ask BTT to quit gracefully and wait a short, bounded time.
 #   3. If it is still alive (wedged mid-quit), SIGTERM and then SIGKILL.
 #
-# After this BTT is fully dead, and the freeze-guard's existing "BTT is not
-# running -- respecting quit" path keeps it dead: no restart, no marker, no
-# change to freeze protection. The next launch of BTT re-creates BTTRelaunch
-# and the guard watches over the new process as before.
+# After this BTT is fully dead and stays dead. The next launch of BTT
+# re-creates BTTRelaunch.
 #
-# Timings are bounded exactly like the freeze-guard's own restart sequence,
-# so a wedged BTT costs a few seconds, not a stuck terminal.
+# Every wait here is bounded, so a wedged BTT costs a few seconds rather
+# than a stuck terminal.
 #
 
 set -u
 
 REPO_DIR="${BTT_REPO_DIR:-$HOME/Documents/BTT}"
 LOG_DIR="${BTT_LOG_DIR:-$REPO_DIR/logs}"
-LOG="$LOG_DIR/freeze-guard.log"
+# Shared with actions/tap-restart.sh: one log for the manual BTT control
+# actions.
+LOG="$LOG_DIR/btt-control.log"
 
 # How long the graceful-quit Apple Event may take before SIGTERM.
 GRACEFUL_QUIT_WAIT="${BTT_QUIT_GRACEFUL_WAIT:-5}"

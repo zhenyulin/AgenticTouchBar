@@ -120,7 +120,15 @@ def _btt_osascript(script: str) -> None:
 
 
 def write_render_receipt(outcome: str) -> None:
-    """Record what went on screen this tick, for the freeze guard to check."""
+    """Record what went on screen this tick.
+
+    Read back by last_rendered_key on the next tick; the rest of the payload
+    (`at`, `outcome`, `state`, `index`, `next_change_at`) is the diagnostic
+    record of that frame. It used to be the freeze guard's evidence that the
+    display had stopped moving -- the guard is retired, so nothing reads
+    those fields now, but they cost one write of an already-open file and
+    they are what makes logs/lyrics/render.json worth looking at by hand.
+    """
     if outcome in REPRINT_OUTCOMES:
         return
 
@@ -128,8 +136,8 @@ def write_render_receipt(outcome: str) -> None:
     payload["at"] = time.time()
     payload["outcome"] = outcome
 
-    # Written whole, then renamed over the old one, so the guard reading it a
-    # few times a minute never catches a half-written line.
+    # Written whole, then renamed over the old one, so a reader never catches
+    # a half-written line.
     temporary = config.RENDER_PATH.with_name(f"render.tmp.{os.getpid()}")
     try:
         config.RENDER_PATH.parent.mkdir(parents=True, exist_ok=True)
@@ -218,10 +226,10 @@ def render_widget(
     lyric, elapsed, index = current_lyric_line(lines, position)
 
     # The one thing only this function knows: when the frame it is about to
-    # return stops being correct. Recording it as a wall clock time lets the
-    # freeze guard judge a stuck display without parsing any LRC -- and
-    # judge it against the gap this track actually has, instead of a fixed
-    # threshold that a long instrumental break trips for no reason.
+    # return stops being correct, as a wall clock time. It let the freeze
+    # guard judge a stuck display without parsing any LRC; with the guard
+    # retired it survives in the receipt as the record of what this frame
+    # was scheduled to do.
     _RECEIPT["index"] = index
     if state == "playing" and index + 1 < len(lines):
         _RECEIPT["next_change_at"] = time.time() + max(
