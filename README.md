@@ -157,5 +157,5 @@ action → `btt-quit.sh`).
   control.
 - [`specs/CONSTRAINTS.md`](specs/CONSTRAINTS.md) — the layout and stacking
   constraints every widget must respect.
-- [`specs/NOTE.md`](specs/NOTE.md) — empirical notes on BTT's own layout keys
-  and the preset files.
+- [`specs/KNOWLEDGE.md`](specs/KNOWLEDGE.md) — promoted repo learnings:
+  empirical layout keys, preset rules, and correction patterns.
