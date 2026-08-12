@@ -248,9 +248,8 @@ btt_cache_put() {
 # for.
 #
 # Any caller that backgrounds work with a raw `cmd </dev/null >/dev/null
-# 2>&1 &` should use this instead -- see actions/track-changed.sh and
-# actions/lyrics-force-refresh.sh, both of which call into Apple Music and
-# used to skip this.
+# 2>&1 &` should use this instead -- see actions/track-changed.sh, which calls
+# into Apple Music and used to skip this.
 # ---------------------------------------------------------------------------
 
 btt_spawn_detached() {
