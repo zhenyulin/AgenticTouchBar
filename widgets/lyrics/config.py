@@ -28,13 +28,24 @@ LOADED_AT = time.monotonic()
 # The lyric renders at one fixed width, counted in layout cells: a narrow
 # glyph is 1 cell and CJK/wide is 2 (see display/layout.py). The default
 # matches the Lyrics widget's own BTTTBWidgetWidth (400) in
-# bttpreset/Default.bttpreset at PIXELS_PER_CELL points per cell, so the
-# frame never overflows the widget's slot. BTT_LYRICS_WIDTH overrides the
-# width directly in cells.
+# bttpreset/Default.bttpreset at PIXELS_PER_CELL points per cell -- one cell
+# is half a CJK glyph, so the calibration tracks the first row's 13 px font
+# with a little headroom -- and the frame never overflows the widget's slot.
+# BTT_LYRICS_WIDTH overrides the width directly in cells.
 PIXELS_PER_CELL = float(os.environ.get("BTT_LYRICS_PX_PER_CELL", "7.0"))
 LYRIC_WIDTH_CELLS = int(
     os.environ.get("BTT_LYRICS_WIDTH", str(max(round(400 / PIXELS_PER_CELL), 1)))
 )
+# BTT draws the widget's two rows into one fixed-height 22 px block: the font
+# size configured in bttpreset/Default.bttpreset is the FIRST row's, and the
+# second row renders at the remainder -- rows look equal at 11 px + 11 px.
+# The Lyrics preset is 13 px, so the second row effectively renders at
+# 22 - 13 = 9 px; width estimation must scale per row accordingly.
+FIRST_ROW_FONT_PX = float(os.environ.get("BTT_LYRICS_ROW1_FONT_PX", "13.0"))
+TWO_ROW_BLOCK_PX = float(os.environ.get("BTT_LYRICS_TWO_ROW_PX", "22.0"))
+SECOND_ROW_FONT_PX = max(TWO_ROW_BLOCK_PX - FIRST_ROW_FONT_PX, 1.0)
+# One layout cell is half a CJK glyph, i.e. half the row's font size in px.
+SECOND_ROW_PX_PER_CELL = SECOND_ROW_FONT_PX / 2.0
 SYNC_OFFSET_SECONDS = float(os.environ.get("BTT_LYRICS_OFFSET", "0.0"))
 SCROLL_LONG_LINES = os.environ.get("BTT_LYRICS_SCROLL", "1") not in {
     "0",
@@ -54,10 +65,10 @@ BREAK_ON_SPACE = os.environ.get("BTT_LYRICS_BREAK_ON_SPACE", "1") not in {
     "False",
 }
 MAX_LYRIC_ROWS = int(os.environ.get("BTT_LYRICS_MAX_ROWS", "2"))
-# Row 2 carries no note symbol. Its line also renders at a smaller font than
-# the first -- BTT fits both rows into the widget's fixed height by drawing
-# the second around 10-11 pt, against the first row's 13 pt -- so spaces on
-# it are proportionally narrower and the calibrated indent is 7 of them.
+# Row 2 carries no note symbol. Its line also renders at the second-row font
+# -- the 22 px two-row block minus the first row's 13 px, i.e. 9 px -- so
+# spaces on it are proportionally narrower and the calibrated indent is 7 of
+# them.
 CONTINUATION_INDENT = os.environ.get("BTT_LYRICS_INDENT", "       ")
 # The gap after the first row's music-note symbol: a plain space. A text
 # widget cannot express an exact pixel gap, so a single space is the

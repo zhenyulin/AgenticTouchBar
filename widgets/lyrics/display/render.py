@@ -196,7 +196,13 @@ def render_widget(
 
     cells = config.LYRIC_WIDTH_CELLS
     first_width = max(cells - display_width(prefix), 8)
-    other_width = max(cells - display_width(config.CONTINUATION_INDENT), 8)
+    # Row 2+ renders at the second-row font (9 px vs the first row's 13 px),
+    # so the same pixel slot holds more layout cells there: 1 cell is half a
+    # CJK glyph, i.e. SECOND_ROW_PX_PER_CELL px. Without this scale-up the
+    # continuation row's width is overestimated and text that actually fits
+    # gets wrapped/cropped/scrolled instead.
+    row2_cells = round(cells * config.PIXELS_PER_CELL / config.SECOND_ROW_PX_PER_CELL)
+    other_width = max(row2_cells - display_width(config.CONTINUATION_INDENT), 8)
     rows = wrap_lyric(lyric, [first_width, other_width], config.MAX_LYRIC_ROWS)
 
     if len(rows) == 1 and config.MAX_LYRIC_ROWS > 1 and index + 1 < len(lines):
