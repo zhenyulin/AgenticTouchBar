@@ -278,11 +278,13 @@ APPLE_MUSIC_CACHE_DURATION_TOLERANCE = 2.0
 # Beyond a handful the query stops being free, and older rows are stale anyway.
 APPLE_MUSIC_CACHE_MAX_ROWS = 12
 
-# TEMPORARILY DISABLED (2026-08-11): each lookup copies Music's whole URL cache
-# DB to a temp dir, and the render path re-runs it every second while a track
-# is not_found. QQ Music/NetEase cover the tracks we care about. Flip back to
-# True to restore the Apple TTML fast path.
-APPLE_CACHE_ENABLED = False
+# The Apple TTML cache (providers/apple_cache.py) is a last resort: Music's
+# URL cache holds the synced lyrics of whatever it played recently, and each
+# lookup copies the whole cache DB to a temp dir, so it never preempts a
+# remote provider (fetch.py) and the render path consults it at most once per
+# track (render.py marks a miss). A track already captioned by QQ Music /
+# NetEase / LrcAPI / LRCLIB never pays for the copy.
+APPLE_CACHE_ENABLED = True
 
 # While a stream starts, Apple Music reports a placeholder track with no
 # artist. Looking those up wastes a fetch and caches a miss under a key the

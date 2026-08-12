@@ -8,18 +8,18 @@ import time
 from typing import Any
 
 from . import config
-from .runtime.cache import atomic_write_json, cache_path, lock_path
-from .text.catalog import catalog_chinese_identity
-from .runtime.concurrency import set_fetch_deadline
-from .runtime.locking import acquire_lock, clear_lock, spawn_helper
-from .text.lrc import parse_lrc
-from .runtime.output import log_error, trace
 from .providers.apple_cache import apple_cache_record
 from .providers.local import local_lyrics_record
 from .providers.lrcapi import choose_lrcapi_candidate
 from .providers.lrclib import lrclib_record
 from .providers.netease import netease_record
 from .providers.qqmusic import qqmusic_record
+from .runtime.cache import atomic_write_json, cache_path, lock_path
+from .runtime.concurrency import set_fetch_deadline
+from .runtime.locking import acquire_lock, clear_lock, spawn_helper
+from .runtime.output import log_error, trace
+from .text.catalog import catalog_chinese_identity
+from .text.lrc import parse_lrc
 
 
 def fetch_lyrics_record(track: dict[str, Any]) -> dict[str, Any] | None:
@@ -28,18 +28,6 @@ def fetch_lyrics_record(track: dict[str, Any]) -> dict[str, Any] | None:
     local = local_lyrics_record(track)
     if local is not None:
         return local
-
-    apple_cached = None
-    if config.APPLE_CACHE_ENABLED:
-        try:
-            apple_cached = apple_cache_record(track)
-        except Exception as exc:
-            # The TTML cache is a fast path, not a library. A broken or locked
-            # cache must not starve the remote providers, which may still have
-            # the lyrics; the failure stays in the error log.
-            log_error(f"Apple lyrics cache lookup failed: {exc}")
-    if apple_cached is not None:
-        return apple_cached
 
     identity = catalog_chinese_identity(track)
     if identity is not None:
@@ -109,14 +97,30 @@ def fetch_lyrics_record(track: dict[str, Any]) -> dict[str, Any] | None:
         if lrclib is not None:
             return lrclib
 
-        if not lrcapi_timed_out:
-            return None
+        if lrcapi_timed_out:
+            # LrcAPI may still be running after the preference window; its
+            # answer outranks the Apple cache, so wait for the leftover
+            # before it.
+            try:
+                lrcapi = lrcapi_future.result()
+            except Exception as exc:
+                log_error(f"LrcAPI lookup failed; using LRCLIB: {exc}")
+            if lrcapi is not None:
+                return lrcapi
 
-        try:
-            return lrcapi_future.result()
-        except Exception as exc:
-            log_error(f"LrcAPI lookup failed; using LRCLIB: {exc}")
-            return None
+        # Last resort: Apple Music's TTML cache. It only ever holds tracks
+        # Music itself played (matched by duration), and every lookup copies
+        # the whole URL cache DB to a temp dir, so it never preempts a remote
+        # answer; a broken or locked cache must not error the fetch.
+        if config.APPLE_CACHE_ENABLED:
+            apple_cached = None
+            try:
+                apple_cached = apple_cache_record(track)
+            except Exception as exc:
+                log_error(f"Apple lyrics cache lookup failed: {exc}")
+            if apple_cached is not None:
+                return apple_cached
+        return None
     finally:
         pool.shutdown(wait=False)
 

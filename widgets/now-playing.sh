@@ -49,9 +49,8 @@ ALLOWED_BUNDLE_IDS="${BTT_NOW_PLAYING_ALLOWED:-com.apple.Music com.tencent.QQMus
 # that has not been re-imported.
 LYRICS_UUID="${BTT_LYRICS_WIDGET_UUID:-E19BB023-5060-4A56-95C8-6E7402779870}"
 
-REPO_DIR="${BTT_REPO_DIR:-$HOME/Documents/BTT}"
-CACHE_DIR="${BTT_WIDGET_CACHE_DIR:-$REPO_DIR/cache}"
-ASSETS_DIR="$REPO_DIR/assets"
+CACHE_DIR="${BTT_WIDGET_CACHE_DIR:-${BTT_REPO_DIR:-$HOME/Documents/BTT}/cache}"
+ASSETS_DIR="${BTT_REPO_DIR:-$HOME/Documents/BTT}/assets"
 # The Lyrics sampler's state, consulted when the session holder is not one of
 # ours. Mirrors CACHE_DIR / STATE_PATH in widgets/lyrics/config.py.
 SAMPLER_STATE="${BTT_LYRICS_CACHE_DIR:-${BTT_REPO_DIR:-$HOME/Documents/BTT}/cache/lyrics}/state.json"
@@ -114,7 +113,7 @@ RAW="$(raw_state)" || RAW=""
 
 python3 - "$RAW" "$ALLOWED_BUNDLE_IDS" "$CACHE_DIR" "$BTT_WIDGET_UUID" \
     "$ASSETS_DIR" "$LYRICS_UUID" \
-    "$SAMPLER_STATE" "$HELPER" "$REPO_DIR" <<'PY'
+    "$SAMPLER_STATE" "$HELPER" <<'PY'
 import base64
 import hashlib
 import json
@@ -209,52 +208,6 @@ def display_width(text):
 
 def join_parts(*parts):
     return " ▸ ".join(part for part in parts if part)
-
-
-# Music occasionally publishes a streaming item with real duration and an
-# iTunes Store id but empty title/artist/album. The metadata is recovered
-# from the public iTunes Store lookup keyed by the adam id; the records
-# live at now-playing-adam-<id>.json in the widget cache dir and are shared
-# with the Lyrics sampler (widgets/lyrics/sources/store_lookup.py) -- keep
-# the file shape and these TTLs in sync with it.
-RESOLVED_TTL = 30 * 24 * 3600
-ERROR_TTL = 15 * 60
-
-
-def read_adam_cache(adam_id, cache_dir):
-    """The cached iTunes lookup for the id, or None when absent/stale."""
-    path = Path(cache_dir) / f"now-playing-adam-{adam_id}.json"
-    try:
-        record = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return None
-    try:
-        fetched = float(record.get("fetched_at") or 0.0)
-    except (TypeError, ValueError):
-        return None
-    ttl = ERROR_TTL if record.get("error") else RESOLVED_TTL
-    if time.time() - fetched > ttl or record.get("error"):
-        return None
-    return {key: str(record.get(key) or "") for key in ("title", "artist", "album", "genre")}
-
-
-def spawn_adam_lookup(adam_id, repo_dir, cache_dir):
-    """A detached iTunes lookup: this tick runs on BTT's shared script
-    runner and must never block on the network. The lyrics CLI writes the
-    same cache file this widget reads next tick."""
-    env = dict(os.environ)
-    env["PYTHONPATH"] = os.path.join(repo_dir, "widgets")
-    try:
-        subprocess.Popen(
-            ["/usr/bin/env", "python3", "-m", "lyrics", "--adam-lookup", str(adam_id)],
-            env=env,
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            start_new_session=True,
-        )
-    except OSError:
-        pass
 
 
 def artwork_icon(info, cache_dir):
@@ -623,8 +576,7 @@ def clear_lyrics_for_change(identity, cache_dir, lyrics_uuid):
     lyrics_uuid,
     state_path,
     helper_payload,
-    repo_dir,
-) = sys.argv[1:10]
+) = sys.argv[1:9]
 try:
     info = json.loads(payload)
 except (json.JSONDecodeError, UnicodeDecodeError):
@@ -677,30 +629,8 @@ else:
 title = strip_parens(identity["title"])
 artist = identity["artist"]
 album = display_album(identity["album"])
-if not title or not artist:
-    # Music withholds a streaming item's metadata (empty title/artist/
-    # album) while publishing its real duration and iTunes Store id;
-    # recover the fields from the cached lookup keyed by that adam id. A
-    # missing cache spawns a detached lookup and renders nothing until it
-    # lands, rather than blocking the shared script runner.
-    adam_id = (
-        info.get("kMRMediaRemoteNowPlayingInfoiTunesStoreSubscriptionAdamIdentifier")
-        or info.get("kMRMediaRemoteNowPlayingInfoiTunesStoreIdentifier")
-    )
-    if adam_id is None:
-        sys.exit(0)
-    resolved = read_adam_cache(adam_id, cache_dir)
-    if resolved is None:
-        spawn_adam_lookup(adam_id, repo_dir, cache_dir)
-        sys.exit(0)
-    identity["title"] = resolved.get("title") or identity["title"]
-    identity["artist"] = resolved.get("artist") or identity["artist"]
-    identity["album"] = resolved.get("album") or identity["album"]
-    title = strip_parens(identity["title"])
-    artist = identity["artist"]
-    album = display_album(identity["album"])
-    if not title:
-        sys.exit(0)
+if not title:
+    sys.exit(0)
 
 # A terminal run prints a row and touches nothing else.
 if widget_uuid:

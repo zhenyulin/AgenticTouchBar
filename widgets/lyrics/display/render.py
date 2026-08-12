@@ -269,11 +269,18 @@ def render_tick() -> str:
 
     if cached is not None and cached.get("status") == "not_found":
         apple_record = None
-        if config.APPLE_CACHE_ENABLED:
+        # Every lookup copies Music's whole URL cache DB to a temp dir, so a
+        # not_found track must not re-pay per tick: the miss is marked on the
+        # record, and later ticks skip the lookup until the fetch retry rolls
+        # the record over (retry_after in fetch.py).
+        if config.APPLE_CACHE_ENABLED and not cached.get("apple_checked"):
             try:
                 apple_record = apple_cache_record(track)
             except Exception as exc:
                 log_error(f"Apple lyrics cache lookup failed: {exc}")
+            if apple_record is None:
+                cached["apple_checked"] = True
+                atomic_write_json(cache_path(key), cached)
         if apple_record is not None:
             apple_record = dict(apple_record)
             apple_record["parsedLines"] = parse_lrc(
