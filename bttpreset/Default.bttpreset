@@ -45,7 +45,7 @@
     "BTTTouchBarVisible" : true,
     "BSTDontShowSnapAreasWhileModMoving" : 0,
     "BTTDrawingAreaHeight" : 626,
-    "BTTNumberOfStarts" : 605,
+    "BTTNumberOfStarts" : 606,
     "BTTTouchBarHapticFeedback" : 0,
     "BTTStageManagerLeftSnappingAreaIncreasePercentage" : 0.125,
     "showKeyboardTab" : false,
@@ -162,12 +162,25 @@
     "BSTSnapAreaDefaultShowPictogram" : false,
     "BSTSnapAreaDefaultPictoDistanceFromBottom" : 0.10000000149011612
   },
-  "BTTPresetUUID" : "B1DC6430-7EF6-49D9-91BE-32AFFB0C4A39",
+  "BTTPresetUUID" : "C1297DD9-8B07-4DC3-9CF5-0535CC8F50D7",
   "BTTPresetContent" : [
     {
       "BTTAppBundleIdentifier" : "BT.L",
       "BTTAppName" : "Recently Used",
       "BTTAppAutoInvertIcon" : 1,
+      "BTTTriggers" : [
+
+      ]
+    },
+    {
+      "BTTAppBundleIdentifier" : "com.microsoft.VSCode",
+      "BTTAppName" : "Code",
+      "BTTAppAutoInvertIcon" : 1,
+      "BTTAppProcessMatchMode" : 2,
+      "BTTAppProcessName" : "Code",
+      "BTTAppSpecificSettings" : {
+        "BTTDisableGlobalTriggers" : false
+      },
       "BTTTriggers" : [
 
       ]
@@ -181,84 +194,186 @@
       },
       "BTTTriggers" : [
         {
-          "BTTLastUpdatedAt" : 1786484244.732635,
-          "BTTTriggerType" : 644,
-          "BTTTriggerTypeDescriptionReadOnly" : "Two Finger Swipe Left",
+          "BTTLastUpdatedAt" : 1786558559.681705,
+          "BTTTriggerType" : 630,
+          "BTTTriggerTypeDescriptionReadOnly" : "Group",
+          "BTTTriggerTypeDescription" : "Music",
           "BTTTriggerClass" : "BTTTriggerTypeTouchBar",
-          "BTTUUID" : "398D8506-BF6E-408B-B4FE-0E6EA6CCCE14",
-          "BTTRepeatRate" : 5,
-          "BTTOrder" : 3,
+          "BTTUUID" : "5CE6DC19-82BA-4B57-886B-6CDCCF006322",
+          "BTTOrder" : 9,
           "BTTMergeIntoTouchBarGroups" : 0,
-          "BTTActionsToExecute" : [
-            {
-              "BTTLastUpdatedAt" : 1786484244.7324581,
-              "BTTTriggerParentUUID" : "398D8506-BF6E-408B-B4FE-0E6EA6CCCE14",
-              "BTTIsPureAction" : true,
-              "BTTUUID" : "FB878344-162C-4C87-A77A-2815E5DC7379",
-              "BTTPredefinedActionType" : 26,
-              "BTTPredefinedActionName" : "Previous",
-              "BTTOrder" : 0
-            },
-            {
-              "BTTLastUpdatedAt" : 1786484244.7326269,
-              "BTTTriggerParentUUID" : "398D8506-BF6E-408B-B4FE-0E6EA6CCCE14",
-              "BTTIsPureAction" : true,
-              "BTTUUID" : "E1F484D3-F77E-4599-8F6B-CBA79E874619",
-              "BTTPredefinedActionType" : 206,
-              "BTTPredefinedActionName" : "Execute Shell Script  or  Task",
-              "BTTShellTaskActionScript" : "exec \"$HOME/Documents/BTT/actions/track-changed.sh\" \\\n    \"{BTT_WIDGET_LYRICS_UUID}\" \\\n    \"{BTT_WIDGET_STAR_UUID}\"",
-              "BTTShellTaskActionConfig" : "/bin/zsh:::-c:::-:::",
-              "BTTOrder" : 1
-            }
-          ],
+          "BTTTouchBarButtonName" : "Music",
           "BTTTriggerConfig" : {
-            "BTTTouchBarItemIconWidth" : 22,
-            "BTTTouchBarButtonColor" : "75.323769, 75.323769, 75.323769, 255.000000",
-            "BTTTouchBarButtonTextAlignment" : 0,
-            "BTTTouchBarItemPlacement" : 0,
-            "BTTTouchBarButtonFontSize" : 15,
-            "BTTTouchBarAlternateBackgroundColor" : "75.323769, 75.323769, 75.323769, 255.000000",
-            "BTTTouchBarBorderColor" : "255.000000, 255.000000, 255.000000, 255.000000",
-            "BTTTouchBarAlwaysShowButton" : false,
-            "BTTTBWidgetWidth" : 400,
-            "BTTTouchBarFreeSpaceBeforeButton" : 0,
+            "BTTTouchBarButtonColor" : "0.000000, 0.000000, 0.000000, 255.000000",
             "BTTTouchBarIconInvert" : false,
+            "BTTTouchBarItemPlacement" : 0,
+            "BTTTouchBarAlwaysShowButton" : false,
+            "BTTNotchBarActivateWidgetModeForGroup" : false,
             "BTTTouchBarButtonHoverColor" : "248.880000, 146.115000, 128.010000, 181.050000",
-            "BTTTouchBarIconTextOffset" : 5,
+            "BTTNotchBarUnhideForGroup" : false,
             "BTTTouchBarButtonWidth" : 100,
+            "BTTTouchBarButtonHeight" : 15,
+            "BTTKeepGroupOpenWhileSwitchingApps" : true,
+            "BTTTouchBarItemIconHeight" : 22,
+            "BTTTouchBarButtonTextAlignment" : 0,
+            "BTTTouchBarAlternateBackgroundColor" : "75.323769, 75.323769, 75.323769, 255.000000",
+            "BTTTBWidgetWidth" : 400,
+            "BTTTouchBarBorderColor" : "255.000000, 255.000000, 255.000000, 255.000000",
+            "BTTTouchBarItemIconWidth" : 22,
+            "BTTTouchBarFreeSpaceBeforeButton" : 0,
+            "BTTTouchBarButtonFontSize" : 1,
+            "BTTTouchBarIconTextOffset" : 5,
             "BTTTouchBarOnlyShowIcon" : false,
             "BTTTouchBarFreeSpaceAfterButton" : 5,
-            "BTTTouchBarButtonHeight" : 15,
-            "BTTTouchBarItemIconHeight" : 22,
             "BTTTouchBarItemPadding" : 0
           }
         },
         {
-          "BTTLastUpdatedAt" : 1786548126.6130409,
+          "BTTLastUpdatedAt" : 1786561738.1795712,
           "BTTTriggerType" : 642,
           "BTTTriggerTypeDescriptionReadOnly" : "Shell Script / Task Widget",
-          "BTTTriggerTypeDescription" : "🌐",
+          "BTTTriggerTypeDescription" : "Now Playing",
           "BTTTriggerClass" : "BTTTriggerTypeTouchBar",
-          "BTTUUID" : "CF76E4C0-5986-41F9-8F3E-00A6C8F160FE",
+          "BTTUUID" : "710F54C5-25B0-4A2C-B960-D9C0FE78B1B7",
           "BTTShellScriptWidgetGestureConfig" : "/bin/zsh:::-c:::-:::",
-          "BTTOrder" : 12,
-          "BTTMergeIntoTouchBarGroups" : 0,
+          "BTTOrder" : 5,
+          "BTTDisplayOrder" : 1,
+          "BTTMergeIntoTouchBarGroups" : 1,
           "BTTActionsToExecute" : [
             {
-              "BTTLastUpdatedAt" : 1786484244.7324471,
-              "BTTTriggerParentUUID" : "CF76E4C0-5986-41F9-8F3E-00A6C8F160FE",
+              "BTTLastUpdatedAt" : 1786484244.7325711,
+              "BTTTriggerParentUUID" : "710F54C5-25B0-4A2C-B960-D9C0FE78B1B7",
               "BTTIsPureAction" : true,
-              "BTTUUID" : "1787C5CE-9CBD-4CB3-ADCC-EF870F9EFE03",
+              "BTTUUID" : "B7C5A2E1-6D4F-4D8A-9B31-2F6E7C8A9012",
+              "BTTPredefinedActionType" : 195,
+              "BTTPredefinedActionName" : "Run Apple Script (async in background)",
+              "BTTAdditionalActionData" : {
+                "BTTScriptType" : 0,
+                "BTTAppleScriptUsePath" : false,
+                "BTTScriptLocation" : 0,
+                "BTTAppleScriptRunInBackground" : true,
+                "SelectedAction" : 195,
+                "BTTAppleScriptString" : "delay 0.25\n\nset lyricsUUID to \"{BTT_WIDGET_LYRICS_UUID}\"\nset shouldShowLyrics to false\n\nif application \"Music\" is running then\n    tell application \"Music\"\n        set shouldShowLyrics to (player state is playing)\n    end tell\nend if\n\nif shouldShowLyrics then\n    do shell script \"$HOME/Documents/BTT/actions/weather-state.sh playing\"\nelse\n    do shell script \"$HOME/Documents/BTT/actions/weather-state.sh paused\"\nend if\n\ntell application \"BetterTouchTool\"\n    if shouldShowLyrics then\n        refresh_widget lyricsUUID\n    else\n        update_touch_bar_widget lyricsUUID text \"\"\n    end if\n    refresh_widget \"6C52DA31-FC05-495E-847D-C51B9AD9E33C\"\n    refresh_widget \"E953195F-2D7C-4AAA-B288-3DFB4DC1DA0A\"\nend tell"
+              },
+              "BTTInlineAppleScript" : "delay 0.25\n\nset lyricsUUID to \"{BTT_WIDGET_LYRICS_UUID}\"\nset shouldShowLyrics to false\n\nif application \"Music\" is running then\n    tell application \"Music\"\n        set shouldShowLyrics to (player state is playing)\n    end tell\nend if\n\nif shouldShowLyrics then\n    do shell script \"$HOME/Documents/BTT/actions/weather-state.sh playing\"\nelse\n    do shell script \"$HOME/Documents/BTT/actions/weather-state.sh paused\"\nend if\n\ntell application \"BetterTouchTool\"\n    if shouldShowLyrics then\n        refresh_widget lyricsUUID\n    else\n        update_touch_bar_widget lyricsUUID text \"\"\n    end if\n    refresh_widget \"6C52DA31-FC05-495E-847D-C51B9AD9E33C\"\n    refresh_widget \"E953195F-2D7C-4AAA-B288-3DFB4DC1DA0A\"\nend tell",
+              "BTTOrder" : 0
+            },
+            {
+              "BTTLastUpdatedAt" : 1786484244.732692,
+              "BTTTriggerParentUUID" : "710F54C5-25B0-4A2C-B960-D9C0FE78B1B7",
+              "BTTIsPureAction" : true,
+              "BTTUUID" : "3F8E2B4A-9C1D-4E5F-B6A7-8C9D0E1F2A3B",
+              "BTTPredefinedActionType" : 23,
+              "BTTPredefinedActionName" : "Play or Pause",
+              "BTTOrder" : 0
+            }
+          ],
+          "BTTWidgetName" : "Now Playing",
+          "BTTTriggerConfig" : {
+            "BTTTouchBarShellScriptString" : "exec \"$HOME/Documents/BTT/widgets/now-playing.sh\" \\\n\"{BTT_WIDGET_NOW_PLAYING_UUID}\"",
+            "BTTTouchBarItemPadding" : -5,
+            "BTTTouchBarButtonColor" : "0.000000, 0.000000, 0.000000, 255.000000",
+            "BTTTouchBarIconInvert" : false,
+            "BTTTouchBarItemPlacement" : 1,
+            "BTTTouchBarAppleScriptStringRunOnInit" : true,
+            "BTTTouchBarAlwaysShowButton" : false,
+            "BTTTouchBarButtonHoverColor" : "248.880000, 146.115000, 128.010000, 181.050000",
+            "BTTTouchBarButtonHeight" : 15,
+            "BTTTouchBarButtonWidth" : 100,
+            "BTTTouchBarScriptUpdateInterval" : 1,
+            "BTTTouchBarItemIconHeight" : 30,
+            "BTTTouchBarButtonTextAlignment" : 0,
+            "BTTShellScriptDontTrimWhitepsace" : false,
+            "BTTTouchBarAlternateBackgroundColor" : "75.323769, 75.323769, 75.323769, 255.000000",
+            "BTTTouchBarItemIconType" : 1,
+            "BTTTBWidgetWidth" : 400,
+            "BTTTouchBarBorderColor" : "255.000000, 255.000000, 255.000000, 255.000000",
+            "BTTTouchBarItemIconWidth" : 30,
+            "BTTTouchBarLongPressActionName" : "Toggle Music Group",
+            "BTTTouchBarButtonName" : "Now Playing",
+            "BTTTouchBarButtonFontSize" : 13,
+            "BTTTouchBarIconTextOffset" : 5,
+            "BTTTouchBarFontColor" : "255.000000, 255.000000, 255.000000, 255.000000",
+            "BTTTouchBarFreeSpaceBeforeButton" : 0,
+            "BTTTouchBarFreeSpaceAfterButton" : -10,
+            "BTTTouchBarOnlyShowIcon" : false
+          }
+        },
+        {
+          "BTTLastUpdatedAt" : 1786484244.7325869,
+          "BTTTriggerType" : 643,
+          "BTTTriggerTypeDescriptionReadOnly" : "Named Trigger: Quit BTT",
+          "BTTTriggerClass" : "BTTTriggerTypeOtherTriggers",
+          "BTTUUID" : "1686B90A-5D5E-4ECC-AD4A-C6D946C29BF8",
+          "BTTTriggerName" : "Quit BTT",
+          "BTTOrder" : 0,
+          "BTTActionsToExecute" : [
+            {
+              "BTTLastUpdatedAt" : 1786484244.732615,
+              "BTTTriggerParentUUID" : "1686B90A-5D5E-4ECC-AD4A-C6D946C29BF8",
+              "BTTIsPureAction" : true,
+              "BTTUUID" : "30F43047-6380-43F9-B896-07C16ACA4E46",
               "BTTPredefinedActionType" : 206,
               "BTTPredefinedActionName" : "Execute Shell Script  or  Task",
-              "BTTShellTaskActionScript" : "exec \"$HOME/Documents/BTT/actions/tap-refresh.sh\" \\\n\"{BTT_WIDGET_CLASH_LATENCY_UUID}\" \\\n\"{BTT_WIDGET_CLASH_REGION_UUID}\"\n",
+              "BTTShellTaskActionScript" : "exec /bin/zsh \"$HOME/Documents/BTT/actions/btt-quit.sh\"\n",
               "BTTShellTaskActionConfig" : "/bin/zsh:::-c:::-:::",
               "BTTOrder" : 7
             }
+          ]
+        },
+        {
+          "BTTLastUpdatedAt" : 1786484244.7326069,
+          "BTTTriggerType" : 643,
+          "BTTTriggerTypeDescriptionReadOnly" : "Named Trigger: Open Player",
+          "BTTTriggerClass" : "BTTTriggerTypeOtherTriggers",
+          "BTTUUID" : "ECAED750-A776-4E5D-8556-3B3751C34D86",
+          "BTTTriggerName" : "Open Player",
+          "BTTOrder" : 0,
+          "BTTActionsToExecute" : [
+            {
+              "BTTLastUpdatedAt" : 1786484244.7323089,
+              "BTTTriggerParentUUID" : "ECAED750-A776-4E5D-8556-3B3751C34D86",
+              "BTTIsPureAction" : true,
+              "BTTUUID" : "D260A34D-7EC4-4446-99E5-EABB5DFA392E",
+              "BTTPredefinedActionType" : 195,
+              "BTTPredefinedActionName" : "Run Apple Script (async in background)",
+              "BTTAdditionalActionData" : {
+                "BTTScriptType" : 0,
+                "BTTAppleScriptRunInBackground" : true,
+                "BTTTouchBarAppleScriptString" : "set playerBundleIdentifier to do shell script \"$HOME/Documents/BTT/actions/now-playing-app.sh\"\n\nif playerBundleIdentifier is not \"\" then\n\ttell application id playerBundleIdentifier\n\t\tactivate\n\t\treopen\n\tend tell\nend if",
+                "BTTTouchBarAppleScriptUsePath" : false
+              },
+              "BTTInlineAppleScript" : "set playerBundleIdentifier to do shell script \"$HOME/Documents/BTT/actions/now-playing-app.sh\"\n\nif playerBundleIdentifier is not \"\" then\n\ttell application id playerBundleIdentifier\n\t\tactivate\n\t\treopen\n\tend tell\nend if",
+              "BTTOrder" : 7
+            }
+          ]
+        },
+        {
+          "BTTLastUpdatedAt" : 1786561738.1796541,
+          "BTTTriggerType" : 642,
+          "BTTTriggerTypeDescriptionReadOnly" : "Shell Script / Task Widget",
+          "BTTTriggerTypeDescription" : "Codex",
+          "BTTTriggerClass" : "BTTTriggerTypeTouchBar",
+          "BTTUUID" : "508ECCA7-BAD5-469D-9418-94E2C370AE37",
+          "BTTShellScriptWidgetGestureConfig" : "/bin/zsh:::-c:::-:::",
+          "BTTOrder" : 15,
+          "BTTMergeIntoTouchBarGroups" : 0,
+          "BTTActionsToExecute" : [
+            {
+              "BTTLastUpdatedAt" : 1786484244.732336,
+              "BTTTriggerParentUUID" : "508ECCA7-BAD5-469D-9418-94E2C370AE37",
+              "BTTIsPureAction" : true,
+              "BTTUUID" : "CFFF823A-D595-4AC8-982D-25CC84BE6945",
+              "BTTPredefinedActionType" : 206,
+              "BTTPredefinedActionName" : "Execute Shell Script  or  Task",
+              "BTTShellTaskActionScript" : "exec \"$HOME/Documents/BTT/actions/tap-refresh.sh\" \\\n\"{BTT_WIDGET_CODEX_UUID}\"",
+              "BTTShellTaskActionConfig" : "/bin/zsh:::-c:::-:::",
+              "BTTOrder" : 9
+            }
           ],
-          "BTTWidgetName" : "🌐",
+          "BTTIconData" : "iVBORw0KGgoAAAANSUhEUgAAAEYAAABGCAYAAABxLuKEAAAEDmlDQ1BrQ0dDb2xvclNwYWNlR2VuZXJpY1JHQgAAOI2NVV1oHFUUPpu5syskzoPUpqaSDv41lLRsUtGE2uj+ZbNt3CyTbLRBkMns3Z1pJjPj_KRpKT4UQRDBqOCT4P9bwSchaqvtiy2itFCiBIMo+ND6R6HSFwnruTOzu5O4a73L3PnmnO9+595z7t4LkLgsW5beJQIsGq4t5dPis8fmxMQ6dMF90A190C0rjpUqlSYBG+PCv9rt7yDG3tf2t_f_Z+uuUEcBiN2F2Kw4yiLiZQD+FcWyXYAEQfvICddi+AnEO2ycIOISw7UAVxieD_Cyz5mRMohfRSwoqoz+xNuIB+cj9loEB3Pw2448NaitKSLLRck2q5pOI9O9g_t_tkXda8Tbg0+PszB9FN8DuPaXKnKW4YcQn1Xk3HSIry5ps8UQ_2W5aQnxIwBdu7yFcgrxPsRjVXu8HOh0qao30cArp9SZZxDfg3h1wTzKxu5E_LUxX5wKdX5SnAzmDx4A4OIqLbB69yMesE1pKojLjVdoNsfyiPi45hZmAn3uLWdpOtfQOaVmikEs7ovj8hFWpz7EV6mel0L9Xy23FMYlPYZenAx0yDB1_PX6dledmQjikjkXCxqMJS9WtfFCyH9XtSekEF+2dH+P4tzITduTygGfv58a5VCTH5PtXD7EFZiNyUDBhHnsFTBgE0SQIA9pfFtgo6cKGuhooeilaKH41eDs38Ip+f4At1Rq_sjr6NEwQqb_I_DQqsLvaFUjvAx+eWirddAJZnAj1DFJL0mSg_gcIpPkMBkhoyCSJ8lTZIxk0TpKDjXHliJzZPO50dR5ASNSnzeLvIvod0HG_mdkmOC0z8VKnzcQ2M_Yz2vKldduXjp9bleLu0ZWn7vWc+l0JGcaai10yNrUnXLP_8Jf59ewX+c3Wgz+B34Df+vbVrc16zTMVgp9um9bxEfzPU5kPqUtVWxhs6OiWTVW+gIfywB9uXi7CGcGW_zk98k_kmvJ95IfJn_j3uQ+4c5zn3Kfcd+AyF3gLnJfcl9xH3OfR2rUee80a+6vo7EK5mmXUdyfQlrYLTwoZIU9wsPCZEtP6BWGhAlhL3p2N6sTjRdduwbHsG9kq32sgBepc+xurLPW4T9URpYGJ3ym4+8zA05u44QjST8ZIoVtu3qE7fWmdn5LPdqvgcZz8Ww8BWJ8X3w0PhQ_wnCDGd+LvlHs8dRy6bLLDuKMaZ20tZrqisPJ5ONiCq8yKhYM5cCgKOu66Lsc0aYOtZdo5QCwezI4wm9J_v0X23mlZXOfBjj8Jzv3WrY5D+CsA9D7aMs2gGfjve8ArD6mePZSeCfEYt8CONWDw8FXTxrPqx_r9Vt4biXeANh8vV7_+_16ffMD1N8AuKD_A_8leAvFY9bLAAAAOGVYSWZNTQAqAAAACAABh2kABAAAAAEAAAAaAAAAAAACoAIABAAAAAEAAABGoAMABAAAAAEAAABGAAAAAE3tIiIAABPgSURBVHgBxVwLrB3FeZ7ZPefch+0Y8ygEEpBqWiAVz7QCXENpGxBtIS0Pg1Ai4orUBKUInFAgxsCNwQkmfkAoBAgVsdQ25VmKRAItNI4Sk75IUkRRWyUtOKCUAsXG1_fe89idft+_88+d3bP3+vhiYOQ988__+P5__pmdnZ1zrq15j8qDG91Ir2kOy7Leh1Nn93fGNJLUTPZM+lrSMduah5pXLrjAZu9ROLt1Y3er8Q4UNiIZByTm9DTNzzXOLrHWHopkDKWJMRaeHbLT6xmT5W4nmj9xzn2nl+cPf2pl8wfvwO1eMX1XEvPVy93Qvouzi22aXN5o2KPTFJ1HAvIcyWDY8uHjRwQMIkGyGtDrdJGnzG3JenbjxZ+33_Ja73m11xPz9XWdk0ZGGhtaLbtEZgRuDuYhOIqT4rsbs6jXbGAm0S5zj+zaZVetWGX_873OTIh3bzjevCG7tDFk12OWzMfI77bQeUhKILwZhK0mEtQxr3Uzs3L5SvvNGHBs7N9ah5mPJC9jko2NWczFvVv2WmLu35Td2BpKxjhLeMvscakmBgBkNXCLkex2zFpMopdSmy+1xh7urNnXOdu0zoxnxr1mnX3emWzrZDvd+ser7Jti9Q4+9kpi7tuQXTMymtyScfqjN9pHgivNGIu2Q22FHztXPXS0ZKN2XH+4YPPKqRPpJZ5P_72eexWL+OPtqezrl32h9SPaz6XEsc3F3ty9vnfu6EjyYO5symDrCgJFh9QVlZT22jV2MauiLUYip0N5vE175SLONarbxVagZ_4865ibL73WbpvWGIyq8zmYJbT+dL07bKTl_iFt2IM4WoMVdglufRVspKehNXfC41gkiGtUu21emeqalZ+9yj68J6DFHbwnFpFuM8lvabbsQVgcDZeV6sUYq7wcSREechNkUOzjwZa55hX0YlptYh5p4uLKIJ_sYAga5kPDQ+aBuzZmN0A8cAHE3Mqd693S1rDZgvtdbiG9U5gMXSRklgujmPGRqDxjoMNAsKAGW+rOpdRBMI4m1qjJyfzWz34+vWYQ3LnPmIZZidFIa0cUgcioIYIwgqBLutSh3Otk2va2QaY6A9axD44JcTh72hC0RpKr71ifXQ3WbgvC2PNy+y3u0HTUvIj7eN5MC+6eo85iwR7WRRrz62jyosKZg6s7MWXOvuoq+1Qk6iPr3PUpTTOc3bTJLEkb5gps85dVF1yCVWKZNp2NmrPhbKCRLAoKsZtOx_10csKeuGqW_Q7UBivrN7k_wAvglda6U5OGtV28+1QLR4SlNIs8z1czJ64uOTEvpgs3u_0MJiRYkCC+s7WG7eKeM38CzrXCr_lQkxpRwVq3zh2Vjph1yPTZ3CPwbZgO6gxDYjxaCGyGtmcPXkUjX2dUFVdj1AHjoxyzfXt7pzlu9Wr7ch3WrDPmy+t7n2gMm01p0xyADRNe6voTUnVe54QBV_VinnZIdbTdh6UKXlC3S+6ziRmwF2x8NIfNPp3cXAzxTbGK0hVXyjbmS7e51c2WWQOOzbnUs1A7ilqMZ0QQC_mgSVVNeRGc6AYXgZjGmZWKgWJnMR8A2uRRSKftnu_usL+Gl1DseMqldsas3eSuR0bXcHGV6QdHHB0poMnjbaOsMmR9q06XPF7VfoguPsgXuh4y2OktUlWbyZ6YMtiJPdLMM7+M5gtV277E3LTRXYKkfFHOQ7gJ8OgarEajCStFDl1R196wMUBR9apqlS8DAiXyfVjBRHXVP2uGr6WkD2VuJhst02p3zfHQmT0xY7d2TmgMmU097Nt5dECwEIXScVQaDWW+CKsUBQRq40mqCjYJX4IKCNkBq4C1gBYMJbWO1WLVqjxuC40P+nEmP7KKwXaYMWNjDvlzt9vULOj5Q6YAFggPUW0rsvLhUHKjbZWz9rxZREEnNlOadtWkqox1jKt6gReIQs_P+oNje6VDYrJ52QUjQ+nSTt8yBNXYg9KKAGdcb7hxKrJRPNKjGArNPoYCDFDTNvIrUPiQGnyK6tYZkdfAqz3PdYxNPlCjUsyYZTgmtI30SirqfRnFUR6GijcmJcuxmZw09+Fx_jxm3Ol4mp3nFEi9lgCVWdS6dii34kLY1UezJIMSKNfpK1ZfHemLHY79+nTAkBlz+OhHTsSu9gTZzXov6qy6aSNICAo0vwrpTprr115tb6UM5Z7rNmR_OTqaXMS9TygKGBgFQTbxqnmsqNV2vgRZalSti+TFcasGnrxvKR3XkhjsBM_GJs522xDRmsU7qvOnPKrK1x2JeVxs_MfUZPIFJPoM3F77cVMoxUeltjPyvPruqhJORZky7UYsklsnYnCmZnn+s4gVyATHjtYkbin3LBw1uZ1ACI02jXkJ39cxD2exCW6bowMiiA3YZuN0fz1fIRRHb1NASM4VQ2rwKFde7Ev5Vd6c+PQd+eGWBN9o1Z4LJ6u+zNN2s1j2LWoUAWhAMaDypMbg4Fxm1YoxN0o3WnAGcufUlPl3rDmlYBQnDAIMpJOs_SU6oDWJKte21sJnzNRl7a_Ar_DIVx9CowGb2sd1gpmyP3AXyreENKy56FD5SmsQfKlsNs1xC0fNJcAJ5dZr7E484W7kIhzbxDiK0VcDpcTzbdrW8ZUXsKGvCaCMtOpoTV08NAz2bbd87ubehVAplcS0zALs51pMTNWxOuIJWAwozuiQF+yYHNw2116x1h0Yo7_8nHlkqm2eTrCSqU2Mo_iKIzEwDh9LqQ0ek1zlBVsfo7ZlQGIcjdfHzDiYGPxrNIaSr61c0_6VOPYETw6uETYEGTlX8DggJkmdqw1vQzyiD2415Iwj4D_0kM3wGF+NL8vaMJu2i3yEjioua5UrL26Tnk3Hy6XTXk_7UYfLQcW3HIuSRvO208acPIzYgSS1ZgILcE9GUp1qQDV1SBJk4pA1Lm4MsZ5ceuVN7qiQGRC332D_sd0xm_GUmp4JxK12VtsaQ7WtNnGttNqgrf1gLT5Y+0tkFVpjT1v2Y8fY7GyNPckmJt_Cl2Xj0BcANRZgMOO20nSkcnXOEcItMx_XjQqu9a62WdueMm_IGzls1V7wYKe41Vo7FNfBr8dRrFgnpmv1NekxBoJNGunKZcschhD0wubI6_hVwf+wUQWpttWh8lnL5TuHWwZT0Jx3+Rp3CvG03Dtmt+GW_QpPzrQjwRZKilutg4768R2p8mNMnYk6m2OZxqp+Ag7il4M465bsf6Q5jnEnPKTB2cQLHE0BYSc1o5Va+eJUZZp1tLkXQucbmDVrlo+5YU0Ma9zLd7UnzX+IH9pGdnGA2iHlaUdFv8ZnkHtZsCO+6sc1+NIPrSnzulhrUmw9zmK8GEMEndlnqiBx52M66FUcq468BjizZKhnPkxsLXeN2XEs3P8Fs2Jt0o5Ugg74KmcHeKGtneZuWi7y_FW1m7Xt8ao6HFi8Of0GY5ZVeGrcPIUjunHkaz4dVQtwSkXOS5SJ2u_2RYdfqOMRvfmem81PYqPLVrsjsBM7mUca7KDsynylUEG_jxEkZYJ6uvcHPahZrBjbODyh0Lcjll_p9pEZc996+995zzwpW3hohmlOGokqtZVXM1oMErfL65Nv84A5HIYWnUnMWqw_++hPzmJcHfVqTR3yqiMb2lEsjDHMLNppm3UVg3b+CjZscybmZr_WiDkoPLd7nex2bHXOgWL_zzlgVFvA17dvyvlI7nbydfdvTH8W6196rTsTsnPkV1bEUjytVTlu+5kQs9gJlniGFpzyJ9XCsEjDu4zB1KTCg48hzOpFMmOoc++65ve7U+YhHiNIhpE9ZnDGS0eTOqD5xMFs+VfzRvI19cl6+XI37BK3lq+qfkSmR7CKXx1Zj60zhHHp6CutbdURHxU75alN0K36Iz4ShWoozBh2Ymrn1Cpjh38To3sgjVlk71GQPu1kFiMSkg3CdY1rt7PrNt_bmFB11skB+SVpKzkBb9tSgg1aOgMKSeXTz5gwuyhWY5XFPBVXdeK20l5XZl7EY78k0T3Tjl3QjfnDK935jVHzTdyDDQlErGGAOpyikRbt4kO+D54yj33jK_aciG0uusIdOG_UPIdEH6KJDnIEJDF5fPI56_h9D4MLRR1RWXVjnlcUMfi0laeL1wkxB8AyURoc2vdMFzP_+NKMocn9t9mHL16ZHd8cTlZJZzQIOJSOeFylOaNwwLUTt+F1ZZeYj01zLfY0h+jhepCrcYQlX_92zKvd3HwVC_RPRYRbwiBReviIPQZeXkpj4hGKijMd_j6TtszRsqcCW11pze5IMrRfXsBK9lj46nbq7fHX+xJDF912sg2v47J2sB1GShrlD86W7lR+x1_ckb4YSz55eedYzIAVPBUsjUqsFNHoyM7Jie45D9zV+ueIvcfkss+4v8HB0A_w3vbh2lmKhDAeSVAFnTMWcWw7dvH8N0D2F5vkR9GYwPJYqy5m5PsLrwEud8mjZRTceGnzJngf5cipbqlWPmcFCmbJC+80KcR56G77Kmbo99jxkr8oZrnd0Jb1JOYzjk7+Q_5uuDYxSMYBAZQdQJIIUgWiDorNuuYYofzHBZeZ30f2z+K7k+BoEqIgAh_YkjxnDlm2wi2MceZGO35ZuHjGAfExhIGPYuIDojflnqTf2lvJ5cmQbMQ4mnVzLoqYycK9vfb8T7sdSOBzjST7VSygtyM4S5kUdF5wfLOvghwYh+K2vOe85W5sCr8GH+3KwVtQ7c7bzkhw7rOPK53rLypU3sJZ_6IRszAZNZ_DoJzIQekr1TjQJouFa1xnyr3S257+Pdu1iUFSuqnPJJW0SI4USZmoEcgHsSY9gmSMJ0k6n0nggis9ifRmIgnJYwsk9EL8Fufjo8NmO1iaVjFrmn2mzfebJpVatJ_8sHp+0jQLOVukVGJlU2NSWlX4I+pe125+7DFL3zMlJt+R4y7jdGeJwRSokPhPHwhW9fly2+Gdgza1uiXDcgNPJD4ZRjB6I2VJgaVxUCbY_ACz4Be_NueJ3GwlxASCNC_OlskJ99rEDnun2tbOmDxLtjEpvKodJFAcoAKxpkwNhGY7LrGhKlQcKDs2E1r1qhhxm4oAmBGjCuoVWXUm7JqnHrU_V5X6xOTZi1k3lcdacIIAJDYwYh4bEpsGGITqIqpjGWkBLOT6CA08xVNztdU64isUWSWxNiI_aiY15Nj3mKlx99iun9t7Y1ltYrrj3R_bNB3Ht5Pz44DFjzojinfIXXE5othFhaa9dlqxPI+++mQVczar5uQplNKio3h+SaBMC0XcZXcm3I96b9oVW7bY0k2oPlTf1y4565Pmu_gB0VJdZyoKIbgq__1uxwmaLRZJyqT5cW_cnPPkY_alqm7tjMGY5FnXPYJfHC0Nj1xNofcsleepiOAa2EzvKNx2U4c2qhsIMGMs4s1W1D62EZ4Kaozpn1d73Dyxa4f59JZvWTnvrqrGmCXZab_jPjS6r3m+0TSLZIqXpOUGQWaJRZQH0YlRY_04SPUTy2O7mWgmg08fvKLswCvMLW++lGx47jkb_x6jZBr7LAnYOOO8bOPwB5KVsi9ARBqMGM1qCeNSD2gMA+X1eYoYu8ONVKdJAntD9eGb2DiKX+xq_y_P8r_uvp1sfObbtvReN40zTc0axumnu4PTfbGbbZmDwlpDiyiOAqrCkBUbioFd_FUbdSVu+ajkyvO0f4Wbil3hTD6LwB3w+PdyHte3Yii8jT_R62aPTuxIn_7+04P_QVeBHzmskqf9Xu9TIwvTb5Af31JiKB8IQx5L3lJ5YqDw0OGMER7DJu1rT0orsCs6qisA8YfqKa9oK1beNdt3bh8_4tm_XfC_qjFojbtu9rLlicbm7q78bokZHpkcXjk+ik0g_jCLtFz+pdFvDqs8vIbLCyl3x+GirmKCFmz8LY++sNKGdNGmT7ShRD3n9QqdQk_k0Ge8eLV5Zi5JYUZmeCqVk9XbkaxEJ3+hNc+ey_PT6YLo+orn6ejLaEOJnQm601TBmm4rpXsjaROLxQuLCaqahSjI0KQ6fmjgcHh2j5fucaUud2v40Y+60YUHm_tw7HkRR0sDqTfUoBU+bpNWfr31NFftyBnEpsDmgtueME8f8Lg58yGcikzjDU4N4i2gnWbwM4nfNavTYbMKRwTNsCAHjZiIExDTkY6yWbMwGuUJQxtaC3PWDy5lWc9Ntsd7p279u9a_zKo8i3CPEqM4p57hfgvJWYtXhpN4HCgJGjz23cw29RLV8iXRYKFSqz2eX_e9p9IvRQh7TA7mrQb28MPd0MG_mJ1vm8kK_MjmJCSpxRHvu83A4yjKThjJ40LbV2IeMaCAqq_MxFdF3kKd8fzB5MnkE1tM+d1HdQat6_wPahv0TvltdwxO8E_BzvJkHOP8Erq2v03sMLLUw6N8B54i22xm_wlfvB3THLbnSXLiZASkGQiNUm3Yjmk0ZVc76b6dvW0v3LrV7pwBaWC2uhzYYBBFLtQLFpgWfvmQ4YeLk_rmyln2wcX53fhqZjn7JbMr7mQduMq1po5GDRCZjWh3J_MH8vHkj_ZGUmIXdSG9Szxnf_1j5ir85dwNWMDnl9YnnQXVyMjXxGhSwOIs6XXdRDZlb976jMEv0+f2BKrraOSmTvzu8U4+1eFLPXN90nQfT5r4fyH85o4eNQ9V78JHxEwIvplw+IXGE3nbfHHrFjvnp0_Vh7bft8RoACef2l2SDjcuxtPtTHT4MJ6o8RZjEjRDDFKffvjB0GtI4tP5pPmzrd+131GcvV2_74nRDmFdWjg0r3ds0kpO703Za1oLDH72hfCwg8XZSdpoZn8FcrOdbPzw2WftHr_7qJ9B6_8Hf8CPDv8g3A4AAAAASUVORK5CYII=",
+          "BTTWidgetName" : "Codex",
           "BTTTriggerConfig" : {
-            "BTTTouchBarItemPadding" : -10,
             "BTTTouchBarButtonColor" : "0.000000, 0.000000, 0.000000, 255.000000",
             "BTTTouchBarIconInvert" : false,
             "BTTTouchBarItemPlacement" : 2,
@@ -272,63 +387,132 @@
             "BTTTouchBarButtonTextAlignment" : 0,
             "BTTShellScriptDontTrimWhitepsace" : false,
             "BTTTouchBarAlternateBackgroundColor" : "75.323769, 75.323769, 75.323769, 255.000000",
+            "BTTTouchBarItemIconType" : 1,
             "BTTTBWidgetWidth" : 400,
             "BTTTouchBarBorderColor" : "255.000000, 255.000000, 255.000000, 255.000000",
             "BTTTouchBarItemIconWidth" : 22,
             "BTTTouchBarFreeSpaceBeforeButton" : 0,
-            "BTTTouchBarButtonName" : "🌐",
-            "BTTTouchBarShellScriptString" : "exec \"$HOME/Documents/BTT/widgets/clash-region.sh\" \\\n\"{BTT_WIDGET_CLASH_REGION_UUID}\"",
-            "BTTTouchBarButtonFontSize" : 22,
-            "BTTTouchBarFontColor" : "255,255,255,255",
+            "BTTTouchBarShellScriptString" : "exec \"$HOME/Documents/BTT/widgets/codex-quota.sh\" \\\n\"{BTT_WIDGET_CODEX_UUID}\"",
+            "BTTTouchBarButtonFontSize" : 14,
             "BTTTouchBarIconTextOffset" : 5,
+            "BTTTouchBarButtonName" : "Codex",
             "BTTTouchBarOnlyShowIcon" : false,
-            "BTTTouchBarFreeSpaceAfterButton" : 0
+            "BTTTouchBarFreeSpaceAfterButton" : 0,
+            "BTTTouchBarItemPadding" : -5
           }
         },
         {
-          "BTTLastUpdatedAt" : 1786484244.7324839,
-          "BTTTriggerType" : 677,
-          "BTTTriggerTypeDescriptionReadOnly" : "Single Finger Swipe Right",
+          "BTTLastUpdatedAt" : 1786560162.5094581,
+          "BTTTriggerType" : 633,
+          "BTTTriggerTypeDescriptionReadOnly" : "Date / Time Widget",
           "BTTTriggerClass" : "BTTTriggerTypeTouchBar",
-          "BTTUUID" : "F89A1BA9-3BF3-4CA8-B0EA-9A91F55CF9C9",
-          "BTTRepeatRate" : 1,
-          "BTTOrder" : 8,
-          "BTTMergeIntoTouchBarGroups" : 0,
+          "BTTUUID" : "0E55B8EC-C241-467A-A341-A1780D95047E",
+          "BTTOrder" : 0,
+          "BTTMergeIntoTouchBarGroups" : 1,
           "BTTActionsToExecute" : [
             {
-              "BTTLastUpdatedAt" : 1786484244.7326519,
-              "BTTTriggerParentUUID" : "F89A1BA9-3BF3-4CA8-B0EA-9A91F55CF9C9",
+              "BTTLastUpdatedAt" : 1786484244.7325091,
+              "BTTTriggerParentUUID" : "0E55B8EC-C241-467A-A341-A1780D95047E",
               "BTTIsPureAction" : true,
-              "BTTUUID" : "4FB9CB84-F8DB-4F49-9ADB-B132F989BBE5",
-              "BTTPredefinedActionType" : 198,
-              "BTTPredefinedActionName" : "Volume Up (Small Step)",
-              "BTTOrder" : 15
+              "BTTUUID" : "9F3E7A21-4B6C-4D8F-A1E9-5C2B7D0F3A6E",
+              "BTTPredefinedActionType" : 206,
+              "BTTPredefinedActionName" : "Execute Shell Script  or  Task",
+              "BTTShellTaskActionScript" : "exec \"$HOME/Documents/BTT/actions/tap-restart.sh\"\n",
+              "BTTShellTaskActionConfig" : "/bin/zsh:::-c:::-:::",
+              "BTTOrder" : 5
+            },
+            {
+              "BTTLastUpdatedAt" : 1786484244.7323,
+              "BTTTriggerParentUUID" : "0E55B8EC-C241-467A-A341-A1780D95047E",
+              "BTTIsPureAction" : true,
+              "BTTUUID" : "BE702371-53DF-478B-89E3-7935D3D92EA6",
+              "BTTPredefinedActionType" : 55,
+              "BTTPredefinedActionName" : "Restart BetterTouchTool",
+              "BTTOrder" : 7
             }
           ],
           "BTTTriggerConfig" : {
-            "BTTTouchBarItemIconWidth" : 22,
-            "BTTTouchBarButtonColor" : "75.323769, 75.323769, 75.323769, 255.000000",
-            "BTTTouchBarButtonTextAlignment" : 0,
-            "BTTTouchBarItemPlacement" : 0,
-            "BTTTouchBarButtonFontSize" : 15,
-            "BTTTouchBarAlternateBackgroundColor" : "75.323769, 75.323769, 75.323769, 255.000000",
-            "BTTTouchBarBorderColor" : "255.000000, 255.000000, 255.000000, 255.000000",
-            "BTTTouchBarAlwaysShowButton" : false,
-            "BTTTBWidgetWidth" : 400,
-            "BTTTouchBarFreeSpaceBeforeButton" : 0,
+            "BTTTouchBarDateWidgetTimeZone" : 0,
+            "BTTTouchBarButtonColor" : "0.000000, 0.000000, 0.000000, 255.000000",
             "BTTTouchBarIconInvert" : false,
+            "BTTTouchBarItemPlacement" : 1,
+            "BTTTouchBarAlwaysShowButton" : false,
             "BTTTouchBarButtonHoverColor" : "248.880000, 146.115000, 128.010000, 181.050000",
-            "BTTTouchBarIconTextOffset" : 5,
-            "BTTTouchBarButtonWidth" : 100,
-            "BTTTouchBarOnlyShowIcon" : false,
-            "BTTTouchBarFreeSpaceAfterButton" : 5,
             "BTTTouchBarButtonHeight" : 15,
+            "BTTTouchBarButtonWidth" : 100,
+            "BTTTouchBarDateFormat" : "E\n MM-dd",
+            "BTTTouchBarTimeZoneLocation" : "System Time Zone",
             "BTTTouchBarItemIconHeight" : 22,
-            "BTTTouchBarItemPadding" : 0
+            "BTTTouchBarButtonTextAlignment" : 0,
+            "BTTTouchBarAlternateBackgroundColor" : "75.323769, 75.323769, 75.323769, 255.000000",
+            "BTTTouchBarItemIconType" : 1,
+            "BTTTBWidgetWidth" : 400,
+            "BTTTouchBarBorderColor" : "255.000000, 255.000000, 255.000000, 255.000000",
+            "BTTTouchBarItemIconWidth" : 22,
+            "BTTTouchBarFreeSpaceBeforeButton" : 0,
+            "BTTTouchBarLongPressActionName" : "Quit BTT",
+            "BTTTouchBarButtonFontSize" : 15,
+            "BTTTouchBarFontColor" : null,
+            "BTTTouchBarIconTextOffset" : 5,
+            "BTTTouchBarOnlyShowIcon" : false,
+            "BTTTouchBarFreeSpaceAfterButton" : -7,
+            "BTTTouchBarItemPadding" : -5
           }
         },
         {
-          "BTTLastUpdatedAt" : 1786548126.613023,
+          "BTTLastUpdatedAt" : 1786561738.1795158,
+          "BTTTriggerType" : 642,
+          "BTTTriggerTypeDescriptionReadOnly" : "Shell Script / Task Widget",
+          "BTTTriggerTypeDescription" : "☀️",
+          "BTTTriggerClass" : "BTTTriggerTypeTouchBar",
+          "BTTUUID" : "E953195F-2D7C-4AAA-B288-3DFB4DC1DA0A",
+          "BTTShellScriptWidgetGestureConfig" : "/bin/zsh:::-c:::-:::",
+          "BTTOrder" : 10,
+          "BTTMergeIntoTouchBarGroups" : 0,
+          "BTTActionsToExecute" : [
+            {
+              "BTTLastUpdatedAt" : 1786484244.7327008,
+              "BTTTriggerParentUUID" : "E953195F-2D7C-4AAA-B288-3DFB4DC1DA0A",
+              "BTTIsPureAction" : true,
+              "BTTUUID" : "6F8D22CC-1F09-4B4D-8917-9DCFA5C61121",
+              "BTTPredefinedActionType" : 206,
+              "BTTPredefinedActionName" : "Execute Shell Script  or  Task",
+              "BTTShellTaskActionScript" : "exec \"$HOME/Documents/BTT/actions/tap-refresh.sh\" \\\n\"{BTT_WIDGET_WEATHER_UUID}\" \\\n\"{BTT_WIDGET_WEATHER_ICON_UUID}\"\n",
+              "BTTShellTaskActionConfig" : "/bin/zsh:::-c:::-:::",
+              "BTTOrder" : 7
+            }
+          ],
+          "BTTWidgetName" : "☀️",
+          "BTTTriggerConfig" : {
+            "BTTTouchBarButtonColor" : "0.000000, 0.000000, 0.000000, 255.000000",
+            "BTTTouchBarIconInvert" : false,
+            "BTTTouchBarItemPlacement" : 2,
+            "BTTTouchBarAppleScriptStringRunOnInit" : true,
+            "BTTTouchBarAlwaysShowButton" : false,
+            "BTTTouchBarButtonHoverColor" : "248.880000, 146.115000, 128.010000, 181.050000",
+            "BTTTouchBarButtonHeight" : 15,
+            "BTTTouchBarButtonWidth" : 100,
+            "BTTTouchBarScriptUpdateInterval" : 600,
+            "BTTTouchBarItemIconHeight" : 22,
+            "BTTTouchBarButtonTextAlignment" : 0,
+            "BTTShellScriptDontTrimWhitepsace" : false,
+            "BTTTouchBarAlternateBackgroundColor" : "75.323769, 75.323769, 75.323769, 255.000000",
+            "BTTTouchBarItemIconType" : 1,
+            "BTTTBWidgetWidth" : 400,
+            "BTTTouchBarBorderColor" : "255.000000, 255.000000, 255.000000, 255.000000",
+            "BTTTouchBarItemIconWidth" : 22,
+            "BTTTouchBarFreeSpaceBeforeButton" : 0,
+            "BTTTouchBarShellScriptString" : "exec \"$HOME/Documents/BTT/widgets/weather.sh\" \\\n\"{BTT_WIDGET_WEATHER_ICON_UUID}\" --icon",
+            "BTTTouchBarButtonFontSize" : 15,
+            "BTTTouchBarIconTextOffset" : 5,
+            "BTTTouchBarButtonName" : "☀️",
+            "BTTTouchBarOnlyShowIcon" : false,
+            "BTTTouchBarFreeSpaceAfterButton" : -3,
+            "BTTTouchBarItemPadding" : -11
+          }
+        },
+        {
+          "BTTLastUpdatedAt" : 1786561738.1796131,
           "BTTTriggerType" : 642,
           "BTTTriggerTypeDescriptionReadOnly" : "Shell Script / Task Widget",
           "BTTTriggerTypeDescription" : "Claude",
@@ -381,34 +565,7 @@
           }
         },
         {
-          "BTTLastUpdatedAt" : 1786484244.732327,
-          "BTTTriggerType" : 643,
-          "BTTTriggerTypeDescriptionReadOnly" : "Named Trigger: Toggle Music Group",
-          "BTTTriggerClass" : "BTTTriggerTypeOtherTriggers",
-          "BTTUUID" : "7697585E-9D65-4743-8C3D-50EEA12DEE36",
-          "BTTTriggerName" : "Toggle Music Group",
-          "BTTOrder" : 0,
-          "BTTActionsToExecute" : [
-            {
-              "BTTLastUpdatedAt" : 1786484244.7326601,
-              "BTTTriggerParentUUID" : "7697585E-9D65-4743-8C3D-50EEA12DEE36",
-              "BTTIsPureAction" : true,
-              "BTTUUID" : "BA7251D5-701D-47F0-AAF7-CD92CDEC13CE",
-              "BTTPredefinedActionType" : 195,
-              "BTTPredefinedActionName" : "Run Apple Script (async in background)",
-              "BTTAdditionalActionData" : {
-                "BTTScriptType" : 0,
-                "BTTAppleScriptRunInBackground" : true,
-                "BTTTouchBarAppleScriptString" : "tell application \"BetterTouchTool\"\n\tset activeGroup to get_active_touch_bar_group\n\tif activeGroup is \"Music\" then\n\t\ttrigger_action \"{\\\"BTTPredefinedActionType\\\":191}\"\n\telse\n\t\ttrigger_action \"{\\\"BTTPredefinedActionType\\\":205,\\\"BTTOpenGroupWithName\\\":\\\"Music\\\"}\"\n\tend if\nend tell",
-                "BTTTouchBarAppleScriptUsePath" : false
-              },
-              "BTTInlineAppleScript" : "tell application \"BetterTouchTool\"\n\tset activeGroup to get_active_touch_bar_group\n\tif activeGroup is \"Music\" then\n\t\ttrigger_action \"{\\\"BTTPredefinedActionType\\\":191}\"\n\telse\n\t\ttrigger_action \"{\\\"BTTPredefinedActionType\\\":205,\\\"BTTOpenGroupWithName\\\":\\\"Music\\\"}\"\n\tend if\nend tell",
-              "BTTOrder" : 7
-            }
-          ]
-        },
-        {
-          "BTTLastUpdatedAt" : 1786548126.61291,
+          "BTTLastUpdatedAt" : 1786561738.179599,
           "BTTTriggerType" : 642,
           "BTTTriggerTypeDescriptionReadOnly" : "Shell Script / Task Widget",
           "BTTTriggerTypeDescription" : "Weather",
@@ -461,177 +618,23 @@
           }
         },
         {
-          "BTTLastUpdatedAt" : 1786548126.612968,
-          "BTTTriggerType" : 642,
-          "BTTTriggerTypeDescriptionReadOnly" : "Shell Script / Task Widget",
-          "BTTTriggerTypeDescription" : "VPN",
+          "BTTLastUpdatedAt" : 1786558559.6818531,
+          "BTTTriggerType" : 677,
+          "BTTTriggerTypeDescriptionReadOnly" : "Single Finger Swipe Right",
           "BTTTriggerClass" : "BTTTriggerTypeTouchBar",
-          "BTTUUID" : "59F8C568-022F-4BD9-B3EB-63A7676592DF",
-          "BTTShellScriptWidgetGestureConfig" : "/bin/zsh:::-c:::-:::",
-          "BTTOrder" : 13,
-          "BTTMergeIntoTouchBarGroups" : 0,
-          "BTTActionsToExecute" : [
-            {
-              "BTTLastUpdatedAt" : 1786484244.7324219,
-              "BTTTriggerParentUUID" : "59F8C568-022F-4BD9-B3EB-63A7676592DF",
-              "BTTIsPureAction" : true,
-              "BTTUUID" : "31EBC333-AE31-4FFF-BD96-48AD058CE87A",
-              "BTTPredefinedActionType" : 206,
-              "BTTPredefinedActionName" : "Execute Shell Script  or  Task",
-              "BTTShellTaskActionScript" : "exec \"$HOME/Documents/BTT/actions/tap-refresh.sh\" \\\n\"{BTT_WIDGET_CLASH_LATENCY_UUID}\" \\\n\"{BTT_WIDGET_CLASH_REGION_UUID}\"\n",
-              "BTTShellTaskActionConfig" : "/bin/zsh:::-c:::-:::",
-              "BTTOrder" : 7
-            }
-          ],
-          "BTTWidgetName" : "VPN",
-          "BTTTriggerConfig" : {
-            "BTTTouchBarItemPadding" : -15,
-            "BTTTouchBarButtonColor" : "0.000000, 0.000000, 0.000000, 255.000000",
-            "BTTTouchBarIconInvert" : false,
-            "BTTTouchBarItemPlacement" : 2,
-            "BTTTouchBarAppleScriptStringRunOnInit" : true,
-            "BTTTouchBarAlwaysShowButton" : false,
-            "BTTTouchBarButtonHoverColor" : "248.880000, 146.115000, 128.010000, 181.050000",
-            "BTTTouchBarButtonHeight" : 15,
-            "BTTTouchBarButtonWidth" : 100,
-            "BTTTouchBarScriptUpdateInterval" : 300,
-            "BTTTouchBarItemIconHeight" : 22,
-            "BTTTouchBarButtonTextAlignment" : 0,
-            "BTTShellScriptDontTrimWhitepsace" : false,
-            "BTTTouchBarAlternateBackgroundColor" : "75.323769, 75.323769, 75.323769, 255.000000",
-            "BTTTouchBarItemIconType" : 1,
-            "BTTTBWidgetWidth" : 400,
-            "BTTTouchBarBorderColor" : "255.000000, 255.000000, 255.000000, 255.000000",
-            "BTTTouchBarItemIconWidth" : 22,
-            "BTTTouchBarFreeSpaceBeforeButton" : 0,
-            "BTTTouchBarButtonName" : "VPN",
-            "BTTTouchBarShellScriptString" : "exec \"$HOME/Documents/BTT/widgets/clash-latency.sh\" \\\n\"{BTT_WIDGET_CLASH_LATENCY_UUID}\"",
-            "BTTTouchBarButtonFontSize" : 14,
-            "BTTTouchBarFontColor" : "255,255,255,255",
-            "BTTTouchBarOnlyShowIcon" : false,
-            "BTTTouchBarIconTextOffset" : 5,
-            "BTTTouchBarFreeSpaceAfterButton" : 0
-          }
-        },
-        {
-          "BTTLastUpdatedAt" : 1786484244.7325869,
-          "BTTTriggerType" : 643,
-          "BTTTriggerTypeDescriptionReadOnly" : "Named Trigger: Quit BTT",
-          "BTTTriggerClass" : "BTTTriggerTypeOtherTriggers",
-          "BTTUUID" : "1686B90A-5D5E-4ECC-AD4A-C6D946C29BF8",
-          "BTTTriggerName" : "Quit BTT",
-          "BTTOrder" : 0,
-          "BTTActionsToExecute" : [
-            {
-              "BTTLastUpdatedAt" : 1786484244.732615,
-              "BTTTriggerParentUUID" : "1686B90A-5D5E-4ECC-AD4A-C6D946C29BF8",
-              "BTTIsPureAction" : true,
-              "BTTUUID" : "30F43047-6380-43F9-B896-07C16ACA4E46",
-              "BTTPredefinedActionType" : 206,
-              "BTTPredefinedActionName" : "Execute Shell Script  or  Task",
-              "BTTShellTaskActionScript" : "exec /bin/zsh \"$HOME/Documents/BTT/actions/btt-quit.sh\"\n",
-              "BTTShellTaskActionConfig" : "/bin/zsh:::-c:::-:::",
-              "BTTOrder" : 7
-            }
-          ]
-        },
-        {
-          "BTTLastUpdatedAt" : 1786548126.612987,
-          "BTTTriggerType" : 642,
-          "BTTTriggerTypeDescriptionReadOnly" : "Shell Script / Task Widget",
-          "BTTTriggerTypeDescription" : "☀️",
-          "BTTTriggerClass" : "BTTTriggerTypeTouchBar",
-          "BTTUUID" : "E953195F-2D7C-4AAA-B288-3DFB4DC1DA0A",
-          "BTTShellScriptWidgetGestureConfig" : "/bin/zsh:::-c:::-:::",
-          "BTTOrder" : 10,
-          "BTTMergeIntoTouchBarGroups" : 0,
-          "BTTActionsToExecute" : [
-            {
-              "BTTLastUpdatedAt" : 1786484244.7327008,
-              "BTTTriggerParentUUID" : "E953195F-2D7C-4AAA-B288-3DFB4DC1DA0A",
-              "BTTIsPureAction" : true,
-              "BTTUUID" : "6F8D22CC-1F09-4B4D-8917-9DCFA5C61121",
-              "BTTPredefinedActionType" : 206,
-              "BTTPredefinedActionName" : "Execute Shell Script  or  Task",
-              "BTTShellTaskActionScript" : "exec \"$HOME/Documents/BTT/actions/tap-refresh.sh\" \\\n\"{BTT_WIDGET_WEATHER_UUID}\" \\\n\"{BTT_WIDGET_WEATHER_ICON_UUID}\"\n",
-              "BTTShellTaskActionConfig" : "/bin/zsh:::-c:::-:::",
-              "BTTOrder" : 7
-            }
-          ],
-          "BTTWidgetName" : "☀️",
-          "BTTTriggerConfig" : {
-            "BTTTouchBarButtonColor" : "0.000000, 0.000000, 0.000000, 255.000000",
-            "BTTTouchBarIconInvert" : false,
-            "BTTTouchBarItemPlacement" : 2,
-            "BTTTouchBarAppleScriptStringRunOnInit" : true,
-            "BTTTouchBarAlwaysShowButton" : false,
-            "BTTTouchBarButtonHoverColor" : "248.880000, 146.115000, 128.010000, 181.050000",
-            "BTTTouchBarButtonHeight" : 15,
-            "BTTTouchBarButtonWidth" : 100,
-            "BTTTouchBarScriptUpdateInterval" : 600,
-            "BTTTouchBarItemIconHeight" : 22,
-            "BTTTouchBarButtonTextAlignment" : 0,
-            "BTTShellScriptDontTrimWhitepsace" : false,
-            "BTTTouchBarAlternateBackgroundColor" : "75.323769, 75.323769, 75.323769, 255.000000",
-            "BTTTouchBarItemIconType" : 1,
-            "BTTTBWidgetWidth" : 400,
-            "BTTTouchBarBorderColor" : "255.000000, 255.000000, 255.000000, 255.000000",
-            "BTTTouchBarItemIconWidth" : 22,
-            "BTTTouchBarFreeSpaceBeforeButton" : 0,
-            "BTTTouchBarShellScriptString" : "exec \"$HOME/Documents/BTT/widgets/weather.sh\" \\\n\"{BTT_WIDGET_WEATHER_ICON_UUID}\" --icon",
-            "BTTTouchBarButtonFontSize" : 15,
-            "BTTTouchBarIconTextOffset" : 5,
-            "BTTTouchBarButtonName" : "☀️",
-            "BTTTouchBarOnlyShowIcon" : false,
-            "BTTTouchBarFreeSpaceAfterButton" : -3,
-            "BTTTouchBarItemPadding" : -11
-          }
-        },
-        {
-          "BTTLastUpdatedAt" : 1786484244.7326069,
-          "BTTTriggerType" : 643,
-          "BTTTriggerTypeDescriptionReadOnly" : "Named Trigger: Open Player",
-          "BTTTriggerClass" : "BTTTriggerTypeOtherTriggers",
-          "BTTUUID" : "ECAED750-A776-4E5D-8556-3B3751C34D86",
-          "BTTTriggerName" : "Open Player",
-          "BTTOrder" : 0,
-          "BTTActionsToExecute" : [
-            {
-              "BTTLastUpdatedAt" : 1786484244.7323089,
-              "BTTTriggerParentUUID" : "ECAED750-A776-4E5D-8556-3B3751C34D86",
-              "BTTIsPureAction" : true,
-              "BTTUUID" : "D260A34D-7EC4-4446-99E5-EABB5DFA392E",
-              "BTTPredefinedActionType" : 195,
-              "BTTPredefinedActionName" : "Run Apple Script (async in background)",
-              "BTTAdditionalActionData" : {
-                "BTTScriptType" : 0,
-                "BTTAppleScriptRunInBackground" : true,
-                "BTTTouchBarAppleScriptString" : "set playerBundleIdentifier to do shell script \"$HOME/Documents/BTT/actions/now-playing-app.sh\"\n\nif playerBundleIdentifier is not \"\" then\n\ttell application id playerBundleIdentifier\n\t\tactivate\n\t\treopen\n\tend tell\nend if",
-                "BTTTouchBarAppleScriptUsePath" : false
-              },
-              "BTTInlineAppleScript" : "set playerBundleIdentifier to do shell script \"$HOME/Documents/BTT/actions/now-playing-app.sh\"\n\nif playerBundleIdentifier is not \"\" then\n\ttell application id playerBundleIdentifier\n\t\tactivate\n\t\treopen\n\tend tell\nend if",
-              "BTTOrder" : 7
-            }
-          ]
-        },
-        {
-          "BTTLastUpdatedAt" : 1786484244.732414,
-          "BTTTriggerType" : 676,
-          "BTTTriggerTypeDescriptionReadOnly" : "Single Finger Swipe Left",
-          "BTTTriggerClass" : "BTTTriggerTypeTouchBar",
-          "BTTUUID" : "7BEE936B-C276-454A-B7E9-FAF7DDB6711A",
+          "BTTUUID" : "F89A1BA9-3BF3-4CA8-B0EA-9A91F55CF9C9",
           "BTTRepeatRate" : 1,
-          "BTTOrder" : 2,
+          "BTTOrder" : 8,
           "BTTMergeIntoTouchBarGroups" : 0,
           "BTTActionsToExecute" : [
             {
-              "BTTLastUpdatedAt" : 1786484244.732517,
-              "BTTTriggerParentUUID" : "7BEE936B-C276-454A-B7E9-FAF7DDB6711A",
+              "BTTLastUpdatedAt" : 1786484244.7326519,
+              "BTTTriggerParentUUID" : "F89A1BA9-3BF3-4CA8-B0EA-9A91F55CF9C9",
               "BTTIsPureAction" : true,
-              "BTTUUID" : "89F818D1-6D3A-46F9-B876-AB05BB8B22CB",
-              "BTTPredefinedActionType" : 199,
-              "BTTPredefinedActionName" : "Volume Down (Small Step)",
-              "BTTOrder" : 14
+              "BTTUUID" : "4FB9CB84-F8DB-4F49-9ADB-B132F989BBE5",
+              "BTTPredefinedActionType" : 198,
+              "BTTPredefinedActionName" : "Volume Up (Small Step)",
+              "BTTOrder" : 15
             }
           ],
           "BTTTriggerConfig" : {
@@ -657,7 +660,35 @@
           }
         },
         {
-          "BTTLastUpdatedAt" : 1786484244.732286,
+          "BTTLastUpdatedAt" : 1786484244.732276,
+          "BTTTriggerType" : 606,
+          "BTTTriggerTypeDescriptionReadOnly" : "After Mac Wakes From Sleep",
+          "BTTTriggerClass" : "BTTTriggerTypeOtherTriggers",
+          "BTTUUID" : "AC2350DE-B08E-44F8-93B8-29729560CB0F",
+          "BTTOrder" : 1,
+          "BTTActionsToExecute" : [
+            {
+              "BTTLastUpdatedAt" : 1786484244.7324061,
+              "BTTTriggerParentUUID" : "AC2350DE-B08E-44F8-93B8-29729560CB0F",
+              "BTTIsPureAction" : true,
+              "BTTUUID" : "6C530193-70C3-466F-96FE-364BC6EAE8A5",
+              "BTTPredefinedActionType" : 195,
+              "BTTPredefinedActionName" : "Run Apple Script (async in background)",
+              "BTTAdditionalActionData" : {
+                "BTTScriptType" : 0,
+                "BTTAppleScriptUsePath" : false,
+                "BTTScriptLocation" : 0,
+                "BTTAppleScriptRunInBackground" : true,
+                "SelectedAction" : 195,
+                "BTTAppleScriptString" : "tell application \"BetterTouchTool\"\r\trefresh_widget \"{BTT_WIDGET_CLASH_LATENCY_UUID}\"\r\trefresh_widget \"{BTT_WIDGET_CODEX_UUID}\"\r\trefresh_widget \"{BTT_WIDGET_CLAUDE_UUID}\"\r\trefresh_widget \"{BTT_WIDGET_OPENCODE_UUID}\"\rend tell"
+              },
+              "BTTInlineAppleScript" : "tell application \"BetterTouchTool\"\r\trefresh_widget \"{BTT_WIDGET_CLASH_LATENCY_UUID}\"\r\trefresh_widget \"{BTT_WIDGET_CODEX_UUID}\"\r\trefresh_widget \"{BTT_WIDGET_CLAUDE_UUID}\"\r\trefresh_widget \"{BTT_WIDGET_OPENCODE_UUID}\"\rend tell",
+              "BTTOrder" : 8
+            }
+          ]
+        },
+        {
+          "BTTLastUpdatedAt" : 1786558559.6818662,
           "BTTTriggerType" : 645,
           "BTTTriggerTypeDescriptionReadOnly" : "Two Finger Swipe Right",
           "BTTTriggerClass" : "BTTTriggerTypeTouchBar",
@@ -711,33 +742,33 @@
           }
         },
         {
-          "BTTLastUpdatedAt" : 1786484244.7322621,
+          "BTTLastUpdatedAt" : 1786561734.062443,
           "BTTTriggerType" : 633,
           "BTTTriggerTypeDescriptionReadOnly" : "Date / Time Widget",
           "BTTTriggerClass" : "BTTTriggerTypeTouchBar",
-          "BTTUUID" : "0E55B8EC-C241-467A-A341-A1780D95047E",
-          "BTTOrder" : 0,
+          "BTTUUID" : "E8EAA446-FD21-40DC-8627-016A2473D2F1",
+          "BTTOrder" : 1,
           "BTTMergeIntoTouchBarGroups" : 1,
           "BTTActionsToExecute" : [
             {
-              "BTTLastUpdatedAt" : 1786484244.7325091,
-              "BTTTriggerParentUUID" : "0E55B8EC-C241-467A-A341-A1780D95047E",
+              "BTTLastUpdatedAt" : 1786561719.6078839,
+              "BTTTriggerParentUUID" : "E8EAA446-FD21-40DC-8627-016A2473D2F1",
               "BTTIsPureAction" : true,
-              "BTTUUID" : "9F3E7A21-4B6C-4D8F-A1E9-5C2B7D0F3A6E",
+              "BTTUUID" : "8A7F64F9-7046-424C-A1EA-B3DE9C49A851",
               "BTTPredefinedActionType" : 206,
               "BTTPredefinedActionName" : "Execute Shell Script  or  Task",
               "BTTShellTaskActionScript" : "exec \"$HOME/Documents/BTT/actions/tap-restart.sh\"\n",
               "BTTShellTaskActionConfig" : "/bin/zsh:::-c:::-:::",
-              "BTTOrder" : 5
+              "BTTOrder" : 0
             },
             {
-              "BTTLastUpdatedAt" : 1786484244.7323,
-              "BTTTriggerParentUUID" : "0E55B8EC-C241-467A-A341-A1780D95047E",
+              "BTTLastUpdatedAt" : 1786561719.611093,
+              "BTTTriggerParentUUID" : "E8EAA446-FD21-40DC-8627-016A2473D2F1",
               "BTTIsPureAction" : true,
-              "BTTUUID" : "BE702371-53DF-478B-89E3-7935D3D92EA6",
+              "BTTUUID" : "837E871B-818F-4AE1-BDD2-5644FF166178",
               "BTTPredefinedActionType" : 55,
               "BTTPredefinedActionName" : "Restart BetterTouchTool",
-              "BTTOrder" : 7
+              "BTTOrder" : 1
             }
           ],
           "BTTTriggerConfig" : {
@@ -749,271 +780,26 @@
             "BTTTouchBarButtonHoverColor" : "248.880000, 146.115000, 128.010000, 181.050000",
             "BTTTouchBarButtonHeight" : 15,
             "BTTTouchBarButtonWidth" : 100,
-            "BTTTouchBarDateFormat" : "E HH:mm",
+            "BTTTouchBarDateFormat" : "HH:MM",
             "BTTTouchBarTimeZoneLocation" : "System Time Zone",
             "BTTTouchBarItemIconHeight" : 22,
             "BTTTouchBarButtonTextAlignment" : 0,
             "BTTTouchBarAlternateBackgroundColor" : "75.323769, 75.323769, 75.323769, 255.000000",
+            "BTTTouchBarItemIconType" : 1,
             "BTTTBWidgetWidth" : 400,
             "BTTTouchBarBorderColor" : "255.000000, 255.000000, 255.000000, 255.000000",
-            "BTTTouchBarItemIconWidth" : 22,
             "BTTTouchBarFreeSpaceBeforeButton" : 0,
-            "BTTTouchBarLongPressActionName" : "Quit BTT",
+            "BTTTouchBarItemIconWidth" : 22,
             "BTTTouchBarButtonFontSize" : 15,
-            "BTTTouchBarFontColor" : null,
             "BTTTouchBarIconTextOffset" : 5,
+            "BTTTouchBarFontColor" : "255.000000, 255.000000, 255.000000, 255.000000",
             "BTTTouchBarOnlyShowIcon" : false,
             "BTTTouchBarFreeSpaceAfterButton" : -5,
             "BTTTouchBarItemPadding" : -5
           }
         },
         {
-          "BTTLastUpdatedAt" : 1786484244.732276,
-          "BTTTriggerType" : 606,
-          "BTTTriggerTypeDescriptionReadOnly" : "After Mac Wakes From Sleep",
-          "BTTTriggerClass" : "BTTTriggerTypeOtherTriggers",
-          "BTTUUID" : "AC2350DE-B08E-44F8-93B8-29729560CB0F",
-          "BTTOrder" : 1,
-          "BTTActionsToExecute" : [
-            {
-              "BTTLastUpdatedAt" : 1786484244.7324061,
-              "BTTTriggerParentUUID" : "AC2350DE-B08E-44F8-93B8-29729560CB0F",
-              "BTTIsPureAction" : true,
-              "BTTUUID" : "6C530193-70C3-466F-96FE-364BC6EAE8A5",
-              "BTTPredefinedActionType" : 195,
-              "BTTPredefinedActionName" : "Run Apple Script (async in background)",
-              "BTTAdditionalActionData" : {
-                "BTTScriptType" : 0,
-                "BTTAppleScriptUsePath" : false,
-                "BTTScriptLocation" : 0,
-                "BTTAppleScriptRunInBackground" : true,
-                "SelectedAction" : 195,
-                "BTTAppleScriptString" : "tell application \"BetterTouchTool\"\r\trefresh_widget \"{BTT_WIDGET_CLASH_LATENCY_UUID}\"\r\trefresh_widget \"{BTT_WIDGET_CODEX_UUID}\"\r\trefresh_widget \"{BTT_WIDGET_CLAUDE_UUID}\"\r\trefresh_widget \"{BTT_WIDGET_OPENCODE_UUID}\"\rend tell"
-              },
-              "BTTInlineAppleScript" : "tell application \"BetterTouchTool\"\r\trefresh_widget \"{BTT_WIDGET_CLASH_LATENCY_UUID}\"\r\trefresh_widget \"{BTT_WIDGET_CODEX_UUID}\"\r\trefresh_widget \"{BTT_WIDGET_CLAUDE_UUID}\"\r\trefresh_widget \"{BTT_WIDGET_OPENCODE_UUID}\"\rend tell",
-              "BTTOrder" : 8
-            }
-          ]
-        },
-        {
-          "BTTLastUpdatedAt" : 1786484244.7324929,
-          "BTTTriggerType" : 630,
-          "BTTTriggerTypeDescriptionReadOnly" : "Group",
-          "BTTTriggerTypeDescription" : "Music",
-          "BTTTriggerClass" : "BTTTriggerTypeTouchBar",
-          "BTTUUID" : "5CE6DC19-82BA-4B57-886B-6CDCCF006322",
-          "BTTOrder" : 9,
-          "BTTMergeIntoTouchBarGroups" : 0,
-          "BTTTouchBarButtonName" : "Music",
-          "BTTTriggerConfig" : {
-            "BTTTouchBarButtonColor" : "0.000000, 0.000000, 0.000000, 255.000000",
-            "BTTTouchBarIconInvert" : false,
-            "BTTTouchBarItemPlacement" : 0,
-            "BTTTouchBarAlwaysShowButton" : false,
-            "BTTNotchBarActivateWidgetModeForGroup" : false,
-            "BTTTouchBarButtonHoverColor" : "248.880000, 146.115000, 128.010000, 181.050000",
-            "BTTNotchBarUnhideForGroup" : false,
-            "BTTTouchBarButtonWidth" : 100,
-            "BTTTouchBarButtonHeight" : 15,
-            "BTTKeepGroupOpenWhileSwitchingApps" : true,
-            "BTTTouchBarItemIconHeight" : 22,
-            "BTTTouchBarButtonTextAlignment" : 0,
-            "BTTTouchBarAlternateBackgroundColor" : "75.323769, 75.323769, 75.323769, 255.000000",
-            "BTTTBWidgetWidth" : 400,
-            "BTTTouchBarBorderColor" : "255.000000, 255.000000, 255.000000, 255.000000",
-            "BTTTouchBarItemIconWidth" : 22,
-            "BTTTouchBarFreeSpaceBeforeButton" : 0,
-            "BTTTouchBarButtonFontSize" : 1,
-            "BTTTouchBarIconTextOffset" : 5,
-            "BTTTouchBarOnlyShowIcon" : false,
-            "BTTTouchBarFreeSpaceAfterButton" : 5,
-            "BTTTouchBarItemPadding" : 0
-          }
-        },
-        {
-          "BTTLastUpdatedAt" : 1786548126.613076,
-          "BTTTriggerType" : 642,
-          "BTTTriggerTypeDescriptionReadOnly" : "Shell Script / Task Widget",
-          "BTTTriggerTypeDescription" : "Codex",
-          "BTTTriggerClass" : "BTTTriggerTypeTouchBar",
-          "BTTUUID" : "508ECCA7-BAD5-469D-9418-94E2C370AE37",
-          "BTTShellScriptWidgetGestureConfig" : "/bin/zsh:::-c:::-:::",
-          "BTTOrder" : 15,
-          "BTTMergeIntoTouchBarGroups" : 0,
-          "BTTActionsToExecute" : [
-            {
-              "BTTLastUpdatedAt" : 1786484244.732336,
-              "BTTTriggerParentUUID" : "508ECCA7-BAD5-469D-9418-94E2C370AE37",
-              "BTTIsPureAction" : true,
-              "BTTUUID" : "CFFF823A-D595-4AC8-982D-25CC84BE6945",
-              "BTTPredefinedActionType" : 206,
-              "BTTPredefinedActionName" : "Execute Shell Script  or  Task",
-              "BTTShellTaskActionScript" : "exec \"$HOME/Documents/BTT/actions/tap-refresh.sh\" \\\n\"{BTT_WIDGET_CODEX_UUID}\"",
-              "BTTShellTaskActionConfig" : "/bin/zsh:::-c:::-:::",
-              "BTTOrder" : 9
-            }
-          ],
-          "BTTIconData" : "iVBORw0KGgoAAAANSUhEUgAAAEYAAABGCAYAAABxLuKEAAAEDmlDQ1BrQ0dDb2xvclNwYWNlR2VuZXJpY1JHQgAAOI2NVV1oHFUUPpu5syskzoPUpqaSDv41lLRsUtGE2uj+ZbNt3CyTbLRBkMns3Z1pJjPj_KRpKT4UQRDBqOCT4P9bwSchaqvtiy2itFCiBIMo+ND6R6HSFwnruTOzu5O4a73L3PnmnO9+595z7t4LkLgsW5beJQIsGq4t5dPis8fmxMQ6dMF90A190C0rjpUqlSYBG+PCv9rt7yDG3tf2t_f_Z+uuUEcBiN2F2Kw4yiLiZQD+FcWyXYAEQfvICddi+AnEO2ycIOISw7UAVxieD_Cyz5mRMohfRSwoqoz+xNuIB+cj9loEB3Pw2448NaitKSLLRck2q5pOI9O9g_t_tkXda8Tbg0+PszB9FN8DuPaXKnKW4YcQn1Xk3HSIry5ps8UQ_2W5aQnxIwBdu7yFcgrxPsRjVXu8HOh0qao30cArp9SZZxDfg3h1wTzKxu5E_LUxX5wKdX5SnAzmDx4A4OIqLbB69yMesE1pKojLjVdoNsfyiPi45hZmAn3uLWdpOtfQOaVmikEs7ovj8hFWpz7EV6mel0L9Xy23FMYlPYZenAx0yDB1_PX6dledmQjikjkXCxqMJS9WtfFCyH9XtSekEF+2dH+P4tzITduTygGfv58a5VCTH5PtXD7EFZiNyUDBhHnsFTBgE0SQIA9pfFtgo6cKGuhooeilaKH41eDs38Ip+f4At1Rq_sjr6NEwQqb_I_DQqsLvaFUjvAx+eWirddAJZnAj1DFJL0mSg_gcIpPkMBkhoyCSJ8lTZIxk0TpKDjXHliJzZPO50dR5ASNSnzeLvIvod0HG_mdkmOC0z8VKnzcQ2M_Yz2vKldduXjp9bleLu0ZWn7vWc+l0JGcaai10yNrUnXLP_8Jf59ewX+c3Wgz+B34Df+vbVrc16zTMVgp9um9bxEfzPU5kPqUtVWxhs6OiWTVW+gIfywB9uXi7CGcGW_zk98k_kmvJ95IfJn_j3uQ+4c5zn3Kfcd+AyF3gLnJfcl9xH3OfR2rUee80a+6vo7EK5mmXUdyfQlrYLTwoZIU9wsPCZEtP6BWGhAlhL3p2N6sTjRdduwbHsG9kq32sgBepc+xurLPW4T9URpYGJ3ym4+8zA05u44QjST8ZIoVtu3qE7fWmdn5LPdqvgcZz8Ww8BWJ8X3w0PhQ_wnCDGd+LvlHs8dRy6bLLDuKMaZ20tZrqisPJ5ONiCq8yKhYM5cCgKOu66Lsc0aYOtZdo5QCwezI4wm9J_v0X23mlZXOfBjj8Jzv3WrY5D+CsA9D7aMs2gGfjve8ArD6mePZSeCfEYt8CONWDw8FXTxrPqx_r9Vt4biXeANh8vV7_+_16ffMD1N8AuKD_A_8leAvFY9bLAAAAOGVYSWZNTQAqAAAACAABh2kABAAAAAEAAAAaAAAAAAACoAIABAAAAAEAAABGoAMABAAAAAEAAABGAAAAAE3tIiIAABPgSURBVHgBxVwLrB3FeZ7ZPefch+0Y8ygEEpBqWiAVz7QCXENpGxBtIS0Pg1Ai4orUBKUInFAgxsCNwQkmfkAoBAgVsdQ25VmKRAItNI4Sk75IUkRRWyUtOKCUAsXG1_fe89idft+_88+d3bP3+vhiYOQ988__+P5__pmdnZ1zrq15j8qDG91Ir2kOy7Leh1Nn93fGNJLUTPZM+lrSMduah5pXLrjAZu9ROLt1Y3er8Q4UNiIZByTm9DTNzzXOLrHWHopkDKWJMRaeHbLT6xmT5W4nmj9xzn2nl+cPf2pl8wfvwO1eMX1XEvPVy93Qvouzi22aXN5o2KPTFJ1HAvIcyWDY8uHjRwQMIkGyGtDrdJGnzG3JenbjxZ+33_Ja73m11xPz9XWdk0ZGGhtaLbtEZgRuDuYhOIqT4rsbs6jXbGAm0S5zj+zaZVetWGX_873OTIh3bzjevCG7tDFk12OWzMfI77bQeUhKILwZhK0mEtQxr3Uzs3L5SvvNGHBs7N9ah5mPJC9jko2NWczFvVv2WmLu35Td2BpKxjhLeMvscakmBgBkNXCLkex2zFpMopdSmy+1xh7urNnXOdu0zoxnxr1mnX3emWzrZDvd+ser7Jti9Q4+9kpi7tuQXTMymtyScfqjN9pHgivNGIu2Q22FHztXPXS0ZKN2XH+4YPPKqRPpJZ5P_72eexWL+OPtqezrl32h9SPaz6XEsc3F3ty9vnfu6EjyYO5symDrCgJFh9QVlZT22jV2MauiLUYip0N5vE175SLONarbxVagZ_4865ibL73WbpvWGIyq8zmYJbT+dL07bKTl_iFt2IM4WoMVdglufRVspKehNXfC41gkiGtUu21emeqalZ+9yj68J6DFHbwnFpFuM8lvabbsQVgcDZeV6sUYq7wcSREechNkUOzjwZa55hX0YlptYh5p4uLKIJ_sYAga5kPDQ+aBuzZmN0A8cAHE3Mqd693S1rDZgvtdbiG9U5gMXSRklgujmPGRqDxjoMNAsKAGW+rOpdRBMI4m1qjJyfzWz34+vWYQ3LnPmIZZidFIa0cUgcioIYIwgqBLutSh3Otk2va2QaY6A9axD44JcTh72hC0RpKr71ifXQ3WbgvC2PNy+y3u0HTUvIj7eN5MC+6eo85iwR7WRRrz62jyosKZg6s7MWXOvuoq+1Qk6iPr3PUpTTOc3bTJLEkb5gps85dVF1yCVWKZNp2NmrPhbKCRLAoKsZtOx_10csKeuGqW_Q7UBivrN7k_wAvglda6U5OGtV28+1QLR4SlNIs8z1czJ64uOTEvpgs3u_0MJiRYkCC+s7WG7eKeM38CzrXCr_lQkxpRwVq3zh2Vjph1yPTZ3CPwbZgO6gxDYjxaCGyGtmcPXkUjX2dUFVdj1AHjoxyzfXt7pzlu9Wr7ch3WrDPmy+t7n2gMm01p0xyADRNe6voTUnVe54QBV_VinnZIdbTdh6UKXlC3S+6ziRmwF2x8NIfNPp3cXAzxTbGK0hVXyjbmS7e51c2WWQOOzbnUs1A7ilqMZ0QQC_mgSVVNeRGc6AYXgZjGmZWKgWJnMR8A2uRRSKftnu_usL+Gl1DseMqldsas3eSuR0bXcHGV6QdHHB0poMnjbaOsMmR9q06XPF7VfoguPsgXuh4y2OktUlWbyZ6YMtiJPdLMM7+M5gtV277E3LTRXYKkfFHOQ7gJ8OgarEajCStFDl1R196wMUBR9apqlS8DAiXyfVjBRHXVP2uGr6WkD2VuJhst02p3zfHQmT0xY7d2TmgMmU097Nt5dECwEIXScVQaDWW+CKsUBQRq40mqCjYJX4IKCNkBq4C1gBYMJbWO1WLVqjxuC40P+nEmP7KKwXaYMWNjDvlzt9vULOj5Q6YAFggPUW0rsvLhUHKjbZWz9rxZREEnNlOadtWkqox1jKt6gReIQs_P+oNje6VDYrJ52QUjQ+nSTt8yBNXYg9KKAGdcb7hxKrJRPNKjGArNPoYCDFDTNvIrUPiQGnyK6tYZkdfAqz3PdYxNPlCjUsyYZTgmtI30SirqfRnFUR6GijcmJcuxmZw09+Fx_jxm3Ol4mp3nFEi9lgCVWdS6dii34kLY1UezJIMSKNfpK1ZfHemLHY79+nTAkBlz+OhHTsSu9gTZzXov6qy6aSNICAo0vwrpTprr115tb6UM5Z7rNmR_OTqaXMS9TygKGBgFQTbxqnmsqNV2vgRZalSti+TFcasGnrxvKR3XkhjsBM_GJs522xDRmsU7qvOnPKrK1x2JeVxs_MfUZPIFJPoM3F77cVMoxUeltjPyvPruqhJORZky7UYsklsnYnCmZnn+s4gVyATHjtYkbin3LBw1uZ1ACI02jXkJ39cxD2exCW6bowMiiA3YZuN0fz1fIRRHb1NASM4VQ2rwKFde7Ev5Vd6c+PQd+eGWBN9o1Z4LJ6u+zNN2s1j2LWoUAWhAMaDypMbg4Fxm1YoxN0o3WnAGcufUlPl3rDmlYBQnDAIMpJOs_SU6oDWJKte21sJnzNRl7a_Ar_DIVx9CowGb2sd1gpmyP3AXyreENKy56FD5SmsQfKlsNs1xC0fNJcAJ5dZr7E484W7kIhzbxDiK0VcDpcTzbdrW8ZUXsKGvCaCMtOpoTV08NAz2bbd87ubehVAplcS0zALs51pMTNWxOuIJWAwozuiQF+yYHNw2116x1h0Yo7_8nHlkqm2eTrCSqU2Mo_iKIzEwDh9LqQ0ek1zlBVsfo7ZlQGIcjdfHzDiYGPxrNIaSr61c0_6VOPYETw6uETYEGTlX8DggJkmdqw1vQzyiD2415Iwj4D_0kM3wGF+NL8vaMJu2i3yEjioua5UrL26Tnk3Hy6XTXk_7UYfLQcW3HIuSRvO208acPIzYgSS1ZgILcE9GUp1qQDV1SBJk4pA1Lm4MsZ5ceuVN7qiQGRC332D_sd0xm_GUmp4JxK12VtsaQ7WtNnGttNqgrf1gLT5Y+0tkFVpjT1v2Y8fY7GyNPckmJt_Cl2Xj0BcANRZgMOO20nSkcnXOEcItMx_XjQqu9a62WdueMm_IGzls1V7wYKe41Vo7FNfBr8dRrFgnpmv1NekxBoJNGunKZcschhD0wubI6_hVwf+wUQWpttWh8lnL5TuHWwZT0Jx3+Rp3CvG03Dtmt+GW_QpPzrQjwRZKilutg4768R2p8mNMnYk6m2OZxqp+Ag7il4M465bsf6Q5jnEnPKTB2cQLHE0BYSc1o5Va+eJUZZp1tLkXQucbmDVrlo+5YU0Ma9zLd7UnzX+IH9pGdnGA2iHlaUdFv8ZnkHtZsCO+6sc1+NIPrSnzulhrUmw9zmK8GEMEndlnqiBx52M66FUcq468BjizZKhnPkxsLXeN2XEs3P8Fs2Jt0o5Ugg74KmcHeKGtneZuWi7y_FW1m7Xt8ao6HFi8Of0GY5ZVeGrcPIUjunHkaz4dVQtwSkXOS5SJ2u_2RYdfqOMRvfmem81PYqPLVrsjsBM7mUca7KDsynylUEG_jxEkZYJ6uvcHPahZrBjbODyh0Lcjll_p9pEZc996+995zzwpW3hohmlOGokqtZVXM1oMErfL65Nv84A5HIYWnUnMWqw_++hPzmJcHfVqTR3yqiMb2lEsjDHMLNppm3UVg3b+CjZscybmZr_WiDkoPLd7nex2bHXOgWL_zzlgVFvA17dvyvlI7nbydfdvTH8W6196rTsTsnPkV1bEUjytVTlu+5kQs9gJlniGFpzyJ9XCsEjDu4zB1KTCg48hzOpFMmOoc++65ve7U+YhHiNIhpE9ZnDGS0eTOqD5xMFs+VfzRvI19cl6+XI37BK3lq+qfkSmR7CKXx1Zj60zhHHp6CutbdURHxU75alN0K36Iz4ShWoozBh2Ymrn1Cpjh38To3sgjVlk71GQPu1kFiMSkg3CdY1rt7PrNt_bmFB11skB+SVpKzkBb9tSgg1aOgMKSeXTz5gwuyhWY5XFPBVXdeK20l5XZl7EY78k0T3Tjl3QjfnDK935jVHzTdyDDQlErGGAOpyikRbt4kO+D54yj33jK_aciG0uusIdOG_UPIdEH6KJDnIEJDF5fPI56_h9D4MLRR1RWXVjnlcUMfi0laeL1wkxB8AyURoc2vdMFzP_+NKMocn9t9mHL16ZHd8cTlZJZzQIOJSOeFylOaNwwLUTt+F1ZZeYj01zLfY0h+jhepCrcYQlX_92zKvd3HwVC_RPRYRbwiBReviIPQZeXkpj4hGKijMd_j6TtszRsqcCW11pze5IMrRfXsBK9lj46nbq7fHX+xJDF912sg2v47J2sB1GShrlD86W7lR+x1_ckb4YSz55eedYzIAVPBUsjUqsFNHoyM7Jie45D9zV+ueIvcfkss+4v8HB0A_w3vbh2lmKhDAeSVAFnTMWcWw7dvH8N0D2F5vkR9GYwPJYqy5m5PsLrwEud8mjZRTceGnzJngf5cipbqlWPmcFCmbJC+80KcR56G77Kmbo99jxkr8oZrnd0Jb1JOYzjk7+Q_5uuDYxSMYBAZQdQJIIUgWiDorNuuYYofzHBZeZ30f2z+K7k+BoEqIgAh_YkjxnDlm2wi2MceZGO35ZuHjGAfExhIGPYuIDojflnqTf2lvJ5cmQbMQ4mnVzLoqYycK9vfb8T7sdSOBzjST7VSygtyM4S5kUdF5wfLOvghwYh+K2vOe85W5sCr8GH+3KwVtQ7c7bzkhw7rOPK53rLypU3sJZ_6IRszAZNZ_DoJzIQekr1TjQJouFa1xnyr3S257+Pdu1iUFSuqnPJJW0SI4USZmoEcgHsSY9gmSMJ0k6n0nggis9ifRmIgnJYwsk9EL8Fufjo8NmO1iaVjFrmn2mzfebJpVatJ_8sHp+0jQLOVukVGJlU2NSWlX4I+pe125+7DFL3zMlJt+R4y7jdGeJwRSokPhPHwhW9fly2+Gdgza1uiXDcgNPJD4ZRjB6I2VJgaVxUCbY_ACz4Be_NueJ3GwlxASCNC_OlskJ99rEDnun2tbOmDxLtjEpvKodJFAcoAKxpkwNhGY7LrGhKlQcKDs2E1r1qhhxm4oAmBGjCuoVWXUm7JqnHrU_V5X6xOTZi1k3lcdacIIAJDYwYh4bEpsGGITqIqpjGWkBLOT6CA08xVNztdU64isUWSWxNiI_aiY15Nj3mKlx99iun9t7Y1ltYrrj3R_bNB3Ht5Pz44DFjzojinfIXXE5othFhaa9dlqxPI+++mQVczar5uQplNKio3h+SaBMC0XcZXcm3I96b9oVW7bY0k2oPlTf1y4565Pmu_gB0VJdZyoKIbgq__1uxwmaLRZJyqT5cW_cnPPkY_alqm7tjMGY5FnXPYJfHC0Nj1xNofcsleepiOAa2EzvKNx2U4c2qhsIMGMs4s1W1D62EZ4Kaozpn1d73Dyxa4f59JZvWTnvrqrGmCXZab_jPjS6r3m+0TSLZIqXpOUGQWaJRZQH0YlRY_04SPUTy2O7mWgmg08fvKLswCvMLW++lGx47jkb_x6jZBr7LAnYOOO8bOPwB5KVsi9ARBqMGM1qCeNSD2gMA+X1eYoYu8ONVKdJAntD9eGb2DiKX+xq_y_P8r_uvp1sfObbtvReN40zTc0axumnu4PTfbGbbZmDwlpDiyiOAqrCkBUbioFd_FUbdSVu+ajkyvO0f4Wbil3hTD6LwB3w+PdyHte3Yii8jT_R62aPTuxIn_7+04P_QVeBHzmskqf9Xu9TIwvTb5Af31JiKB8IQx5L3lJ5YqDw0OGMER7DJu1rT0orsCs6qisA8YfqKa9oK1beNdt3bh8_4tm_XfC_qjFojbtu9rLlicbm7q78bokZHpkcXjk+ik0g_jCLtFz+pdFvDqs8vIbLCyl3x+GirmKCFmz8LY++sNKGdNGmT7ShRD3n9QqdQk_k0Ge8eLV5Zi5JYUZmeCqVk9XbkaxEJ3+hNc+ey_PT6YLo+orn6ejLaEOJnQm601TBmm4rpXsjaROLxQuLCaqahSjI0KQ6fmjgcHh2j5fucaUud2v40Y+60YUHm_tw7HkRR0sDqTfUoBU+bpNWfr31NFftyBnEpsDmgtueME8f8Lg58yGcikzjDU4N4i2gnWbwM4nfNavTYbMKRwTNsCAHjZiIExDTkY6yWbMwGuUJQxtaC3PWDy5lWc9Ntsd7p279u9a_zKo8i3CPEqM4p57hfgvJWYtXhpN4HCgJGjz23cw29RLV8iXRYKFSqz2eX_e9p9IvRQh7TA7mrQb28MPd0MG_mJ1vm8kK_MjmJCSpxRHvu83A4yjKThjJ40LbV2IeMaCAqq_MxFdF3kKd8fzB5MnkE1tM+d1HdQat6_wPahv0TvltdwxO8E_BzvJkHOP8Erq2v03sMLLUw6N8B54i22xm_wlfvB3THLbnSXLiZASkGQiNUm3Yjmk0ZVc76b6dvW0v3LrV7pwBaWC2uhzYYBBFLtQLFpgWfvmQ4YeLk_rmyln2wcX53fhqZjn7JbMr7mQduMq1po5GDRCZjWh3J_MH8vHkj_ZGUmIXdSG9Szxnf_1j5ir85dwNWMDnl9YnnQXVyMjXxGhSwOIs6XXdRDZlb976jMEv0+f2BKrraOSmTvzu8U4+1eFLPXN90nQfT5r4fyH85o4eNQ9V78JHxEwIvplw+IXGE3nbfHHrFjvnp0_Vh7bft8RoACef2l2SDjcuxtPtTHT4MJ6o8RZjEjRDDFKffvjB0GtI4tP5pPmzrd+131GcvV2_74nRDmFdWjg0r3ds0kpO703Za1oLDH72hfCwg8XZSdpoZn8FcrOdbPzw2WftHr_7qJ9B6_8Hf8CPDv8g3A4AAAAASUVORK5CYII=",
-          "BTTWidgetName" : "Codex",
-          "BTTTriggerConfig" : {
-            "BTTTouchBarButtonColor" : "0.000000, 0.000000, 0.000000, 255.000000",
-            "BTTTouchBarIconInvert" : false,
-            "BTTTouchBarItemPlacement" : 2,
-            "BTTTouchBarAppleScriptStringRunOnInit" : true,
-            "BTTTouchBarAlwaysShowButton" : false,
-            "BTTTouchBarButtonHoverColor" : "248.880000, 146.115000, 128.010000, 181.050000",
-            "BTTTouchBarButtonHeight" : 15,
-            "BTTTouchBarButtonWidth" : 100,
-            "BTTTouchBarScriptUpdateInterval" : 300,
-            "BTTTouchBarItemIconHeight" : 22,
-            "BTTTouchBarButtonTextAlignment" : 0,
-            "BTTShellScriptDontTrimWhitepsace" : false,
-            "BTTTouchBarAlternateBackgroundColor" : "75.323769, 75.323769, 75.323769, 255.000000",
-            "BTTTouchBarItemIconType" : 1,
-            "BTTTBWidgetWidth" : 400,
-            "BTTTouchBarBorderColor" : "255.000000, 255.000000, 255.000000, 255.000000",
-            "BTTTouchBarItemIconWidth" : 22,
-            "BTTTouchBarFreeSpaceBeforeButton" : 0,
-            "BTTTouchBarShellScriptString" : "exec \"$HOME/Documents/BTT/widgets/codex-quota.sh\" \\\n\"{BTT_WIDGET_CODEX_UUID}\"",
-            "BTTTouchBarButtonFontSize" : 14,
-            "BTTTouchBarIconTextOffset" : 5,
-            "BTTTouchBarButtonName" : "Codex",
-            "BTTTouchBarOnlyShowIcon" : false,
-            "BTTTouchBarFreeSpaceAfterButton" : 0,
-            "BTTTouchBarItemPadding" : -5
-          }
-        },
-        {
-          "BTTLastUpdatedAt" : 1786484244.7326441,
-          "BTTTriggerType" : 1002,
-          "BTTTriggerTypeDescriptionReadOnly" : "Middle Mouse Button",
-          "BTTTriggerClass" : "BTTTriggerTypeNormalMouse",
-          "BTTUUID" : "E10A3609-DD37-4BEC-9076-67875E476E5D",
-          "BTTOrder" : 0,
-          "BTTActionsToExecute" : [
-            {
-              "BTTLastUpdatedAt" : 1786484244.732352,
-              "BTTTriggerParentUUID" : "E10A3609-DD37-4BEC-9076-67875E476E5D",
-              "BTTIsPureAction" : true,
-              "BTTUUID" : "F977C0D6-DB8F-4E02-8BF8-A0B30DF52F50",
-              "BTTPredefinedActionType" : 5,
-              "BTTPredefinedActionName" : "Mission Control",
-              "BTTOrder" : 8
-            }
-          ]
-        },
-        {
-          "BTTLastUpdatedAt" : 1786548126.613059,
-          "BTTTriggerType" : 642,
-          "BTTTriggerTypeDescriptionReadOnly" : "Shell Script / Task Widget",
-          "BTTTriggerTypeDescription" : "OpenCode",
-          "BTTTriggerClass" : "BTTTriggerTypeTouchBar",
-          "BTTUUID" : "AE01C9E2-9EC6-4329-8358-8389BFB850F8",
-          "BTTShellScriptWidgetGestureConfig" : "/bin/zsh:::-c:::-:::",
-          "BTTOrder" : 16,
-          "BTTMergeIntoTouchBarGroups" : 0,
-          "BTTActionsToExecute" : [
-            {
-              "BTTLastUpdatedAt" : 1786484244.732579,
-              "BTTTriggerParentUUID" : "AE01C9E2-9EC6-4329-8358-8389BFB850F8",
-              "BTTIsPureAction" : true,
-              "BTTUUID" : "C6E91301-B89F-4A9A-9936-4D3DC78527E7",
-              "BTTPredefinedActionType" : 206,
-              "BTTPredefinedActionName" : "Execute Shell Script  or  Task",
-              "BTTShellTaskActionScript" : "exec \"$HOME/Documents/BTT/actions/tap-refresh.sh\" \\\n\"{BTT_WIDGET_OPENCODE_UUID}\"",
-              "BTTShellTaskActionConfig" : "/bin/zsh:::-c:::-:::",
-              "BTTOrder" : 9
-            }
-          ],
-          "BTTIconData" : "iVBORw0KGgoAAAANSUhEUgAAADgAAABGCAYAAACZrlevAAAEDmlDQ1BrQ0dDb2xvclNwYWNlR2VuZXJpY1JHQgAAOI2NVV1oHFUUPpu5syskzoPUpqaSDv41lLRsUtGE2uj+ZbNt3CyTbLRBkMns3Z1pJjPj_KRpKT4UQRDBqOCT4P9bwSchaqvtiy2itFCiBIMo+ND6R6HSFwnruTOzu5O4a73L3PnmnO9+595z7t4LkLgsW5beJQIsGq4t5dPis8fmxMQ6dMF90A190C0rjpUqlSYBG+PCv9rt7yDG3tf2t_f_Z+uuUEcBiN2F2Kw4yiLiZQD+FcWyXYAEQfvICddi+AnEO2ycIOISw7UAVxieD_Cyz5mRMohfRSwoqoz+xNuIB+cj9loEB3Pw2448NaitKSLLRck2q5pOI9O9g_t_tkXda8Tbg0+PszB9FN8DuPaXKnKW4YcQn1Xk3HSIry5ps8UQ_2W5aQnxIwBdu7yFcgrxPsRjVXu8HOh0qao30cArp9SZZxDfg3h1wTzKxu5E_LUxX5wKdX5SnAzmDx4A4OIqLbB69yMesE1pKojLjVdoNsfyiPi45hZmAn3uLWdpOtfQOaVmikEs7ovj8hFWpz7EV6mel0L9Xy23FMYlPYZenAx0yDB1_PX6dledmQjikjkXCxqMJS9WtfFCyH9XtSekEF+2dH+P4tzITduTygGfv58a5VCTH5PtXD7EFZiNyUDBhHnsFTBgE0SQIA9pfFtgo6cKGuhooeilaKH41eDs38Ip+f4At1Rq_sjr6NEwQqb_I_DQqsLvaFUjvAx+eWirddAJZnAj1DFJL0mSg_gcIpPkMBkhoyCSJ8lTZIxk0TpKDjXHliJzZPO50dR5ASNSnzeLvIvod0HG_mdkmOC0z8VKnzcQ2M_Yz2vKldduXjp9bleLu0ZWn7vWc+l0JGcaai10yNrUnXLP_8Jf59ewX+c3Wgz+B34Df+vbVrc16zTMVgp9um9bxEfzPU5kPqUtVWxhs6OiWTVW+gIfywB9uXi7CGcGW_zk98k_kmvJ95IfJn_j3uQ+4c5zn3Kfcd+AyF3gLnJfcl9xH3OfR2rUee80a+6vo7EK5mmXUdyfQlrYLTwoZIU9wsPCZEtP6BWGhAlhL3p2N6sTjRdduwbHsG9kq32sgBepc+xurLPW4T9URpYGJ3ym4+8zA05u44QjST8ZIoVtu3qE7fWmdn5LPdqvgcZz8Ww8BWJ8X3w0PhQ_wnCDGd+LvlHs8dRy6bLLDuKMaZ20tZrqisPJ5ONiCq8yKhYM5cCgKOu66Lsc0aYOtZdo5QCwezI4wm9J_v0X23mlZXOfBjj8Jzv3WrY5D+CsA9D7aMs2gGfjve8ArD6mePZSeCfEYt8CONWDw8FXTxrPqx_r9Vt4biXeANh8vV7_+_16ffMD1N8AuKD_A_8leAvFY9bLAAAAOGVYSWZNTQAqAAAACAABh2kABAAAAAEAAAAaAAAAAAACoAIABAAAAAEAAAA4oAMABAAAAAEAAABGAAAAAGh9FMcAAAHtSURBVGgF7ZtNagJBFIR7fox6gSABN+4GcgHPlTO4DARvkMNkkX1u4EIXySKrqPOXbsGFEBm7fN1vIjUgMtqvql99Msw0bfK1Xrfmho_0hns7tMYG_zthEiTBnifAn2jPAXVOjwQ7I+r5ABLsOaDO6eWdI84MyPPcJEly5lvZj9u2NVVVQaJQg2mamqppnqzjB+TqX_RoPZ+bpvGuhBp05Mrd7m0ynb57OwIFm9XqezQcApXGwBeZNMvuIEeg6BovuEFgniolbFAldkFTEhQMU0WKBFViFzQlQcEwVaRggvZmO9qK+DVe0L2oQ_G52Yzm8_k4BhbndT+ZQFZQg+7x5WW5fK2225_BYAAZX1pUlqXzGi8Wi0tLTsZBDTqFqq4f3FNF6GdCp2+9TibtcwI36CgeXz6GvmOv9YAvMr4T1RrPBrWSl_IlQakktXRIUCt5KV8SlEpSS4cEtZKX8iVBqSS1dEhQK3kpXxKUSlJLhwS1kpfyJUGpJLV0SFAreSlfeF3UbczZ7_eHtVGpyfyl41a20U1ATg9q0C3GFkVhhnbvSmZ3PIU8ahvkbDaDg0zQ_01kWRZ82f4YnAu0Bpfv4fhRw+OkY73zKhor6VA+JBgq2Vi6JBgr6VA+JBgq2Vi6JBgr6VA+JBgq2Vi6v2_mbXblGFZ0AAAAAElFTkSuQmCC",
-          "BTTWidgetName" : "OpenCode",
-          "BTTTriggerConfig" : {
-            "BTTTouchBarButtonColor" : "0.000000, 0.000000, 0.000000, 255.000000",
-            "BTTTouchBarIconInvert" : false,
-            "BTTTouchBarItemPlacement" : 2,
-            "BTTTouchBarAppleScriptStringRunOnInit" : true,
-            "BTTTouchBarAlwaysShowButton" : false,
-            "BTTTouchBarButtonHoverColor" : "248.880000, 146.115000, 128.010000, 181.050000",
-            "BTTTouchBarButtonHeight" : 15,
-            "BTTTouchBarButtonWidth" : 100,
-            "BTTTouchBarScriptUpdateInterval" : 300,
-            "BTTTouchBarItemIconHeight" : 22,
-            "BTTTouchBarButtonTextAlignment" : 0,
-            "BTTShellScriptDontTrimWhitepsace" : false,
-            "BTTTouchBarAlternateBackgroundColor" : "75.323769, 75.323769, 75.323769, 255.000000",
-            "BTTTouchBarItemIconType" : 1,
-            "BTTTBWidgetWidth" : 400,
-            "BTTTouchBarBorderColor" : "255.000000, 255.000000, 255.000000, 255.000000",
-            "BTTTouchBarItemIconWidth" : 22,
-            "BTTTouchBarFreeSpaceBeforeButton" : 0,
-            "BTTTouchBarShellScriptString" : "exec \"$HOME/Documents/BTT/widgets/opencode-quota.sh\" \\\n\"{BTT_WIDGET_OPENCODE_UUID}\"",
-            "BTTTouchBarButtonFontSize" : 14,
-            "BTTTouchBarIconTextOffset" : 5,
-            "BTTTouchBarButtonName" : "OpenCode",
-            "BTTTouchBarOnlyShowIcon" : false,
-            "BTTTouchBarFreeSpaceAfterButton" : -10,
-            "BTTTouchBarItemPadding" : -5
-          }
-        },
-        {
-          "BTTLastUpdatedAt" : 1786548126.613097,
-          "BTTTriggerType" : 639,
-          "BTTTriggerTypeDescriptionReadOnly" : "Apple Script / JavaScript Widget",
-          "BTTTriggerTypeDescription" : "Star",
-          "BTTTriggerClass" : "BTTTriggerTypeTouchBar",
-          "BTTUUID" : "A05C5D37-7EAA-4F7B-AC00-23183CC8C6A1",
-          "BTTOrder" : 4,
-          "BTTMergeIntoTouchBarGroups" : 1,
-          "BTTActionsToExecute" : [
-            {
-              "BTTLastUpdatedAt" : 1786484244.7323442,
-              "BTTTriggerParentUUID" : "A05C5D37-7EAA-4F7B-AC00-23183CC8C6A1",
-              "BTTIsPureAction" : true,
-              "BTTUUID" : "2C41450D-D3B5-4387-8A1B-D79EA83EC051",
-              "BTTPredefinedActionType" : 195,
-              "BTTPredefinedActionName" : "Run Apple Script (async in background)",
-              "BTTAdditionalActionData" : {
-                "BTTScriptType" : 0,
-                "BTTAppleScriptUsePath" : false,
-                "BTTScriptLocation" : 0,
-                "BTTAppleScriptRunInBackground" : true,
-                "SelectedAction" : 195,
-                "BTTAppleScriptString" : "set widgetUUID to \"{BTT_WIDGET_STAR_UUID}\"\n\nset playerBundleIdentifier to do shell script \"$HOME/Documents/BTT/actions/now-playing-app.sh\"\n\nif playerBundleIdentifier is \"com.apple.Music\" and application \"Music\" is running then\n    tell application \"Music\"\n        if player state is not stopped then\n            set oldFavorite to favorited of current track\n            set newFavorite to not oldFavorite\n\n            if newFavorite then\n                set newSymbol to \"★\"\n            else\n                set newSymbol to \"☆\"\n            end if\n\n            -- Update Touch Bar immediately, before Apple Music finishes.\n            tell application \"BetterTouchTool\"\n                update_touch_bar_widget widgetUUID text newSymbol\n            end tell\n\n            -- Apple Music can take a moment to persist this.\n            set favorited of current track to newFavorite\n\n            -- Never let BTT display \"missing value\".\n            return newSymbol\n        end if\n    end tell\nend if\n\nreturn \"\""
-              },
-              "BTTInlineAppleScript" : "set widgetUUID to \"{BTT_WIDGET_STAR_UUID}\"\n\nset playerBundleIdentifier to do shell script \"$HOME/Documents/BTT/actions/now-playing-app.sh\"\n\nif playerBundleIdentifier is \"com.apple.Music\" and application \"Music\" is running then\n    tell application \"Music\"\n        if player state is not stopped then\n            set oldFavorite to favorited of current track\n            set newFavorite to not oldFavorite\n\n            if newFavorite then\n                set newSymbol to \"★\"\n            else\n                set newSymbol to \"☆\"\n            end if\n\n            -- Update Touch Bar immediately, before Apple Music finishes.\n            tell application \"BetterTouchTool\"\n                update_touch_bar_widget widgetUUID text newSymbol\n            end tell\n\n            -- Apple Music can take a moment to persist this.\n            set favorited of current track to newFavorite\n\n            -- Never let BTT display \"missing value\".\n            return newSymbol\n        end if\n    end tell\nend if\n\nreturn \"\"",
-              "BTTOrder" : 10
-            }
-          ],
-          "BTTWidgetName" : "Star",
-          "BTTTriggerConfig" : {
-            "BTTTouchBarItemPadding" : -5,
-            "BTTTouchBarButtonColor" : "0.000000, 0.000000, 0.000000, 255.000000",
-            "BTTTouchBarIconInvert" : false,
-            "BTTTouchBarItemPlacement" : 1,
-            "BTTTouchBarAppleScriptStringRunOnInit" : true,
-            "BTTTouchBarAlwaysShowButton" : false,
-            "BTTTouchBarButtonHoverColor" : "248.880000, 146.115000, 128.010000, 181.050000",
-            "BTTScriptType" : 0,
-            "BTTTouchBarButtonHeight" : 15,
-            "BTTTouchBarButtonWidth" : 100,
-            "BTTTouchBarScriptUpdateInterval" : 10,
-            "BTTTouchBarItemIconHeight" : 22,
-            "BTTTouchBarButtonTextAlignment" : 0,
-            "BTTTouchBarAlternateBackgroundColor" : "75.323769, 75.323769, 75.323769, 255.000000",
-            "BTTTouchBarAppleScriptUsePath" : 0,
-            "BTTTBWidgetWidth" : 400,
-            "BTTTouchBarBorderColor" : "255.000000, 255.000000, 255.000000, 255.000000",
-            "BTTTouchBarItemIconWidth" : 22,
-            "BTTTouchBarFreeSpaceBeforeButton" : 0,
-            "BTTTouchBarButtonFontSize" : 14,
-            "BTTTouchBarIconTextOffset" : 5,
-            "BTTTouchBarOnlyShowIcon" : false,
-            "BTTTouchBarAppleScriptString" : "set playerBundleIdentifier to do shell script \"$HOME/Documents/BTT/actions/now-playing-app.sh\"\n\nif playerBundleIdentifier is \"com.apple.Music\" and application \"Music\" is running then\n    tell application \"Music\"\n        if player state is not stopped then\n            if favorited of current track then\n                return \"★\"\n            else\n                return \"☆\"\n            end if\n        end if\n    end tell\nend if\n\nreturn \"\"",
-            "BTTTouchBarFreeSpaceAfterButton" : 0
-          }
-        },
-        {
-          "BTTLastUpdatedAt" : 1786548126.6130061,
+          "BTTLastUpdatedAt" : 1786561738.1795859,
           "BTTTriggerType" : 642,
           "BTTTriggerTypeDescriptionReadOnly" : "Shell Script / Task Widget",
           "BTTTriggerTypeDescription" : "Lyrics",
@@ -1073,31 +859,224 @@
           }
         },
         {
-          "BTTLastUpdatedAt" : 1786548126.612947,
+          "BTTLastUpdatedAt" : 1786561738.179641,
           "BTTTriggerType" : 642,
           "BTTTriggerTypeDescriptionReadOnly" : "Shell Script / Task Widget",
-          "BTTTriggerTypeDescription" : "Now Playing",
+          "BTTTriggerTypeDescription" : "VPN",
           "BTTTriggerClass" : "BTTTriggerTypeTouchBar",
-          "BTTUUID" : "710F54C5-25B0-4A2C-B960-D9C0FE78B1B7",
+          "BTTUUID" : "59F8C568-022F-4BD9-B3EB-63A7676592DF",
           "BTTShellScriptWidgetGestureConfig" : "/bin/zsh:::-c:::-:::",
-          "BTTOrder" : 5,
-          "BTTDisplayOrder" : 1,
+          "BTTOrder" : 13,
+          "BTTMergeIntoTouchBarGroups" : 0,
+          "BTTActionsToExecute" : [
+            {
+              "BTTLastUpdatedAt" : 1786484244.7324219,
+              "BTTTriggerParentUUID" : "59F8C568-022F-4BD9-B3EB-63A7676592DF",
+              "BTTIsPureAction" : true,
+              "BTTUUID" : "31EBC333-AE31-4FFF-BD96-48AD058CE87A",
+              "BTTPredefinedActionType" : 206,
+              "BTTPredefinedActionName" : "Execute Shell Script  or  Task",
+              "BTTShellTaskActionScript" : "exec \"$HOME/Documents/BTT/actions/tap-refresh.sh\" \\\n\"{BTT_WIDGET_CLASH_LATENCY_UUID}\" \\\n\"{BTT_WIDGET_CLASH_REGION_UUID}\"\n",
+              "BTTShellTaskActionConfig" : "/bin/zsh:::-c:::-:::",
+              "BTTOrder" : 7
+            }
+          ],
+          "BTTWidgetName" : "VPN",
+          "BTTTriggerConfig" : {
+            "BTTTouchBarItemPadding" : -15,
+            "BTTTouchBarButtonColor" : "0.000000, 0.000000, 0.000000, 255.000000",
+            "BTTTouchBarIconInvert" : false,
+            "BTTTouchBarItemPlacement" : 2,
+            "BTTTouchBarAppleScriptStringRunOnInit" : true,
+            "BTTTouchBarAlwaysShowButton" : false,
+            "BTTTouchBarButtonHoverColor" : "248.880000, 146.115000, 128.010000, 181.050000",
+            "BTTTouchBarButtonHeight" : 15,
+            "BTTTouchBarButtonWidth" : 100,
+            "BTTTouchBarScriptUpdateInterval" : 300,
+            "BTTTouchBarItemIconHeight" : 22,
+            "BTTTouchBarButtonTextAlignment" : 0,
+            "BTTShellScriptDontTrimWhitepsace" : false,
+            "BTTTouchBarAlternateBackgroundColor" : "75.323769, 75.323769, 75.323769, 255.000000",
+            "BTTTouchBarItemIconType" : 1,
+            "BTTTBWidgetWidth" : 400,
+            "BTTTouchBarBorderColor" : "255.000000, 255.000000, 255.000000, 255.000000",
+            "BTTTouchBarItemIconWidth" : 22,
+            "BTTTouchBarFreeSpaceBeforeButton" : 0,
+            "BTTTouchBarButtonName" : "VPN",
+            "BTTTouchBarShellScriptString" : "exec \"$HOME/Documents/BTT/widgets/clash-latency.sh\" \\\n\"{BTT_WIDGET_CLASH_LATENCY_UUID}\"",
+            "BTTTouchBarButtonFontSize" : 14,
+            "BTTTouchBarFontColor" : "255,255,255,255",
+            "BTTTouchBarOnlyShowIcon" : false,
+            "BTTTouchBarIconTextOffset" : 5,
+            "BTTTouchBarFreeSpaceAfterButton" : 0
+          }
+        },
+        {
+          "BTTLastUpdatedAt" : 1786561738.1795402,
+          "BTTTriggerType" : 642,
+          "BTTTriggerTypeDescriptionReadOnly" : "Shell Script / Task Widget",
+          "BTTTriggerTypeDescription" : "🌐",
+          "BTTTriggerClass" : "BTTTriggerTypeTouchBar",
+          "BTTUUID" : "CF76E4C0-5986-41F9-8F3E-00A6C8F160FE",
+          "BTTShellScriptWidgetGestureConfig" : "/bin/zsh:::-c:::-:::",
+          "BTTOrder" : 12,
+          "BTTMergeIntoTouchBarGroups" : 0,
+          "BTTActionsToExecute" : [
+            {
+              "BTTLastUpdatedAt" : 1786484244.7324471,
+              "BTTTriggerParentUUID" : "CF76E4C0-5986-41F9-8F3E-00A6C8F160FE",
+              "BTTIsPureAction" : true,
+              "BTTUUID" : "1787C5CE-9CBD-4CB3-ADCC-EF870F9EFE03",
+              "BTTPredefinedActionType" : 206,
+              "BTTPredefinedActionName" : "Execute Shell Script  or  Task",
+              "BTTShellTaskActionScript" : "exec \"$HOME/Documents/BTT/actions/tap-refresh.sh\" \\\n\"{BTT_WIDGET_CLASH_LATENCY_UUID}\" \\\n\"{BTT_WIDGET_CLASH_REGION_UUID}\"\n",
+              "BTTShellTaskActionConfig" : "/bin/zsh:::-c:::-:::",
+              "BTTOrder" : 7
+            }
+          ],
+          "BTTWidgetName" : "🌐",
+          "BTTTriggerConfig" : {
+            "BTTTouchBarItemPadding" : -10,
+            "BTTTouchBarButtonColor" : "0.000000, 0.000000, 0.000000, 255.000000",
+            "BTTTouchBarIconInvert" : false,
+            "BTTTouchBarItemPlacement" : 2,
+            "BTTTouchBarAppleScriptStringRunOnInit" : true,
+            "BTTTouchBarAlwaysShowButton" : false,
+            "BTTTouchBarButtonHoverColor" : "248.880000, 146.115000, 128.010000, 181.050000",
+            "BTTTouchBarButtonHeight" : 15,
+            "BTTTouchBarButtonWidth" : 100,
+            "BTTTouchBarScriptUpdateInterval" : 300,
+            "BTTTouchBarItemIconHeight" : 22,
+            "BTTTouchBarButtonTextAlignment" : 0,
+            "BTTShellScriptDontTrimWhitepsace" : false,
+            "BTTTouchBarAlternateBackgroundColor" : "75.323769, 75.323769, 75.323769, 255.000000",
+            "BTTTBWidgetWidth" : 400,
+            "BTTTouchBarBorderColor" : "255.000000, 255.000000, 255.000000, 255.000000",
+            "BTTTouchBarItemIconWidth" : 22,
+            "BTTTouchBarFreeSpaceBeforeButton" : 0,
+            "BTTTouchBarButtonName" : "🌐",
+            "BTTTouchBarShellScriptString" : "exec \"$HOME/Documents/BTT/widgets/clash-region.sh\" \\\n\"{BTT_WIDGET_CLASH_REGION_UUID}\"",
+            "BTTTouchBarButtonFontSize" : 22,
+            "BTTTouchBarFontColor" : "255,255,255,255",
+            "BTTTouchBarIconTextOffset" : 5,
+            "BTTTouchBarOnlyShowIcon" : false,
+            "BTTTouchBarFreeSpaceAfterButton" : 0
+          }
+        },
+        {
+          "BTTLastUpdatedAt" : 1786484244.7326441,
+          "BTTTriggerType" : 1002,
+          "BTTTriggerTypeDescriptionReadOnly" : "Middle Mouse Button",
+          "BTTTriggerClass" : "BTTTriggerTypeNormalMouse",
+          "BTTUUID" : "E10A3609-DD37-4BEC-9076-67875E476E5D",
+          "BTTOrder" : 0,
+          "BTTActionsToExecute" : [
+            {
+              "BTTLastUpdatedAt" : 1786484244.732352,
+              "BTTTriggerParentUUID" : "E10A3609-DD37-4BEC-9076-67875E476E5D",
+              "BTTIsPureAction" : true,
+              "BTTUUID" : "F977C0D6-DB8F-4E02-8BF8-A0B30DF52F50",
+              "BTTPredefinedActionType" : 5,
+              "BTTPredefinedActionName" : "Mission Control",
+              "BTTOrder" : 8
+            }
+          ]
+        },
+        {
+          "BTTLastUpdatedAt" : 1786561738.1796269,
+          "BTTTriggerType" : 642,
+          "BTTTriggerTypeDescriptionReadOnly" : "Shell Script / Task Widget",
+          "BTTTriggerTypeDescription" : "OpenCode",
+          "BTTTriggerClass" : "BTTTriggerTypeTouchBar",
+          "BTTUUID" : "AE01C9E2-9EC6-4329-8358-8389BFB850F8",
+          "BTTShellScriptWidgetGestureConfig" : "/bin/zsh:::-c:::-:::",
+          "BTTOrder" : 16,
+          "BTTMergeIntoTouchBarGroups" : 0,
+          "BTTActionsToExecute" : [
+            {
+              "BTTLastUpdatedAt" : 1786484244.732579,
+              "BTTTriggerParentUUID" : "AE01C9E2-9EC6-4329-8358-8389BFB850F8",
+              "BTTIsPureAction" : true,
+              "BTTUUID" : "C6E91301-B89F-4A9A-9936-4D3DC78527E7",
+              "BTTPredefinedActionType" : 206,
+              "BTTPredefinedActionName" : "Execute Shell Script  or  Task",
+              "BTTShellTaskActionScript" : "exec \"$HOME/Documents/BTT/actions/tap-refresh.sh\" \\\n\"{BTT_WIDGET_OPENCODE_UUID}\"",
+              "BTTShellTaskActionConfig" : "/bin/zsh:::-c:::-:::",
+              "BTTOrder" : 9
+            }
+          ],
+          "BTTIconData" : "iVBORw0KGgoAAAANSUhEUgAAADgAAABGCAYAAACZrlevAAAEDmlDQ1BrQ0dDb2xvclNwYWNlR2VuZXJpY1JHQgAAOI2NVV1oHFUUPpu5syskzoPUpqaSDv41lLRsUtGE2uj+ZbNt3CyTbLRBkMns3Z1pJjPj_KRpKT4UQRDBqOCT4P9bwSchaqvtiy2itFCiBIMo+ND6R6HSFwnruTOzu5O4a73L3PnmnO9+595z7t4LkLgsW5beJQIsGq4t5dPis8fmxMQ6dMF90A190C0rjpUqlSYBG+PCv9rt7yDG3tf2t_f_Z+uuUEcBiN2F2Kw4yiLiZQD+FcWyXYAEQfvICddi+AnEO2ycIOISw7UAVxieD_Cyz5mRMohfRSwoqoz+xNuIB+cj9loEB3Pw2448NaitKSLLRck2q5pOI9O9g_t_tkXda8Tbg0+PszB9FN8DuPaXKnKW4YcQn1Xk3HSIry5ps8UQ_2W5aQnxIwBdu7yFcgrxPsRjVXu8HOh0qao30cArp9SZZxDfg3h1wTzKxu5E_LUxX5wKdX5SnAzmDx4A4OIqLbB69yMesE1pKojLjVdoNsfyiPi45hZmAn3uLWdpOtfQOaVmikEs7ovj8hFWpz7EV6mel0L9Xy23FMYlPYZenAx0yDB1_PX6dledmQjikjkXCxqMJS9WtfFCyH9XtSekEF+2dH+P4tzITduTygGfv58a5VCTH5PtXD7EFZiNyUDBhHnsFTBgE0SQIA9pfFtgo6cKGuhooeilaKH41eDs38Ip+f4At1Rq_sjr6NEwQqb_I_DQqsLvaFUjvAx+eWirddAJZnAj1DFJL0mSg_gcIpPkMBkhoyCSJ8lTZIxk0TpKDjXHliJzZPO50dR5ASNSnzeLvIvod0HG_mdkmOC0z8VKnzcQ2M_Yz2vKldduXjp9bleLu0ZWn7vWc+l0JGcaai10yNrUnXLP_8Jf59ewX+c3Wgz+B34Df+vbVrc16zTMVgp9um9bxEfzPU5kPqUtVWxhs6OiWTVW+gIfywB9uXi7CGcGW_zk98k_kmvJ95IfJn_j3uQ+4c5zn3Kfcd+AyF3gLnJfcl9xH3OfR2rUee80a+6vo7EK5mmXUdyfQlrYLTwoZIU9wsPCZEtP6BWGhAlhL3p2N6sTjRdduwbHsG9kq32sgBepc+xurLPW4T9URpYGJ3ym4+8zA05u44QjST8ZIoVtu3qE7fWmdn5LPdqvgcZz8Ww8BWJ8X3w0PhQ_wnCDGd+LvlHs8dRy6bLLDuKMaZ20tZrqisPJ5ONiCq8yKhYM5cCgKOu66Lsc0aYOtZdo5QCwezI4wm9J_v0X23mlZXOfBjj8Jzv3WrY5D+CsA9D7aMs2gGfjve8ArD6mePZSeCfEYt8CONWDw8FXTxrPqx_r9Vt4biXeANh8vV7_+_16ffMD1N8AuKD_A_8leAvFY9bLAAAAOGVYSWZNTQAqAAAACAABh2kABAAAAAEAAAAaAAAAAAACoAIABAAAAAEAAAA4oAMABAAAAAEAAABGAAAAAGh9FMcAAAHtSURBVGgF7ZtNagJBFIR7fox6gSABN+4GcgHPlTO4DARvkMNkkX1u4EIXySKrqPOXbsGFEBm7fN1vIjUgMtqvql99Msw0bfK1Xrfmho_0hns7tMYG_zthEiTBnifAn2jPAXVOjwQ7I+r5ABLsOaDO6eWdI84MyPPcJEly5lvZj9u2NVVVQaJQg2mamqppnqzjB+TqX_RoPZ+bpvGuhBp05Mrd7m0ynb57OwIFm9XqezQcApXGwBeZNMvuIEeg6BovuEFgniolbFAldkFTEhQMU0WKBFViFzQlQcEwVaRggvZmO9qK+DVe0L2oQ_G52Yzm8_k4BhbndT+ZQFZQg+7x5WW5fK2225_BYAAZX1pUlqXzGi8Wi0tLTsZBDTqFqq4f3FNF6GdCp2+9TibtcwI36CgeXz6GvmOv9YAvMr4T1RrPBrWSl_IlQakktXRIUCt5KV8SlEpSS4cEtZKX8iVBqSS1dEhQK3kpXxKUSlJLhwS1kpfyJUGpJLV0SFAreSlfeF3UbczZ7_eHtVGpyfyl41a20U1ATg9q0C3GFkVhhnbvSmZ3PIU8ahvkbDaDg0zQ_01kWRZ82f4YnAu0Bpfv4fhRw+OkY73zKhor6VA+JBgq2Vi6JBgr6VA+JBgq2Vi6JBgr6VA+JBgq2Vi6v2_mbXblGFZ0AAAAAElFTkSuQmCC",
+          "BTTWidgetName" : "OpenCode",
+          "BTTTriggerConfig" : {
+            "BTTTouchBarButtonColor" : "0.000000, 0.000000, 0.000000, 255.000000",
+            "BTTTouchBarIconInvert" : false,
+            "BTTTouchBarItemPlacement" : 2,
+            "BTTTouchBarAppleScriptStringRunOnInit" : true,
+            "BTTTouchBarAlwaysShowButton" : false,
+            "BTTTouchBarButtonHoverColor" : "248.880000, 146.115000, 128.010000, 181.050000",
+            "BTTTouchBarButtonHeight" : 15,
+            "BTTTouchBarButtonWidth" : 100,
+            "BTTTouchBarScriptUpdateInterval" : 300,
+            "BTTTouchBarItemIconHeight" : 22,
+            "BTTTouchBarButtonTextAlignment" : 0,
+            "BTTShellScriptDontTrimWhitepsace" : false,
+            "BTTTouchBarAlternateBackgroundColor" : "75.323769, 75.323769, 75.323769, 255.000000",
+            "BTTTouchBarItemIconType" : 1,
+            "BTTTBWidgetWidth" : 400,
+            "BTTTouchBarBorderColor" : "255.000000, 255.000000, 255.000000, 255.000000",
+            "BTTTouchBarItemIconWidth" : 22,
+            "BTTTouchBarFreeSpaceBeforeButton" : 0,
+            "BTTTouchBarShellScriptString" : "exec \"$HOME/Documents/BTT/widgets/opencode-quota.sh\" \\\n\"{BTT_WIDGET_OPENCODE_UUID}\"",
+            "BTTTouchBarButtonFontSize" : 14,
+            "BTTTouchBarIconTextOffset" : 5,
+            "BTTTouchBarButtonName" : "OpenCode",
+            "BTTTouchBarOnlyShowIcon" : false,
+            "BTTTouchBarFreeSpaceAfterButton" : -10,
+            "BTTTouchBarItemPadding" : -5
+          }
+        },
+        {
+          "BTTLastUpdatedAt" : 1786484244.732327,
+          "BTTTriggerType" : 643,
+          "BTTTriggerTypeDescriptionReadOnly" : "Named Trigger: Toggle Music Group",
+          "BTTTriggerClass" : "BTTTriggerTypeOtherTriggers",
+          "BTTUUID" : "7697585E-9D65-4743-8C3D-50EEA12DEE36",
+          "BTTTriggerName" : "Toggle Music Group",
+          "BTTOrder" : 0,
+          "BTTActionsToExecute" : [
+            {
+              "BTTLastUpdatedAt" : 1786484244.7326601,
+              "BTTTriggerParentUUID" : "7697585E-9D65-4743-8C3D-50EEA12DEE36",
+              "BTTIsPureAction" : true,
+              "BTTUUID" : "BA7251D5-701D-47F0-AAF7-CD92CDEC13CE",
+              "BTTPredefinedActionType" : 195,
+              "BTTPredefinedActionName" : "Run Apple Script (async in background)",
+              "BTTAdditionalActionData" : {
+                "BTTScriptType" : 0,
+                "BTTAppleScriptRunInBackground" : true,
+                "BTTTouchBarAppleScriptString" : "tell application \"BetterTouchTool\"\n\tset activeGroup to get_active_touch_bar_group\n\tif activeGroup is \"Music\" then\n\t\ttrigger_action \"{\\\"BTTPredefinedActionType\\\":191}\"\n\telse\n\t\ttrigger_action \"{\\\"BTTPredefinedActionType\\\":205,\\\"BTTOpenGroupWithName\\\":\\\"Music\\\"}\"\n\tend if\nend tell",
+                "BTTTouchBarAppleScriptUsePath" : false
+              },
+              "BTTInlineAppleScript" : "tell application \"BetterTouchTool\"\n\tset activeGroup to get_active_touch_bar_group\n\tif activeGroup is \"Music\" then\n\t\ttrigger_action \"{\\\"BTTPredefinedActionType\\\":191}\"\n\telse\n\t\ttrigger_action \"{\\\"BTTPredefinedActionType\\\":205,\\\"BTTOpenGroupWithName\\\":\\\"Music\\\"}\"\n\tend if\nend tell",
+              "BTTOrder" : 7
+            }
+          ]
+        },
+        {
+          "BTTLastUpdatedAt" : 1786561738.1795549,
+          "BTTTriggerType" : 639,
+          "BTTTriggerTypeDescriptionReadOnly" : "Apple Script / JavaScript Widget",
+          "BTTTriggerTypeDescription" : "Star",
+          "BTTTriggerClass" : "BTTTriggerTypeTouchBar",
+          "BTTUUID" : "A05C5D37-7EAA-4F7B-AC00-23183CC8C6A1",
+          "BTTOrder" : 4,
           "BTTMergeIntoTouchBarGroups" : 1,
           "BTTActionsToExecute" : [
             {
-              "BTTLastUpdatedAt" : 1786484244.732692,
-              "BTTTriggerParentUUID" : "710F54C5-25B0-4A2C-B960-D9C0FE78B1B7",
+              "BTTLastUpdatedAt" : 1786484244.7323442,
+              "BTTTriggerParentUUID" : "A05C5D37-7EAA-4F7B-AC00-23183CC8C6A1",
               "BTTIsPureAction" : true,
-              "BTTUUID" : "3F8E2B4A-9C1D-4E5F-B6A7-8C9D0E1F2A3B",
-              "BTTPredefinedActionType" : 23,
-              "BTTPredefinedActionName" : "Play or Pause",
-              "BTTOrder" : 0
-            },
-            {
-              "BTTLastUpdatedAt" : 1786484244.7325711,
-              "BTTTriggerParentUUID" : "710F54C5-25B0-4A2C-B960-D9C0FE78B1B7",
-              "BTTIsPureAction" : true,
-              "BTTUUID" : "B7C5A2E1-6D4F-4D8A-9B31-2F6E7C8A9012",
+              "BTTUUID" : "2C41450D-D3B5-4387-8A1B-D79EA83EC051",
               "BTTPredefinedActionType" : 195,
               "BTTPredefinedActionName" : "Run Apple Script (async in background)",
               "BTTAdditionalActionData" : {
@@ -1106,15 +1085,14 @@
                 "BTTScriptLocation" : 0,
                 "BTTAppleScriptRunInBackground" : true,
                 "SelectedAction" : 195,
-                "BTTAppleScriptString" : "delay 0.25\n\nset lyricsUUID to \"{BTT_WIDGET_LYRICS_UUID}\"\nset shouldShowLyrics to false\n\nif application \"Music\" is running then\n    tell application \"Music\"\n        set shouldShowLyrics to (player state is playing)\n    end tell\nend if\n\ntell application \"BetterTouchTool\"\n    if shouldShowLyrics then\n        refresh_widget lyricsUUID\n    else\n        update_touch_bar_widget lyricsUUID text \"\"\n    end if\nend tell"
+                "BTTAppleScriptString" : "set widgetUUID to \"{BTT_WIDGET_STAR_UUID}\"\n\nset playerBundleIdentifier to do shell script \"$HOME/Documents/BTT/actions/now-playing-app.sh\"\n\nif playerBundleIdentifier is \"com.apple.Music\" and application \"Music\" is running then\n    tell application \"Music\"\n        if player state is not stopped then\n            set oldFavorite to favorited of current track\n            set newFavorite to not oldFavorite\n\n            if newFavorite then\n                set newSymbol to \"★\"\n            else\n                set newSymbol to \"☆\"\n            end if\n\n            -- Update Touch Bar immediately, before Apple Music finishes.\n            tell application \"BetterTouchTool\"\n                update_touch_bar_widget widgetUUID text newSymbol\n            end tell\n\n            -- Apple Music can take a moment to persist this.\n            set favorited of current track to newFavorite\n\n            -- Never let BTT display \"missing value\".\n            return newSymbol\n        end if\n    end tell\nend if\n\nreturn \"\""
               },
-              "BTTInlineAppleScript" : "delay 0.25\n\nset lyricsUUID to \"{BTT_WIDGET_LYRICS_UUID}\"\nset shouldShowLyrics to false\n\nif application \"Music\" is running then\n    tell application \"Music\"\n        set shouldShowLyrics to (player state is playing)\n    end tell\nend if\n\ntell application \"BetterTouchTool\"\n    if shouldShowLyrics then\n        refresh_widget lyricsUUID\n    else\n        update_touch_bar_widget lyricsUUID text \"\"\n    end if\nend tell",
-              "BTTOrder" : 0
+              "BTTInlineAppleScript" : "set widgetUUID to \"{BTT_WIDGET_STAR_UUID}\"\n\nset playerBundleIdentifier to do shell script \"$HOME/Documents/BTT/actions/now-playing-app.sh\"\n\nif playerBundleIdentifier is \"com.apple.Music\" and application \"Music\" is running then\n    tell application \"Music\"\n        if player state is not stopped then\n            set oldFavorite to favorited of current track\n            set newFavorite to not oldFavorite\n\n            if newFavorite then\n                set newSymbol to \"★\"\n            else\n                set newSymbol to \"☆\"\n            end if\n\n            -- Update Touch Bar immediately, before Apple Music finishes.\n            tell application \"BetterTouchTool\"\n                update_touch_bar_widget widgetUUID text newSymbol\n            end tell\n\n            -- Apple Music can take a moment to persist this.\n            set favorited of current track to newFavorite\n\n            -- Never let BTT display \"missing value\".\n            return newSymbol\n        end if\n    end tell\nend if\n\nreturn \"\"",
+              "BTTOrder" : 10
             }
           ],
-          "BTTWidgetName" : "Now Playing",
+          "BTTWidgetName" : "Star",
           "BTTTriggerConfig" : {
-            "BTTTouchBarOnlyShowIcon" : false,
             "BTTTouchBarItemPadding" : -5,
             "BTTTouchBarButtonColor" : "0.000000, 0.000000, 0.000000, 255.000000",
             "BTTTouchBarIconInvert" : false,
@@ -1122,25 +1100,118 @@
             "BTTTouchBarAppleScriptStringRunOnInit" : true,
             "BTTTouchBarAlwaysShowButton" : false,
             "BTTTouchBarButtonHoverColor" : "248.880000, 146.115000, 128.010000, 181.050000",
+            "BTTScriptType" : 0,
             "BTTTouchBarButtonHeight" : 15,
             "BTTTouchBarButtonWidth" : 100,
-            "BTTTouchBarScriptUpdateInterval" : 1,
-            "BTTTouchBarItemIconHeight" : 30,
+            "BTTTouchBarScriptUpdateInterval" : 10,
+            "BTTTouchBarItemIconHeight" : 22,
             "BTTTouchBarButtonTextAlignment" : 0,
-            "BTTShellScriptDontTrimWhitepsace" : false,
             "BTTTouchBarAlternateBackgroundColor" : "75.323769, 75.323769, 75.323769, 255.000000",
-            "BTTTouchBarItemIconType" : 1,
+            "BTTTouchBarAppleScriptUsePath" : 0,
             "BTTTBWidgetWidth" : 400,
             "BTTTouchBarBorderColor" : "255.000000, 255.000000, 255.000000, 255.000000",
-            "BTTTouchBarItemIconWidth" : 30,
-            "BTTTouchBarLongPressActionName" : "Toggle Music Group",
-            "BTTTouchBarButtonName" : "Now Playing",
-            "BTTTouchBarIconTextOffset" : 5,
-            "BTTTouchBarFontColor" : "255.000000, 255.000000, 255.000000, 255.000000",
+            "BTTTouchBarItemIconWidth" : 22,
             "BTTTouchBarFreeSpaceBeforeButton" : 0,
-            "BTTTouchBarShellScriptString" : "exec \"$HOME/Documents/BTT/widgets/now-playing.sh\" \\\n\"{BTT_WIDGET_NOW_PLAYING_UUID}\"",
-            "BTTTouchBarFreeSpaceAfterButton" : -10,
-            "BTTTouchBarButtonFontSize" : 13
+            "BTTTouchBarButtonFontSize" : 14,
+            "BTTTouchBarIconTextOffset" : 5,
+            "BTTTouchBarOnlyShowIcon" : false,
+            "BTTTouchBarAppleScriptString" : "set playerBundleIdentifier to do shell script \"$HOME/Documents/BTT/actions/now-playing-app.sh\"\n\nif playerBundleIdentifier is \"com.apple.Music\" and application \"Music\" is running then\n    tell application \"Music\"\n        if player state is not stopped then\n            if favorited of current track then\n                return \"★\"\n            else\n                return \"☆\"\n            end if\n        end if\n    end tell\nend if\n\nreturn \"\"",
+            "BTTTouchBarFreeSpaceAfterButton" : 0
+          }
+        },
+        {
+          "BTTLastUpdatedAt" : 1786558559.6816921,
+          "BTTTriggerType" : 676,
+          "BTTTriggerTypeDescriptionReadOnly" : "Single Finger Swipe Left",
+          "BTTTriggerClass" : "BTTTriggerTypeTouchBar",
+          "BTTUUID" : "7BEE936B-C276-454A-B7E9-FAF7DDB6711A",
+          "BTTRepeatRate" : 1,
+          "BTTOrder" : 2,
+          "BTTMergeIntoTouchBarGroups" : 0,
+          "BTTActionsToExecute" : [
+            {
+              "BTTLastUpdatedAt" : 1786484244.732517,
+              "BTTTriggerParentUUID" : "7BEE936B-C276-454A-B7E9-FAF7DDB6711A",
+              "BTTIsPureAction" : true,
+              "BTTUUID" : "89F818D1-6D3A-46F9-B876-AB05BB8B22CB",
+              "BTTPredefinedActionType" : 199,
+              "BTTPredefinedActionName" : "Volume Down (Small Step)",
+              "BTTOrder" : 14
+            }
+          ],
+          "BTTTriggerConfig" : {
+            "BTTTouchBarItemIconWidth" : 22,
+            "BTTTouchBarButtonColor" : "75.323769, 75.323769, 75.323769, 255.000000",
+            "BTTTouchBarButtonTextAlignment" : 0,
+            "BTTTouchBarItemPlacement" : 0,
+            "BTTTouchBarButtonFontSize" : 15,
+            "BTTTouchBarAlternateBackgroundColor" : "75.323769, 75.323769, 75.323769, 255.000000",
+            "BTTTouchBarBorderColor" : "255.000000, 255.000000, 255.000000, 255.000000",
+            "BTTTouchBarAlwaysShowButton" : false,
+            "BTTTBWidgetWidth" : 400,
+            "BTTTouchBarFreeSpaceBeforeButton" : 0,
+            "BTTTouchBarIconInvert" : false,
+            "BTTTouchBarButtonHoverColor" : "248.880000, 146.115000, 128.010000, 181.050000",
+            "BTTTouchBarIconTextOffset" : 5,
+            "BTTTouchBarButtonWidth" : 100,
+            "BTTTouchBarOnlyShowIcon" : false,
+            "BTTTouchBarFreeSpaceAfterButton" : 5,
+            "BTTTouchBarButtonHeight" : 15,
+            "BTTTouchBarItemIconHeight" : 22,
+            "BTTTouchBarItemPadding" : 0
+          }
+        },
+        {
+          "BTTLastUpdatedAt" : 1786558559.6818252,
+          "BTTTriggerType" : 644,
+          "BTTTriggerTypeDescriptionReadOnly" : "Two Finger Swipe Left",
+          "BTTTriggerClass" : "BTTTriggerTypeTouchBar",
+          "BTTUUID" : "398D8506-BF6E-408B-B4FE-0E6EA6CCCE14",
+          "BTTRepeatRate" : 5,
+          "BTTOrder" : 3,
+          "BTTMergeIntoTouchBarGroups" : 0,
+          "BTTActionsToExecute" : [
+            {
+              "BTTLastUpdatedAt" : 1786484244.7324581,
+              "BTTTriggerParentUUID" : "398D8506-BF6E-408B-B4FE-0E6EA6CCCE14",
+              "BTTIsPureAction" : true,
+              "BTTUUID" : "FB878344-162C-4C87-A77A-2815E5DC7379",
+              "BTTPredefinedActionType" : 26,
+              "BTTPredefinedActionName" : "Previous",
+              "BTTOrder" : 0
+            },
+            {
+              "BTTLastUpdatedAt" : 1786484244.7326269,
+              "BTTTriggerParentUUID" : "398D8506-BF6E-408B-B4FE-0E6EA6CCCE14",
+              "BTTIsPureAction" : true,
+              "BTTUUID" : "E1F484D3-F77E-4599-8F6B-CBA79E874619",
+              "BTTPredefinedActionType" : 206,
+              "BTTPredefinedActionName" : "Execute Shell Script  or  Task",
+              "BTTShellTaskActionScript" : "exec \"$HOME/Documents/BTT/actions/track-changed.sh\" \\\n    \"{BTT_WIDGET_LYRICS_UUID}\" \\\n    \"{BTT_WIDGET_STAR_UUID}\"",
+              "BTTShellTaskActionConfig" : "/bin/zsh:::-c:::-:::",
+              "BTTOrder" : 1
+            }
+          ],
+          "BTTTriggerConfig" : {
+            "BTTTouchBarItemIconWidth" : 22,
+            "BTTTouchBarButtonColor" : "75.323769, 75.323769, 75.323769, 255.000000",
+            "BTTTouchBarButtonTextAlignment" : 0,
+            "BTTTouchBarItemPlacement" : 0,
+            "BTTTouchBarButtonFontSize" : 15,
+            "BTTTouchBarAlternateBackgroundColor" : "75.323769, 75.323769, 75.323769, 255.000000",
+            "BTTTouchBarBorderColor" : "255.000000, 255.000000, 255.000000, 255.000000",
+            "BTTTouchBarAlwaysShowButton" : false,
+            "BTTTBWidgetWidth" : 400,
+            "BTTTouchBarFreeSpaceBeforeButton" : 0,
+            "BTTTouchBarIconInvert" : false,
+            "BTTTouchBarButtonHoverColor" : "248.880000, 146.115000, 128.010000, 181.050000",
+            "BTTTouchBarIconTextOffset" : 5,
+            "BTTTouchBarButtonWidth" : 100,
+            "BTTTouchBarOnlyShowIcon" : false,
+            "BTTTouchBarFreeSpaceAfterButton" : 5,
+            "BTTTouchBarButtonHeight" : 15,
+            "BTTTouchBarItemIconHeight" : 22,
+            "BTTTouchBarItemPadding" : 0
           }
         }
       ]
@@ -1149,19 +1220,6 @@
       "BTTAppBundleIdentifier" : "com.apple.finder",
       "BTTAppName" : "Finder",
       "BTTAppAutoInvertIcon" : 1,
-      "BTTTriggers" : [
-
-      ]
-    },
-    {
-      "BTTAppBundleIdentifier" : "com.microsoft.VSCode",
-      "BTTAppName" : "Code",
-      "BTTAppAutoInvertIcon" : 1,
-      "BTTAppProcessMatchMode" : 2,
-      "BTTAppProcessName" : "Code",
-      "BTTAppSpecificSettings" : {
-        "BTTDisableGlobalTriggers" : false
-      },
       "BTTTriggers" : [
 
       ]
