@@ -24,7 +24,7 @@
 #
 # Usage: now-playing.sh [widget-uuid]
 # BTT: JSON {"text": "<album> ▸ <title>\n<artist>", "font_color": ...,
-#            "icon_path": <album cover | play icon>}
+#            "icon_path": <album cover | player app icon | play icon>}
 # Terminal: plain "<album> ▸ <title>\n<artist>"
 # Nothing when no allowed player holds Now Playing.
 #
@@ -36,8 +36,10 @@ PATH="/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin"
 if [[ -n "${1:-}" ]]; then BTT_WIDGET_UUID="$1"; shift; else BTT_WIDGET_UUID="${BTT_WIDGET_UUID:-}"; fi
 
 # Real players only, space-separated bundle ids. Browsers and anything else
-# are excluded, so a YouTube tab never hijacks the row.
-ALLOWED_BUNDLE_IDS="${BTT_NOW_PLAYING_ALLOWED:-com.apple.Music com.tencent.qqmusic}"
+# are excluded, so a YouTube tab never hijacks the row. Matched
+# case-insensitively (see allowed_ids below), because these are spelled
+# inconsistently in the wild -- QQ Music registers com.tencent.QQMusicMac.
+ALLOWED_BUNDLE_IDS="${BTT_NOW_PLAYING_ALLOWED:-com.apple.Music com.tencent.QQMusicMac}"
 
 # The Lyrics widget beside this one, cleared before this widget redraws the
 # row for a different track -- see clear_lyrics_for_change below. Defaulted
@@ -49,10 +51,12 @@ LYRICS_UUID="${BTT_LYRICS_WIDGET_UUID:-E19BB023-5060-4A56-95C8-6E7402779870}"
 # The two rows, matching what the Lyrics widget measures its viewport
 # against (BTT_LYRICS_NOW_PLAYING_LINE1/LINE2 in widgets/lyrics/config.py):
 # the formats live in one place so display and measurement stay in step.
-# With the stock pair the rows are balanced by rendered length -- the
-# split with the smaller row-length delta of ({album} ▸ {title}, {artist})
-# vs ({title}, {artist} ▸ {album}) -- and widgets/lyrics/viewport.py
-# mirrors that choice so the measured width stays the drawn width.
+# With the stock pair the widget takes whichever of ({album} ▸ {title},
+# {artist}) and ({title}, {artist} ▸ {album}) keeps its widest row
+# narrower -- that row is what the widget's width comes to, so the narrower
+# one leaves more of the shared row for the lyric -- and
+# widgets/lyrics/display/viewport.py mirrors that choice so the measured
+# width stays the drawn width.
 # zsh brace expansion would mangle {album} inside a ${VAR:-default}, so the
 # defaults are applied in the Python below instead.
 LINE1_FMT="${BTT_LYRICS_NOW_PLAYING_LINE1:-}"
@@ -65,9 +69,23 @@ ASSETS_DIR="${BTT_REPO_DIR:-$HOME/Documents/BTT}/assets"
 SAMPLER_STATE="${BTT_LYRICS_CACHE_DIR:-${BTT_REPO_DIR:-$HOME/Documents/BTT}/cache/lyrics}/state.json"
 STATE_BIN="${BTT_NOW_PLAYING_STATE_BIN:-$HOME/Library/Application Support/BTT/nowplaying-state}"
 
+helper_state() {
+    # The compiled state helper, for one field nothing else has: isPlaying.
+    #
+    # kMRMediaRemoteNowPlayingInfoPlaybackRate is not a playback state. QQ
+    # Music keeps publishing rate 1 while paused and never republishes on a
+    # pause -- measured here at 9 s of rate 1 after BTT's own Play or Pause
+    # action -- so the rate alone left the album cover on screen where the
+    # play icon belongs. specs/LYRICS.md records the same finding for the
+    # lyrics sampler, which is why this helper exists.
+    #
+    # It asks MediaRemote for the flag Control Center's own Now Playing tile
+    # draws, and costs ~0.1 s as a compiled binary.
+    [[ -x "$STATE_BIN" ]] && "$STATE_BIN" 2>/dev/null
+}
+
 raw_state() {
-    # nowplaying-cli get-raw first: the compiled state helper (preferred by
-    # the lyrics sampler for its true isPlaying flag) omits
+    # nowplaying-cli get-raw first: the state helper above omits
     # kMRMediaRemoteNowPlayingInfoClientBundleIdentifier, and this widget's
     # allowlist gate cannot work without the holder's bundle id.
     # Subshell: zsh runs an EXIT trap set inside a function when the
@@ -94,10 +112,13 @@ raw_state() {
         fi
         # Last resort: the helper lacks the bundle id, so the gate fails
         # closed (nothing prints) -- degraded, but never a wrong player.
-        [[ -x "$STATE_BIN" ]] && "$STATE_BIN" 2>/dev/null
+        print -r -- "$HELPER"
     )
 }
 
+# Read before raw_state, which falls back to this answer rather than paying
+# for the helper a second time.
+HELPER="$(helper_state)" || HELPER=""
 # An empty answer is not the end of it: MediaRemote goes silent while an app
 # hands the session over, and the sampler fallback below may still have the
 # track. The Python treats an unusable payload as an empty dictionary.
@@ -105,11 +126,12 @@ RAW="$(raw_state)" || RAW=""
 
 python3 - "$RAW" "$ALLOWED_BUNDLE_IDS" "$LINE1_FMT" "$LINE2_FMT" \
     "$CACHE_DIR" "$BTT_WIDGET_UUID" "$ASSETS_DIR" "$LYRICS_UUID" \
-    "$SAMPLER_STATE" <<'PY'
+    "$SAMPLER_STATE" "$HELPER" <<'PY'
 import base64
 import hashlib
 import json
 import os
+import plistlib
 import re
 import struct
 import subprocess
@@ -117,6 +139,17 @@ import sys
 import time
 import zlib
 from pathlib import Path
+
+
+def allowed_ids(allowed):
+    """The allowlist as a case-folded set.
+
+    Bundle ids are compared case-insensitively because vendors spell their
+    own inconsistently -- QQ Music registers com.tencent.QQMusicMac, which a
+    literal comparison against a lower-case allowlist entry misses, and this
+    gate fails closed: the row goes blank for a player it should be drawing.
+    """
+    return {item.lower() for item in allowed.split()}
 
 
 def strip_parens(text):
@@ -203,6 +236,132 @@ def artwork_icon(info, cache_dir):
     return str(path)
 
 
+# The icon face to prefer out of an .icns: BTT scales it into a 30 px slot,
+# so the smallest face at least this wide is already sharper than the slot.
+PLAYER_ICON_MIN_PIXELS = 64
+# How long a failed player-icon lookup is remembered before it is retried.
+# Without it a player whose icon cannot be read (Spotlight off, so mdfind
+# cannot place the app) would pay a subprocess on every one second tick.
+# Minutes rather than hours because the same marker also absorbs a cold
+# Spotlight query that simply ran past the bound below -- measured at 0.3 s
+# warm, but slower first time -- and that one deserves a prompt retry.
+PLAYER_ICON_MISS_SECONDS = 300.0
+# Bound on the Spotlight query, matching the 1.5 s this widget already
+# allows nowplaying-cli: it runs on BTT's one second tick, in the shell
+# script runner every widget shares.
+PLAYER_ICON_LOOKUP_TIMEOUT = 1.5
+# Bundle ids are used in a Spotlight query and in a cache file name, so only
+# the characters a bundle id is actually made of are accepted.
+BUNDLE_ID_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
+
+
+def icns_png(data):
+    """One embedded PNG out of .icns bytes, or None.
+
+    Modern .icns files store each icon face as a whole PNG, so the face can
+    be lifted out with struct alone -- no sips subprocess, keeping this off
+    the widget path's cost budget. The smallest face at least
+    PLAYER_ICON_MIN_PIXELS wide is preferred (the largest, when every face
+    is smaller); the ancient uncompressed faces are skipped.
+    """
+    if data[:4] != b"icns":
+        return None
+    (declared,) = struct.unpack(">I", data[4:8])
+    end = min(len(data), declared)
+    best = None
+    offset = 8
+    while offset + 8 <= end:
+        tag, length = struct.unpack(">4sI", data[offset : offset + 8])
+        if length < 8:
+            break
+        body = data[offset + 8 : offset + length]
+        offset += length
+        del tag
+        # PNG signature, then the IHDR chunk whose width is bytes 16..20.
+        if body[:8] != b"\x89PNG\r\n\x1a\n" or body[12:16] != b"IHDR":
+            continue
+        (width,) = struct.unpack(">I", body[16:20])
+        # Smallest face >= the minimum wins; below the minimum, biggest wins.
+        rank = (width < PLAYER_ICON_MIN_PIXELS, -width if width < PLAYER_ICON_MIN_PIXELS else width)
+        if best is None or rank < best[0]:
+            best = (rank, body)
+    return best[1] if best else None
+
+
+def app_icns(bundle_id):
+    """The .icns file of an installed app, found by bundle id, or None."""
+    try:
+        found = subprocess.run(
+            ["/usr/bin/mdfind", f"kMDItemCFBundleIdentifier == '{bundle_id}'"],
+            capture_output=True,
+            text=True,
+            timeout=PLAYER_ICON_LOOKUP_TIMEOUT,
+        ).stdout
+    except (OSError, subprocess.SubprocessError):
+        return None
+    for line in found.splitlines():
+        app = Path(line.strip())
+        if not app.name.endswith(".app") or not app.is_dir():
+            continue
+        try:
+            plist = plistlib.loads((app / "Contents/Info.plist").read_bytes())
+            name = str(plist.get("CFBundleIconFile") or "AppIcon")
+        except (OSError, ValueError, plistlib.InvalidFileException):
+            name = "AppIcon"
+        # CFBundleIconFile is written both with and without the extension.
+        icns = app / "Contents/Resources" / (name if name.endswith(".icns") else f"{name}.icns")
+        if icns.is_file():
+            return icns
+    return None
+
+
+def player_icon(bundle_id, cache_dir):
+    """The player app's own icon, standing in for a missing album cover.
+
+    A track without artwork -- QQ Music serves some that way, and the
+    sampler fallback below never has the cover to begin with -- used to draw
+    a bare text row. The app icon says whose track it is instead, which is
+    what the row is missing without a cover.
+
+    Extracted once per player and cached: placing the app costs a Spotlight
+    query, and this runs on BTT's one second tick. A player that updates its
+    icon keeps the cached one until the cache file is removed, which is the
+    right trade for an icon drawn at 30 px.
+    """
+    if not bundle_id or not BUNDLE_ID_PATTERN.fullmatch(bundle_id):
+        return None
+    directory = Path(cache_dir)
+    path = directory / f"now-playing-player-{bundle_id}.png"
+    if path.is_file():
+        return str(path)
+
+    # A lookup that just failed is not retried until the marker ages out.
+    miss = directory / f"now-playing-player-{bundle_id}.miss"
+    try:
+        if time.time() - miss.stat().st_mtime < PLAYER_ICON_MISS_SECONDS:
+            return None
+    except OSError:
+        pass
+
+    icns = app_icns(bundle_id)
+    png = None
+    if icns is not None:
+        try:
+            png = icns_png(icns.read_bytes())
+        except (OSError, struct.error):
+            png = None
+    try:
+        directory.mkdir(parents=True, exist_ok=True)
+        if png is None:
+            miss.touch()
+            return None
+        path.write_bytes(png)
+        miss.unlink(missing_ok=True)
+    except OSError:
+        return None
+    return str(path)
+
+
 def play_icon(cache_dir, assets_dir):
     """The paused-state icon: the repo's SVG asset, or a generated PNG.
 
@@ -279,9 +438,52 @@ def sampled_track(state_path, allowed):
     # accepting them here would undo the allowlist.
     if track.get("source") != "apple_music":
         return None
-    if "com.apple.Music" not in allowed.split():
+    if "com.apple.music" not in allowed_ids(allowed):
         return None
     return track
+
+
+def helper_playing(payload, title):
+    """MediaRemote's own playing flag, from the state helper, or None.
+
+    The playback rate cannot answer this: QQ Music publishes rate 1 while
+    paused and does not republish when it pauses, so a tap on the widget
+    stopped the music while the row kept its album cover. isPlaying is the
+    flag Control Center's Now Playing tile draws, and it flips immediately.
+
+    None when the helper is missing, unreadable, or describing a different
+    track than the row -- the two readings are a moment apart, and a stale
+    flag from the track before is worse than the rate this falls back to.
+    """
+    try:
+        state = json.loads(payload)
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        return None
+    if not isinstance(state, dict) or "isPlaying" not in state:
+        return None
+    seen = str(state.get("kMRMediaRemoteNowPlayingInfoTitle") or "").strip()
+    if seen != title:
+        return None
+    return bool(state["isPlaying"])
+
+
+def held_cover(cache_dir, identity):
+    """The cover kept from an earlier tick of this same track, or None.
+
+    QQ Music leaves the artwork out of the occasional payload while playing
+    (measured: one tick in a few dozen). Without this the icon would drop to
+    the player logo for that single tick and come back, which reads as a
+    flicker; the cover on file still belongs to the track on screen, so the
+    row holds it instead.
+    """
+    if read_json(Path(cache_dir) / "now-playing.identity") != identity:
+        return None
+    try:
+        for path in sorted(Path(cache_dir).glob("now-playing-artwork-*")):
+            return str(path)
+    except OSError:
+        pass
+    return None
 
 
 def write_json(path, payload):
@@ -368,7 +570,8 @@ def clear_lyrics_for_change(identity, cache_dir, lyrics_uuid):
     assets_dir,
     lyrics_uuid,
     state_path,
-) = sys.argv[1:10]
+    helper_payload,
+) = sys.argv[1:11]
 line1_fmt = line1_fmt or "{album} ▸ {title}"
 line2_fmt = line2_fmt or "{artist}"
 try:
@@ -383,7 +586,7 @@ if not isinstance(info, dict):
 # and media_remote.py). The marker written later has to name it the same
 # way, or the Lyrics widget cannot match it against its own state.
 bundle_id = info.get("kMRMediaRemoteNowPlayingInfoClientBundleIdentifier", "")
-if bundle_id in allowed.split():
+if bundle_id.lower() in allowed_ids(allowed):
     identity = {
         field: str(info.get(key) or "").strip()
         for field, key in (
@@ -396,9 +599,13 @@ if bundle_id in allowed.split():
         rate = float(info.get("kMRMediaRemoteNowPlayingInfoPlaybackRate") or 0.0)
     except (TypeError, ValueError):
         rate = 0.0
-    playing = rate > 0
+    # The rate only stands in where the helper cannot answer -- see
+    # helper_playing for why it is not trusted on its own.
+    flag = helper_playing(helper_payload, identity["title"])
+    playing = rate > 0 if flag is None else flag
     # The album cover rides along in the same dictionary as the track.
-    cover = artwork_icon(info, cache_dir)
+    cover = artwork_icon(info, cache_dir) or held_cover(cache_dir, identity)
+    player = bundle_id
 else:
     # Somebody else holds the session -- a browser, most often. The sampler
     # still knows whether one of ours is playing behind it.
@@ -411,9 +618,10 @@ else:
     }
     playing = track.get("state") == "playing"
     # The artwork in the dictionary belongs to whoever holds the session, so
-    # it is not this track's cover. Nothing else carries one without an
-    # AppleScript call, so the row goes without an icon while it plays.
+    # it is not this track's cover, and nothing else carries one without an
+    # AppleScript call. The player's own icon stands in below.
     cover = None
+    player = "com.apple.Music"
 
 title = strip_parens(identity["title"])
 artist = identity["artist"]
@@ -425,26 +633,40 @@ if not title:
 if widget_uuid:
     clear_lyrics_for_change(identity, cache_dir, lyrics_uuid)
 
-# The album cover is the icon while playing; a small play icon stands in
-# while paused, matching the native widget's HideWhenPaused: 0 (still
-# showing the track, but signalling it is not moving).
-icon = cover if playing else play_icon(cache_dir, assets_dir)
+# The album cover is the icon while playing, falling back to the player's
+# own app icon when the track carries no artwork -- a bare text row leaves
+# the reader nothing to place it by. A small play icon stands in while
+# paused, matching the native widget's HideWhenPaused: 0 (still showing the
+# track, but signalling it is not moving).
+if playing:
+    icon = cover or player_icon(player, cache_dir)
+else:
+    icon = play_icon(cache_dir, assets_dir) or player_icon(player, cache_dir)
 
 fields = {"title": title, "artist": artist, "album": album}
-# Balance the rows when the stock pair is in use: of ({album} ▸ {title},
-# {artist}) and ({title}, {artist} ▸ {album}), keep the layout whose two
-# rows are closer in rendered length (ties keep the stock order). The
-# Lyrics viewport mirrors this (widgets/lyrics/viewport.py); custom
-# BTT_LYRICS_NOW_PLAYING_* formats are used verbatim.
+
+
+def row_extent(formats):
+    """How long the longer of two rows comes out, in characters.
+
+    That row is what the widget's width comes to. The font sizes BTT draws
+    the rows in live in the preset alone (bttpreset/Default.bttpreset), so
+    the choice between layouts is made on character count: rough, but this
+    runs on BTT's one second tick, where the Cocoa measurement the Lyrics
+    widget pays for (an osascript launch) does not belong.
+    """
+    return max(len(line_format.format(**fields)) for line_format in formats)
+
+
+# Choose the layout when the stock pair is in use: of ({album} ▸ {title},
+# {artist}) and ({title}, {artist} ▸ {album}), keep the one whose widest row
+# is narrower, so the widget takes less of the row and the lyric beside it
+# gets the rest (ties keep the stock order). The Lyrics viewport mirrors
+# this (widgets/lyrics/display/viewport.py); custom BTT_LYRICS_NOW_PLAYING_*
+# formats are used verbatim.
 if line1_fmt == "{album} ▸ {title}" and line2_fmt == "{artist}" and artist:
     balanced = ("{title}", "{artist} ▸ {album}")
-    delta_stock = abs(
-        len(line1_fmt.format(**fields)) - len(line2_fmt.format(**fields))
-    )
-    delta_balanced = abs(
-        len(balanced[0].format(**fields)) - len(balanced[1].format(**fields))
-    )
-    if delta_balanced < delta_stock:
+    if row_extent(balanced) < row_extent((line1_fmt, line2_fmt)):
         line1_fmt, line2_fmt = balanced
 rows = [line1_fmt.format(**fields)]
 if artist:

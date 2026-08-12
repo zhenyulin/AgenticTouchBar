@@ -47,13 +47,12 @@ configured natively in BTT.
 | Widget | Shows | Script | Refresh | Tap action |
 | --- | --- | --- | --- | --- |
 | Lyrics | Synchronised lyrics + now playing | `widgets/now-playing-lyrics.sh` | 1 s | Repaint after a short delay |
-| Now Playing | Title/album/artist + album-cover icon (small play icon while paused) — only while an allowed player holds Now Playing (browsers ignored) | `widgets/now-playing.sh` | 1 s | Play or Pause + weather/lyrics refresh |
+| Now Playing | Title/album/artist + album-cover icon (the player's app icon when the track carries no cover; small play icon while paused) — only while an allowed player holds Now Playing (browsers ignored) | `widgets/now-playing.sh` | 1 s | Play or Pause + weather/lyrics refresh |
 | Codex | Codex quota | `widgets/codex-quota.sh` | 120 s | `actions/tap-refresh.sh` |
 | Claude | Claude 5 h / 7 d quota | `widgets/claude-quota.sh` | 300 s | `actions/tap-refresh.sh` |
 | OpenCode | OpenCode Go weekly quota | `widgets/opencode-quota.sh` | 300 s | `actions/tap-refresh.sh` |
 | 🌐 | Selected Clash node's region flag | `widgets/clash-region.sh` | 300 s | `actions/tap-refresh.sh` (region + latency) |
 | Latency | Selected Clash node's latency | `widgets/clash-latency.sh` | 10 s | `actions/tap-refresh.sh` (region + latency) |
-| TIMER | BTT process uptime (diagnostics) | `widgets/timer-widget.sh` | 10 s | `actions/tap-refresh.sh` |
 | Star | Favourite (★/☆) — only while Apple Music holds Now Playing | AppleScript in the preset + `actions/now-playing-app.sh` | 5 s | Toggle favourite |
 | Weather | Temperature/humidity | `widgets/weather.sh --text` | 10 s | `actions/tap-refresh.sh` (text + icon) |
 | Weath Icon | Conditions icon | `widgets/weather.sh --icon` | 10 s | `actions/tap-refresh.sh` (text + icon) |
@@ -75,7 +74,13 @@ playing YouTube included. The `now-playing.sh` script widget replaces it:
 it prints the track only when the holder's bundle id is in
 `BTT_NOW_PLAYING_ALLOWED` (an allowlist, not a denylist, because browsers
 are many and players are few) and prints nothing otherwise, which makes
-BTT hide it. The preset ships it in place of the native widget (same UUID,
+BTT hide it. It reads the track from `nowplaying-cli get-raw` (the only
+source carrying the holder's bundle id) but takes play/pause from the
+`nowplaying-state` helper's `isPlaying`, because the published playback rate
+lies: QQ Music keeps reporting rate 1 while paused, which left the album
+cover on screen where the play icon belongs — the same finding
+[`specs/LYRICS.md`](specs/LYRICS.md) records for the lyrics sampler. The
+preset ships it in place of the native widget (same UUID,
 so `BTT_WIDGET_NOW_PLAYING_UUID` keeps working): 1 s refresh, tap toggles
 play/pause and refreshes the weather/lyrics pair, long-press toggles the
 `Music` Touch Bar group. The toggle is a named trigger (`Toggle Music
@@ -105,7 +110,6 @@ detached process and then refreshes the Lyrics (and Star) widgets.
 | `actions/weather-state.sh` | Records the playback state set by the Now Playing tap, so the weather widgets flip instantly |
 | `actions/set-widget-variables.sh` | Sets the BTT persistent variables mapping widget names to UUIDs |
 | `actions/tap-restart.sh` | Date/Time widget tap: marks the traces before BTT's own restart action |
-| `actions/freeze-catch.sh` | Manual freeze sampler for diagnostics |
 | `actions/btt-quit.sh` | Quit BTT for real — survives a wedged BTT and BTTRelaunch (below) |
 
 ## Configuration
@@ -122,7 +126,7 @@ BTT's shell actions can see them (BTT environment variables or `~/.zshenv`).
 | `CLASH_LATENCY_MIN_MS`, `CLASH_LATENCY_MAX_MS` | `150`, `500` | Latency colour bands |
 | `CLAUDE_QUOTA_MAX_AGE`, `CODEX_QUOTA_MAX_AGE`, `OPENCODE_QUOTA_MAX_AGE` | `300` | Quota cache freshness (seconds) |
 | `BTT_LYRICS_*` | — | Lyrics tunables — see [`specs/LYRICS.md`](specs/LYRICS.md) |
-| `BTT_NOW_PLAYING_ALLOWED` | `com.apple.Music com.tencent.qqmusic` | Now Playing widget: space-separated bundle ids allowed to hold the row |
+| `BTT_NOW_PLAYING_ALLOWED` | `com.apple.Music com.tencent.QQMusicMac` | Now Playing widget: space-separated bundle ids allowed to hold the row (matched case-insensitively) |
 | `BTT_WEATHER_UNIT`, `BTT_WEATHER_TTL` | `celsius`, `300` | Weather widgets: unit (celsius/fahrenheit) and get_weather cache TTL (seconds) |
 
 ## The Lyrics feature
@@ -149,9 +153,10 @@ The AppKit one was worked around by `actions/btt-freeze-guard.sh`, a
 LaunchAgent watchdog that restarted BTT whenever it stopped dispatching
 widget ticks. **Retired on 2026-08-12** — the BTT upgrade fixed the
 underlying bug, so the guard, its `hid-state` helper, and the
-`com.zhenyulin.btt-freeze-guard` LaunchAgent are all gone. Nothing in this
-repo runs in the background any more; `actions/freeze-catch.sh` remains as
-an on-demand sampler if freezes ever come back.
+`com.zhenyulin.btt-freeze-guard` LaunchAgent, and the two on-demand
+diagnostics (`actions/freeze-catch.sh`, `widgets/timer-widget.sh`) are all
+gone. Nothing in this repo runs in the background any more; all of it is
+recoverable from git history if freezes ever come back.
 
 Quitting BTT from its own menu does not stick when BTT is wedged: the quit
 Apple Event never gets processed, and BTTRelaunch (BTT's own relauncher)
@@ -161,14 +166,6 @@ to quit and escalates to TERM/KILL if it hangs. The next launch of BTT
 re-creates BTTRelaunch. The preset wires the Date Time widget to it: tap
 restarts BTT (BTT's own restart action), long-press quits for real (named
 action → `btt-quit.sh`).
-
-## Diagnostics
-
-- `widgets/timer-widget.sh` — network-free widget proving whether BTT itself
-  is dispatching ticks.
-- `actions/freeze-catch.sh` — run in a terminal and leave it open; captures
-  `sample` stack traces of BTT and its script runner the moment a freeze
-  starts (`logs/freeze-samples/<timestamp>/`).
 
 ## Docs
 

@@ -53,7 +53,12 @@ class DisplayAlbum(unittest.TestCase):
 
 
 class NowPlayingFormats(unittest.TestCase):
-    """The balanced-row rule, mirrored from widgets/now-playing.sh."""
+    """The row-choice rule, mirrored from widgets/now-playing.sh.
+
+    Of the two layouts the widget draws, it keeps whichever has the narrower
+    widest row -- that row is what the widget's width comes to, and what is
+    left of the pair's budget goes to the lyric.
+    """
 
     def setUp(self):
         patcher = patch.object(config, "NOW_PLAYING_LINE_FORMATS", STOCK_FORMATS)
@@ -61,16 +66,17 @@ class NowPlayingFormats(unittest.TestCase):
         self.addCleanup(patcher.stop)
 
     def test_a_long_title_and_short_album_swap_to_the_balanced_pair(self):
-        # Stock would give "X ▸ <long title>" over a two-character artist.
-        # Moving the album down beside the artist evens the two rows out.
+        # Stock would give "X ▸ <long title>" over a two-character artist,
+        # a wide first row; the title alone is narrower than that.
         rows = viewport.now_playing_lines(
             track(title="A Very Long Song Title Here", artist="Ye", album="X")
         )
         self.assertEqual(rows, ["A Very Long Song Title Here", "Ye ▸ X"])
 
     def test_a_dominant_album_stays_on_the_stock_layout(self):
-        # Swapping cannot help when the album is the long part: it is lopsided
-        # on either layout, so the stock order wins and the album leads.
+        # Swapping cannot help when the album is the long part: it lands on
+        # whichever row it is joined to and sets the width there, and beside
+        # the artist it is a character longer still.
         rows = viewport.now_playing_lines(
             track(
                 title="I",
@@ -80,7 +86,17 @@ class NowPlayingFormats(unittest.TestCase):
         )
         self.assertEqual(rows[0], "A Very Long Album Name Indeed That Runs On ▸ I")
 
-    def test_a_balanced_stock_pair_is_left_alone(self):
+    def test_a_dominant_artist_stays_on_the_stock_layout(self):
+        # The artist is on row 2 either way, so joining the album to it only
+        # lengthens the row that already sets the width. Stock keeps it alone.
+        rows = viewport.now_playing_lines(
+            track(title="I", artist="A Very Long Artist Name Collective", album="X")
+        )
+        self.assertEqual(rows, ["X ▸ I", "A Very Long Artist Name Collective"])
+
+    def test_a_stock_pair_with_no_longer_row_to_gain_is_left_alone(self):
+        # "Parachutes ▸ Yellow" is 19 characters against the balanced
+        # layout's 21 ("Coldplay ▸ Parachutes"), so the stock order stands.
         rows = viewport.now_playing_lines(
             track(title="Yellow", artist="Coldplay", album="Parachutes")
         )
@@ -110,7 +126,7 @@ class NowPlayingFormats(unittest.TestCase):
         rows = viewport.now_playing_lines(
             track(title="Yellow (Live)", album="Parachutes; Extras", artist="Coldplay")
         )
-        self.assertEqual(rows[0], "Parachutes ▸ Yellow")
+        self.assertEqual(rows, ["Parachutes ▸ Yellow", "Coldplay"])
 
 
 class LyricBudget(unittest.TestCase):

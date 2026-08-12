@@ -681,9 +681,10 @@ JXA
 # BTT renders these rows in a proportional font in which "1" is the narrowest
 # digit, so a first row that opens with "1" -- an exhausted "100%" -- renders
 # narrower than the same row with any other digit, and the second row floats
-# out of line with it. The fix is presentation-only: two leading spaces on
-# the second row. Applied inside btt_publish so every widget shares the rule,
-# and no widget bakes padding into the value it caches.
+# out of line with it. The fix is presentation-only: one leading space on the
+# second row, which is what the current widget font sizes need. Applied inside
+# btt_publish so every widget shares the rule, and no widget bakes padding
+# into the value it caches.
 #
 #   btt_pad_second_row <text>
 # ---------------------------------------------------------------------------
@@ -697,7 +698,7 @@ btt_pad_second_row() {
         return 0
     }
 
-    printf '%s\n  %s' "$first_row" "${text#*$'\n'}"
+    printf '%s\n %s' "$first_row" "${text#*$'\n'}"
 }
 
 
@@ -713,7 +714,7 @@ btt_pad_second_row() {
 #   when the refresh finishes.
 #
 # Whatever the mode, a two-row value whose first row opens with "1" gets its
-# second row indented two spaces -- the alignment rule every widget shares.
+# second row indented one space -- the alignment rule every widget shares.
 # ---------------------------------------------------------------------------
 
 btt_publish() {

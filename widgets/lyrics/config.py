@@ -77,14 +77,23 @@ VIEWPORT_WIDTH_OVERRIDE = (
 # bttpreset/Default.bttpreset). The script reads the same two format
 # variables, so display and measurement share one knob. Line 1 is album
 # first with the ▸ separator: for "What a Wonderful World" it reads
-# "What a Wonderful World ▸ What a Wonderful World" at 11 pt.
+# "What a Wonderful World ▸ What a Wonderful World" at 13 pt.
 NOW_PLAYING_LINE_FORMATS = (
     os.environ.get("BTT_LYRICS_NOW_PLAYING_LINE1", "{album} ▸ {title}"),
     os.environ.get("BTT_LYRICS_NOW_PLAYING_LINE2", "{artist}"),
 )
-# Mirrored from the shell widgets in bttpreset/Default.bttpreset.
+# Mirrored from the shell widgets in bttpreset/Default.bttpreset. The Now
+# Playing widget sits beside the Lyrics widget and now sets the same
+# BTTTouchBarButtonFontSize, so the two read as one row rather than as a
+# small caption next to a larger lyric.
 LYRICS_FONT_SIZE = float(os.environ.get("BTT_LYRICS_FONT_SIZE", "13"))
-NOW_PLAYING_FONT_SIZE = float(os.environ.get("BTT_LYRICS_NOW_PLAYING_FONT", "11"))
+NOW_PLAYING_FONT_SIZE = float(os.environ.get("BTT_LYRICS_NOW_PLAYING_FONT", "13"))
+# BTT fits a two-row widget into the same fixed height by drawing the second
+# row smaller than the first -- around 10-11 pt against a 13 pt first row
+# (the same observation CONTINUATION_INDENT below is calibrated against).
+# Both widgets on this part of the row set 13 pt, so they share this size
+# too, and the second row of either one is measured with it.
+SECOND_ROW_FONT_SIZE = float(os.environ.get("BTT_LYRICS_SECOND_ROW_FONT", "10.5"))
 # How much Now Playing text the widget can actually show before BTT
 # truncates it. Calibrated 2026-08-12 against the Saint-Saëns Organ
 # Symphony: both rows were visible through "Poco a" (row 1) and "No. 3"
@@ -92,7 +101,9 @@ NOW_PLAYING_FONT_SIZE = float(os.environ.get("BTT_LYRICS_NOW_PLAYING_FONT", "11"
 # nominal 365 pt text budget (BTTTBWidgetWidth 400 minus the 30 pt cover
 # icon and 5 pt gap), so the box is not the limiter it looked like. The
 # prediction caps at the observed visible extent; a longer title truncates
-# rather than costing the lyric any more of the row.
+# rather than costing the lyric any more of the row. The cap is a width on
+# the row, not a character count, so it survives the font size change above
+# -- the same title simply reaches it sooner at 13 pt.
 NOW_PLAYING_MAX_TEXT_PX = float(os.environ.get("BTT_LYRICS_NOW_PLAYING_MAX_PX", "527"))
 # The OpenCode quota widget (widgets/opencode-quota.sh), the row's last
 # item. While the Now Playing + Lyrics pair is short of space the lyrics

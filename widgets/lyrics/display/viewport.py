@@ -35,7 +35,10 @@ from ..runtime.locking import spawn_helper
 from ..runtime.output import log_error, trace
 
 MEASURE_SCRIPT = Path(__file__).resolve().with_name("text_width.js")
-CHARACTER_METRICS_VERSION = 3
+# Bumped whenever a stored measurement stops meaning what it did, so the
+# playing track is measured again instead of carrying the old numbers until
+# it changes. Version 4: the Now Playing rows moved to 13 pt / 10.5 pt.
+CHARACTER_METRICS_VERSION = 4
 MEASURED_CHARACTERS = " " + string.ascii_letters + string.digits + string.punctuation
 
 
@@ -85,28 +88,37 @@ def now_playing_lines(track: dict[str, Any]) -> list[str]:
     ]
 
 
+def _row_extent(formats: tuple[str, str], fields: _TrackFields) -> int:
+    """How long a layout's longest row is, in characters.
+
+    That row is what sets the widget's width. widgets/now-playing.sh picks
+    its layout on the same count -- it runs on BTT's tick and cannot afford
+    the Cocoa measurement below -- so this counts rather than measures, or
+    the two would choose different rows and the measured width would stop
+    being the drawn one.
+    """
+    return max(len(line_format.format_map(fields)) for line_format in formats)
+
+
 def _now_playing_formats(fields: _TrackFields) -> tuple[str, str]:
     """The row formats the widget draws, balanced when they are the stock pair.
 
     widgets/now-playing.sh swaps between ({album} ▸ {title}, {artist}) and
-    ({title}, {artist} ▸ {album}) on whichever has the smaller rendered
-    length delta; this mirrors that decision so the measured width stays
-    the width the widget actually draws. Custom formats always win.
+    ({title}, {artist} ▸ {album}) on whichever keeps its widest row
+    narrower -- that row is what the widget's width comes to, so the
+    narrower one leaves more of the pair's budget for the lyric. This
+    mirrors that decision so the measured width stays the width the widget
+    actually draws. Custom formats always win.
     """
     line1_fmt, line2_fmt = config.NOW_PLAYING_LINE_FORMATS
+    stock = (line1_fmt, line2_fmt)
     if (
         line1_fmt == "{album} ▸ {title}"
         and line2_fmt == "{artist}"
         and fields.get("artist")
     ):
         balanced = ("{title}", "{artist} ▸ {album}")
-        delta_stock = abs(
-            len(line1_fmt.format_map(fields)) - len(line2_fmt.format_map(fields))
-        )
-        delta_balanced = abs(
-            len(balanced[0].format_map(fields)) - len(balanced[1].format_map(fields))
-        )
-        if delta_balanced < delta_stock:
+        if _row_extent(balanced, fields) < _row_extent(stock, fields):
             line1_fmt, line2_fmt = balanced
     return line1_fmt, line2_fmt
 
@@ -129,11 +141,37 @@ def measure_px(strings: list[str], font_size: float) -> list[float]:
     return widths
 
 
+def row_font_sizes(count: int) -> list[float]:
+    """The font size BTT draws each of a widget's rows at.
+
+    The first row gets the size the preset sets; every row below it is drawn
+    smaller, so that all of them fit the widget's fixed height (see
+    config.SECOND_ROW_FONT_SIZE).
+    """
+    return [
+        config.NOW_PLAYING_FONT_SIZE if index == 0 else config.SECOND_ROW_FONT_SIZE
+        for index in range(count)
+    ]
+
+
+def measure_rows(lines: list[str]) -> list[float]:
+    """Rendered widths of the Now Playing rows, each in its own row's font.
+
+    One osascript launch per row rather than one for all of them, because
+    the rows are drawn at different sizes. Only the detached measurement
+    helper reaches this, so the extra ~200 ms costs the widget path nothing.
+    """
+    return [
+        measure_px([line], font_size)[0]
+        for line, font_size in zip(lines, row_font_sizes(len(lines)))
+    ]
+
+
 def measure_track(track: dict[str, Any]) -> tuple[list[float], dict[str, float]]:
     """Measure Now Playing rows and lyric-font glyph advances."""
     lines = now_playing_lines(track)
     characters = list(dict.fromkeys(MEASURED_CHARACTERS + "".join(lines)))
-    row_widths = measure_px(lines, config.NOW_PLAYING_FONT_SIZE)
+    row_widths = measure_rows(lines)
     character_widths = measure_px(characters, config.LYRICS_FONT_SIZE)
     return row_widths, dict(zip(characters, character_widths))
 
@@ -143,9 +181,11 @@ def now_playing_width_px(track: dict[str, Any]) -> float:
 
     The wider of its two rows is what sets the widget's width, and BTT stops
     widening it at BTTTBWidgetWidth -- past that the title truncates instead
-    of taking any more of the row, so neither does the number here.
+    of taking any more of the row, so neither does the number here. The two
+    rows are measured in their own fonts (measure_rows), the second being
+    the smaller of the pair.
     """
-    widths = measure_px(now_playing_lines(track), config.NOW_PLAYING_FONT_SIZE)
+    widths = measure_rows(now_playing_lines(track))
     return min(max(widths), config.NOW_PLAYING_MAX_TEXT_PX)
 
 

@@ -59,14 +59,15 @@ already worked this way; `track-changed.sh` uses the same primitive.
 
 ### Cause B: BetterTouchTool's own main thread
 
-The fix above does not explain every freeze. `widgets/timer-widget.sh` timer
-widget has no network or Apple Music dependency: with every other widget
-disabled, it still froze — twice, for 312s and 174s — proving a second
-failure mode exists that has nothing to do with any script in this repo.
+The fix above did not explain every freeze. The `widgets/timer-widget.sh`
+timer widget had no network or Apple Music dependency: with every other
+widget disabled, it still froze — twice, for 312s and 174s — proving a
+second failure mode existed that had nothing to do with any script in this
+repo.
 
-`actions/freeze-catch.sh` watches the shared trace and runs `sample` against
+`actions/freeze-catch.sh` watched the shared trace and ran `sample` against
 both BetterTouchTool and its `BetterTouchToolShellScriptRunner` XPC helper
-the moment it goes silent, catching one of these live
+the moment it went silent, catching one of these live
 (`~/Library/Caches/btt-widgets/freeze-samples/20260808-180758/`). The
 runner's only thread was idle in `mach_msg2_trap`, waiting for a request that
 never arrived — it wasn't stuck on anything. BTT's own main thread was:
@@ -82,7 +83,7 @@ bundled watchdog) gives up and restarts it.
 BetterTouchTool's own AppKit code. Fixed upstream: the BTT version running
 since 2026-08-12 no longer shows it, which is why the guard below is
 retired. If widgets start freezing together again, that is the signal to
-bring it back rather than to look for a new cause in this repo.
+bring the guard back rather than to look for a new cause in this repo.
 
 ## Retired stopgap: the freeze guard
 
@@ -144,28 +145,14 @@ Its logs are left in place as the historical record: `logs/freeze-guard.log`
 analyses them. Nothing writes to any of these any more — the manual restart
 and quit actions now log to `logs/btt-control.log`.
 
-## Diagnostics
+## Diagnostics (retired 2026-08-12)
 
-Two tools isolate and capture the AppKit freeze, kept for any future
-recurrence or regression:
-
-- **`widgets/timer-widget.sh`** — a Touch Bar timer widget with no network or
-  Apple Music dependency. It displays the elapsed time since the current BTT
-  process started, resetting to zero after a BTT restart. A tap still greys it
-  out for a few seconds (via the same refresh-lock coloring every widget uses,
-  see `widgets/lib/btt-widget.sh`) without resetting the timer. If the timer
-  stops while a next-song action still repaints the now-playing widget, the
-  action's detached path is alive but ordinary BTT widget dispatch or input
-  handling is not. Currently disabled in BTT (`BTTEnabled2: 0` in the preset)
-  — re-enable it to test again after a BTT update, or if tap-refresh misbehaves
-  in a new way.
-- **`actions/freeze-catch.sh`** — run manually in a terminal
-  (`./actions/freeze-catch.sh`) and left open. Actively probes timer-widget
-  every five seconds; the moment it fails to produce a trace row within its
-  timeout, it runs `sample` against both BetterTouchTool and
-  `BetterTouchToolShellScriptRunner` in parallel and saves the output to
-  `logs/freeze-samples/<timestamp>/` — a real stack trace of the freeze while
-  it's still happening. This is what caught the sample referenced above.
+The two diagnostics kept for a future recurrence were removed with the
+guard: `widgets/timer-widget.sh` (the network-free ticker that proved BTT
+was dispatching ticks) and `actions/freeze-catch.sh` (the live `sample`
+sampler that caught the evidence above). Both are recoverable from git
+history; the sample they captured remains at
+`~/Library/Caches/btt-widgets/freeze-samples/20260808-180758/`.
 
 ## Touch Bar stacking
 
