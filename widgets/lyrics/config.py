@@ -337,20 +337,24 @@ RETRY_NOT_FOUND_SECONDS = 6 * 60 * 60
 CACHE_KEY_VERSION = 6
 
 # Community/catalog aliases for artist and title metadata, as a JSON file of
-# alias groups next to this script — there are no built-in groups, so the file
-# is the single source of truth. Each group is a list of equivalent names.
+# alias groups shipped inside this package — there are no built-in groups, so
+# the file is the single source of truth. Each group is a list of equivalent
+# names.
 ALIASES_PATH = Path(
     os.environ.get(
         "BTT_LYRICS_ALIASES",
-        str(Path(__file__).resolve().parent.with_name("lyrics_aliases.json")),
+        str(Path(__file__).resolve().parent / "lyrics_aliases.json"),
     )
 )
 
+# Hand-maintained .lrc files, which providers.local prefers over every remote
+# lookup. A repo directory, NOT one inside the package: this holds the user's
+# own files, and pointing it at the package would both mix data into the source
+# tree and (as it did until 2026-08-12, via a copy of the ALIASES_PATH idiom
+# above) resolve back to the package directory itself, where no .lrc can ever
+# be found and the provider silently never matches.
 LOCAL_LYRICS_DIR = Path(
-    os.environ.get(
-        "BTT_LYRICS_LOCAL_DIR",
-        str(Path(__file__).resolve().parent.with_name("lyrics")),
-    )
+    os.environ.get("BTT_LYRICS_LOCAL_DIR", str(REPO_DIR / "lyrics"))
 )
 
 # Apple Music caches the time-synced TTML it fetches for the catalog track it is
