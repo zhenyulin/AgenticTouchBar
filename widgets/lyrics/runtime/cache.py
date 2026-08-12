@@ -62,7 +62,18 @@ def read_compatible_cache(key: str, track: dict[str, Any]) -> dict[str, Any] | N
             continue
         try:
             candidate = json.loads(path.read_text(encoding="utf-8"))
-            record = candidate.get("record") or {}
+            # Not every *.json in here is one of our records -- the sampler's
+            # state.json and viewport.json share the directory, and a
+            # half-written or hand-edited file can be any shape at all. Anything
+            # that is not a record-shaped dict is simply not a salvage
+            # candidate; without this guard a stray list or null reaches .get()
+            # and the AttributeError escapes the scan, taking the render tick
+            # with it.
+            if not isinstance(candidate, dict):
+                continue
+            record = candidate.get("record")
+            if not isinstance(record, dict):
+                record = {}
             record_duration = float(record.get("duration", 0.0) or 0.0)
         except (OSError, TypeError, ValueError):
             continue
