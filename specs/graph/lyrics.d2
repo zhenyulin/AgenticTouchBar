@@ -1,32 +1,6 @@
 # cspell:ignore LRCLIB
 
-classes: {
-  entry: {
-    style.fill: "#E8F1FB"
-    style.stroke: "#32689A"
-    style.border-radius: 6
-  }
-  process: {
-    style.fill: "#EEF6EE"
-    style.stroke: "#4D7C4D"
-    style.border-radius: 6
-  }
-  state: {
-    style.fill: "#FFF6E5"
-    style.stroke: "#B47A1F"
-    style.border-radius: 6
-  }
-  external: {
-    style.fill: "#F3EDF8"
-    style.stroke: "#76539A"
-    style.border-radius: 6
-  }
-  diagnostic: {
-    style.fill: "#F7EEEE"
-    style.stroke: "#A34E4E"
-    style.border-radius: 6
-  }
-}
+...@lib/classes.d2
 
 btt: BTT integration {
   btt_tick: "Periodic widget tick" { class: entry }
@@ -43,6 +17,7 @@ runtime: Lyrics runtime {
   lock: "locking.acquire_widget_lock" { class: process }
   tick: "render.render_tick" { class: process }
   track: "apple_music.current_track" { class: process }
+  position: "Project position by sample age" { class: process }
   state_gate: "Playback-state gate" { class: process }
   emit: "output.emit / last frame" { class: process }
 }
@@ -50,13 +25,11 @@ runtime: Lyrics runtime {
 storage: Persisted state {
   sample: "lyrics/state.json" { class: state }
   cache: "Per-track lyric JSON" { class: state }
-  viewport: "lyrics/viewport.json" { class: state }
   locks: "widget / sampler / track locks" { class: state }
 }
 
 resolution: Lyric resolution {
   key: "metadata.track_cache_key" { class: process }
-  viewport_measure: "viewport.ensure_viewport" { class: process }
   cache_read: "cache.read_compatible_cache" { class: process }
   revive: "Revive Apple-cache not_found" { class: process }
   fetch_start: "fetch.start_background_fetch" { class: process }
@@ -78,8 +51,8 @@ presentation: Lyric presentation {
 
 fallback: Playback and helpers {
   sample_helper: "Detached --sample" { class: external }
+  nowplaying_cli: "nowplaying-cli fallback" { class: external }
   media_remote: "MediaRemote fallback" { class: external }
-  text_width: "Detached JXA text measurement" { class: external }
   fetch_helper: "Detached --fetch" { class: external }
 }
 
@@ -102,22 +75,26 @@ runtime.track -> storage.sample: read current snapshot
 runtime.track -> fallback.sample_helper: stale sample {
   style.stroke-dash: 4
 }
+fallback.sample_helper -> fallback.nowplaying_cli: permission denied {
+  style.stroke-dash: 4
+}
 fallback.sample_helper -> storage.sample: atomic write
 runtime.track -> fallback.media_remote: Music stopped/unavailable {
   style.stroke-dash: 4
 }
+runtime.track -> runtime.position
+runtime.position -> presentation.active: active line at projected position
 runtime.track -> runtime.state_gate
 runtime.state_gate -> runtime.emit: denied / paused / idle / placeholder
 runtime.state_gate -> resolution.key: playing real track
-resolution.key -> resolution.viewport_measure
-resolution.viewport_measure -> storage.viewport: measure and persist {
-  style.stroke-dash: 4
-}
 resolution.key -> resolution.cache_read
 resolution.cache_read -> storage.cache: compatible record
 resolution.cache_read -> resolution.revive: cached not_found
 resolution.revive -> resolution.cache_write
 resolution.cache_read -> resolution.fetch_start: cache miss
+resolution.cache_read -> resolution.fetch_start: cache_error retry elapsed {
+  style.stroke-dash: 4
+}
 resolution.fetch_start -> fallback.fetch_helper: detached worker {
   style.stroke-dash: 4
 }

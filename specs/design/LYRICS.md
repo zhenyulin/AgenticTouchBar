@@ -1,13 +1,18 @@
 # Lyrics Feature Specification
 
+Indexed from [`specs/FEATURES.md`](../FEATURES.md); the shared widget
+lifecycle it does *not* use is
+[`specs/design/WIDGET-RUNTIME.md`](WIDGET-RUNTIME.md), and the row it shares
+is [`specs/design/NOW-PLAYING.md`](NOW-PLAYING.md).
+
 ## Reconstruction Target
 
-This document preserves the behavior needed to rebuild the Lyrics Touch Bar
+This document preserves the behaviour needed to rebuild the Lyrics Touch Bar
 feature: how BetterTouchTool invokes it, how playback state becomes a lyric
 frame, how lyric sources are selected, and how slow or unavailable dependencies
 are handled.
 
-It is a behavior contract rather than a file inventory. It records stable
+It is a behaviour contract rather than a file inventory. It records stable
 module and script owners where they help reconstruction, but leaves provider
 protocol details, BetterTouchTool's private implementation, and presentation
 styling choices to the implementation unless they affect an observable
@@ -32,64 +37,119 @@ BetterTouchTool Touch Bar
 | `python3 -m lyrics --sample` | Detached sampler | Queries the available player and atomically persists the newest track sample. |
 | `python3 -m lyrics --track-changed <uuid>` | `actions/track-changed.sh` after next/previous media input | Follows the asynchronous track transition, pre-warms lyrics, and requests a final repaint. |
 | `python3 -m lyrics --fetch <key>` | Detached cache worker | Fetches and persists one track's lyric record. |
-| `python3 -m lyrics --measure` | Detached viewport worker | Measures the current Now Playing layout and persists viewport metrics. |
-| `python3 -m lyrics --report`, `--watch`, `--diagnose` | Operator diagnostics | Reads render and trace state to inspect widget health and freeze shape. |
+| `python3 -m lyrics --report`, `--watch`, `--diagnose` | Operator diagnostics | Reads render and trace state to inspect widget health. |
 | `python3 -m lyrics --clear-current` | Operator or recovery action | Clears current lyric output/state according to the CLI implementation. |
 | BetterTouchTool `refresh_widget` | Tap, play/pause, or track-change action | Causes BTT to invoke the widget again; the refresh request is asynchronous from shell actions. |
 
 The production widget is configured in
-[`bttpreset/Default.bttpreset`](../bttpreset/Default.bttpreset#L235). The shell
-entry point is [`widgets/now-playing-lyrics.sh`](../widgets/now-playing-lyrics.sh#L1),
+[`bttpreset/Default.bttpreset`](../../bttpreset/Default.bttpreset). The shell
+entry point is [`widgets/now-playing-lyrics.sh`](../../widgets/now-playing-lyrics.sh),
 and the track-change bridge is
-[`actions/track-changed.sh`](../actions/track-changed.sh#L1).
+[`actions/track-changed.sh`](../../actions/track-changed.sh).
 
 ## Feature Tree
 
-```text
-Lyrics Touch Bar feature
-├── Keep playback context current
-│   ├── Read the newest persisted Apple Music sample
-│   ├── Advance playback position by sample age
-│   ├── Start a detached sampler when state is old
-│   ├── Fall back to nowplaying-cli after Apple Music permission failure
-│   └── Fall back to MediaRemote when Music is stopped or unavailable
-├── Render the correct playback state
-│   ├── Permission warning
-│   ├── Paused or idle hidden widget
-│   ├── Settling-track title placeholder
-│   ├── Synchronized lyric line
-│   ├── Instrumental, not-found, or cache-error status
-│   └── Previous-frame preservation while work is pending
-├── Find lyrics with bounded work
-│   ├── Reuse a compatible per-track cache record
-│   ├── Revive not-found records from Apple Music's local cache
-│   ├── Prefer local LRC files
-│   ├── Search Apple Music's cached TTML
-│   ├── Apply the Mandopop catalog title when available
-│   ├── Race QQ Music, NetEase, LrcAPI, and LRCLIB with bounded waiting
-│   └── Accept only a sufficiently matched synchronized/instrumental result
-├── Fit lyrics beside Now Playing
-│   ├── Measure BTT-like text width in a detached JXA helper
-│   ├── Persist track-specific viewport metrics
-│   ├── Wrap at punctuation and spaces into at most two rows
-│   ├── Preserve continuation indentation
-│   └── Marquee rows that still overflow
-├── Survive repeated one-second ticks
-│   ├── Serialize widget ticks with an expiring lock
-│   ├── Serialize one track fetch with a per-track lock
-│   ├── Use atomic JSON/text replacement
-│   ├── Retry not-found and cache-error records after bounded delays
-│   └── Preserve the last visible frame on contention or pending work
-├── Respond to user actions
-│   ├── Repaint after play/pause state changes
-│   ├── Follow next/previous until the title changes or the deadline expires
-│   ├── Pre-warm the new track's lyrics cache
-│   └── Repaint Lyrics and the Star widget after track change
-└── Explain failures
-    ├── Emit a user-visible permission or cache status
-    ├── Record render receipts and trace outcomes
-    ├── Keep provider and sampler errors out of the widget process
-    └── Supply evidence for distinguishing widget failure from BTT freeze
+### [Keep playback context current](#playback-sampling)
+
+```mermaid
+flowchart TD
+    A[Read newest persisted sample] --> B{"Stale?"}
+    B -->|no| C[Project position by sample age]
+    B -->|yes| D[Start detached sampler]
+    D --> C
+    C --> E{Player state}
+    E -->|denied| F[Try nowplaying-cli]
+    E -->|stopped or not running| G[Try MediaRemote]
+    E -->|playing| H[Keep projected position]
+```
+
+### [Render the correct playback state](#main-render-flow)
+
+```mermaid
+flowchart TD
+    A[Acquire widget lock] --> B{Lock available?}
+    B -->|no| C[Emit last output]
+    B -->|yes| D[Read persisted sample]
+    D --> E{Track state}
+    E -->|denied| F["Emit ⚠ Allow BTT → Music"]
+    E -->|paused| G[Emit empty, widget hidden]
+    E -->|idle| H[Emit empty, stopped or no title]
+    E -->|placeholder| I["Emit ♪ #lt;title#gt;"]
+    E -->|playing| J[Read cache for track key]
+    J --> K{"Record usable?"}
+    K -->|yes| L[Emit active LRC line, wrap or marquee]
+    K -->|no| M[Start detached fetch, emit last output]
+```
+
+### [Find lyrics with bounded work](#lyric-source-dispatch)
+
+```mermaid
+flowchart TD
+    A[Read cache record] --> B{"Usable?"}
+    B -->|yes| C[Render cached lyrics]
+    B -->|"not_found, Apple TTML match"| D[Promote record to ok]
+    B -->|miss| E{"Local .lrc file?"}
+    E -->|yes| F[Use local record, no remote access]
+    E -->|no| G{"Apple Cache.db TTML?"}
+    G -->|yes| H[Convert TTML to LRC]
+    G -->|no| I[Add Mandopop catalog title]
+    I --> J[Race QQ Music, NetEase, LrcAPI, LRCLIB]
+    J --> K{"Score at least 0.60?"}
+    K -->|yes| L[Use accepted candidate]
+    K -->|no| M[Persist not_found or cache_error, retry later]
+```
+
+### [Fit lyrics beside Now Playing](#lrc-and-fixed-width-rendering)
+
+```mermaid
+flowchart TD
+    A[Select active LRC line] --> B{"No active line?"}
+    B -->|yes| C[Use preceding timed line]
+    B -->|no| D[Wrap at punctuation, then spaces]
+    C --> D
+    D --> E{"Row fits width?"}
+    E -->|yes| F[Emit line, and next line if the pair fits]
+    E -->|no| G[Indent continuation row]
+    G --> H[Marquee after the configured delay]
+```
+
+### [Survive repeated one-second ticks](#main-render-flow)
+
+```mermaid
+flowchart TD
+    A[Widget tick] --> B[Expiring widget lock serializes ticks]
+    B --> C[Per-track lock serializes one fetch]
+    C --> D[Atomic JSON or text write]
+    D --> E{"Retry due?"}
+    E -->|not_found| F[Retry after 6 hours]
+    E -->|cache_error| G[Retry after 90 seconds]
+    D --> H{"Pending work or contention?"}
+    H -->|yes| I[Emit last visible frame]
+```
+
+### [Respond to user actions](#track-change-flow)
+
+```mermaid
+flowchart TD
+    A[Play or pause] --> B[Request widget repaint]
+    C[Next or previous] --> D[Detached title follower]
+    D --> E{"Title settled?"}
+    E -->|not yet| F[Persist sample, keep following until deadline]
+    E -->|settled| G[Pre-warm new track cache]
+    G --> H[Repaint Lyrics and Star]
+    E -->|deadline| I[Repaint anyway, trace timeout]
+```
+
+### Explain failures
+
+```mermaid
+flowchart TD
+    A[Every tick] --> B[Write render receipt and trace]
+    B --> C[Emit user-visible permission or cache status]
+    A --> D[Detach providers and samplers]
+    D --> E[Keep their errors out of the widget tick]
+    B --> F[trace.tsv and render.json]
+    F --> G[Separate widget failure from BTT scheduling failure]
 ```
 
 ## Decision Trees
@@ -97,30 +157,29 @@ Lyrics Touch Bar feature
 ### Main Render Flow
 
 The normal widget tick is a synchronous, bounded decision over persisted
-state. Samplers, viewport measurement, and lyric fetches are detached so the
-tick does not wait for AppleScript, network, or text measurement work.
+state. Samplers and lyric fetches are detached so the tick does not wait for
+AppleScript or network work.
 
 ```mermaid
 flowchart TD
     A[BTT invokes python3 -m lyrics] --> B[Acquire widget lock]
-    B -->|lock unavailable| C[Emit last output; trace locked]
+    B -->|lock unavailable| C["Emit last output; trace locked"]
     B -->|lock acquired| D[Read persisted track sample]
-    D -->|no usable sample| E[Start sampler if stale; emit last output; trace no_sample]
+    D -->|no usable sample| E["Start sampler if stale; emit last output; trace no_sample"]
     D -->|sample available| F{Track state}
-    F -->|denied| G[Emit "⚠ Allow BTT → Music"]
-    F -->|paused| H[Emit empty text; trace paused]
-    F -->|stopped, not_running, or no title| I[Emit empty text; trace idle]
-    F -->|placeholder title| J[Emit "♪ <title>"; trace placeholder]
+    F -->|denied| G["Emit #quot;⚠ Allow BTT → Music#quot;"]
+    F -->|paused| H["Emit empty text; trace paused"]
+    F -->|stopped, not_running, or no title| I["Emit empty text; trace idle"]
+    F -->|placeholder title| J["Emit #quot;♪ #lt;title#gt;#quot;; trace placeholder"]
     F -->|playing real track| K[Build versioned track key]
-    K --> L[Ensure viewport measurement in background]
-    L --> M[Read compatible cache]
+    K --> M[Read compatible cache]
     M -->|not_found plus Apple cache match| N[Promote Apple cache record to ok]
-    M -->|cache miss| O[Start background fetch; emit last output; trace pending]
-    M -->|retry_after elapsed| P[Delete record; refetch; render waiting status]
+    M -->|cache miss| O["Start background fetch; emit last output; trace pending"]
+    M -->|retry_after elapsed| P["Delete record; refetch; render waiting status"]
     M -->|usable record| Q[Select active LRC line; wrap or marquee; emit frame]
     N --> Q
     P --> Q
-    C --> R[Release lock; write receipt and trace]
+    C --> R["Release lock; write receipt and trace"]
     E --> R
     G --> R
     H --> R
@@ -135,6 +194,15 @@ including a crash outcome. This is an operational invariant: a failed tick
 must not leave the widget permanently locked.
 
 ### Playback Sampling
+
+A sample is the newest persisted snapshot of the active player, written by a
+detached sampler: track identity (title, artist, album), duration, playback
+state, and position. The widget tick reads the snapshot and makes three
+decisions from it: the state gate (denied, paused, idle, placeholder, or
+playing), the track identity that builds the versioned cache key, and the
+playback position that selects the active LRC line. Position is the
+lyric-sync input — the tick projects it forward from the sample, so
+synchronisation never requires a live position query.
 
 | Input or condition | Selected path | Observable result |
 | --- | --- | --- |
@@ -190,13 +258,45 @@ part of their refresh contract.
 | 8 | NetEase misses or fails | Await LrcAPI within its preference window, then LRCLIB, then a later acceptable LrcAPI result if available. |
 | 9 | No provider returns an acceptable result | Persist `not_found` or `cache_error` according to the failure, then retry after its configured delay. |
 
+The dispatch shape is a fork chain: cached state first, then the concurrent
+provider race.
+
+```mermaid
+flowchart TD
+  A["Track needs lyrics"] --> B{"Cached record usable?"}
+  B -->|"retry deadline not reached"| R1["Render cached record"]
+  B -->|"cached not_found, Apple TTML now matches"| R2["Convert and atomically promote to ok; render"]
+  B -->|"miss, retry due, or no Apple match"| C{"Local .lrc file?"}
+  C -->|yes| R3["Use local record; no remote access"]
+  C -->|no| D{"Apple Cache.db recent TTML?"}
+  D -->|yes| R4["Convert TTML to LRC"]
+  D -->|no| E["Add Chinese catalog title as remote search title"]
+  E --> F["Race QQ Music, NetEase, LrcAPI, LRCLIB concurrently"]
+  F --> G1{"QQ Music acceptable?"}
+  G1 -->|yes| R5["Prefer QQ Music"]
+  G1 -->|no| G2{"NetEase timed LRC?"}
+  G2 -->|yes| R6["Use NetEase"]
+  G2 -->|no| G3{"LrcAPI within preference window?"}
+  G3 -->|yes| R7["Use LrcAPI"]
+  G3 -->|no| G4{"LRCLIB acceptable?"}
+  G4 -->|yes| R8["Use LRCLIB"]
+  G4 -->|no| G5{"Later acceptable LrcAPI result?"}
+  G5 -->|yes| R9["Use the later LrcAPI answer"]
+  G5 -->|no| R10["Persist not_found or cache_error; retry after configured delay"]
+```
+
 Provider lookup is bounded and concurrent. QQ Music, NetEase, LrcAPI, and
 LRCLIB are started together; provider-specific query retries must not turn the
 one-second widget tick into a blocking network request. QQ Music and NetEase
 fill the gap left when LRCLIB only carries plain text for a Chinese track (its
 even-spread LRC is a stopgap, never a sync) and LrcAPI is silent; their public
 lyric endpoints usually have genuinely timed LRC for those tracks. QQ Music's
-lyric endpoint rejects requests without a y.qq.com referer.
+lyric endpoint rejects requests without a y.qq.com referer. LRCLIB is a
+keyless community database and the strongest source for English and
+non-Chinese tracks, including outside China; LrcAPI is a Chinese-source
+aggregator (KuGou and an Apple Music data source among others) that fills the
+Chinese long tail after the two primary catalogs miss. Those roles — and
+LrcAPI's third-party hosting — are why they run after QQ Music and NetEase.
 
 ### Candidate Acceptance
 
@@ -212,15 +312,14 @@ An accepted result is a track association, not merely valid LRC syntax. A
 provider response that parses but belongs to another recording must remain
 unaccepted.
 
-### LRC and Viewport Rendering
+### LRC and Fixed-Width Rendering
 
 | Input | Decision | Result |
 | --- | --- | --- |
 | No active line at the current position | Select the preceding timed line when available | Keep the lyric frame synchronized to playback. |
-| Line fits the measured width | Emit the line, and the next line when the pair fits | Use the compact two-line frame. |
+| Line fits the fixed width | Emit the line, and the next line when the pair fits | Use the compact two-line frame. |
 | Line is too wide | Break at punctuation, then spaces | Preserve readable rows up to the two-row limit. |
 | A row still exceeds width | Crop/marquee according to elapsed playback time | Scroll at the configured cell rate after the delay. |
-| Viewport measurement is pending or fails | Use the carried/stored width or fallback width | Lose measurement accuracy for the track, not all layout state. |
 | Track has no synchronized lyrics but is instrumental | Render the instrumental marker, faded with playback progress | Emit widget JSON `{"text": "♬", "font_color": "r,g,b,a"}` with `r=g=b` fading 255→80 gray over the track. |
 | Track is not found | Render the not-found marker, faded with playback progress | Emit widget JSON `{"text": "♩", "font_color": "r,g,b,a"}` with `r=g=b` fading 255→80 gray over the track. |
 | A provider fetch fails | Render the unavailable marker | Emit `♪ Lyrics unavailable`; Apple-cache read failures are logged and degrade to a miss, so the marker never reads as an Apple Music problem. |
@@ -238,7 +337,7 @@ cache directory, and optional previous output.
 **Transformation:**
 
 ```text
-sample -> state gate -> track key -> viewport/cache lookup
+sample -> state gate -> track key -> cache lookup
        -> background work when needed -> LRC line selection
        -> width-constrained output
 ```
@@ -300,7 +399,7 @@ repeat, and non-blocking to the BTT shell runner.
 
 | State class | Examples | Semantics |
 | --- | --- | --- |
-| Reusable durable state | Per-track lyric JSON, `state.json`, `last.txt`, `lyrics.value`, `viewport.json`, `media_remote_position.json` | Survives a process and avoids repeating expensive work. |
+| Reusable durable state | Per-track lyric JSON, `state.json`, `last.txt`, `lyrics.value`, `media_remote_position.json` | Survives a process and avoids repeating expensive work. |
 | Diagnostic durable state | `error.log`, `logs/lyrics/trace.tsv`, `logs/lyrics/render.json` | Explains outcomes and separates widget failures from BTT scheduling failures. |
 | Ephemeral coordination | `widget.lock`, `sampler.lock`, per-track locks, detached helpers, fetch deadlines | Prevents overlap and bounds work; stale locks are recoverable. |
 | Integration residue | BTT UUID `.force` files | Intended for shared shell widgets; Lyrics and Star currently do not consume them. |
@@ -313,53 +412,75 @@ cache records are keyed so one track cannot replace another track's lyrics.
 
 | Contract | Stable owner |
 | --- | --- |
-| Package entry and CLI dispatch | [`widgets/lyrics/__main__.py`](../widgets/lyrics/__main__.py#L1), [`widgets/lyrics/cli.py`](../widgets/lyrics/cli.py#L244) |
-| BTT shell integration | [`widgets/now-playing-lyrics.sh`](../widgets/now-playing-lyrics.sh#L1), [`bttpreset/Default.bttpreset`](../bttpreset/Default.bttpreset#L235) |
-| Track sampling and player fallback | [`widgets/lyrics/apple_music.py`](../widgets/lyrics/apple_music.py#L42), [`widgets/lyrics/media_remote.py`](../widgets/lyrics/media_remote.py#L1), [`widgets/lyrics/cli.py`](../widgets/lyrics/cli.py#L180) |
-| Main state machine and output decisions | [`widgets/lyrics/render.py`](../widgets/lyrics/render.py#L146) |
-| Widget lock, helper spawning, retry display timing | [`widgets/lyrics/locking.py`](../widgets/lyrics/locking.py#L1) |
-| Cache identity and atomic persistence | [`widgets/lyrics/cache.py`](../widgets/lyrics/cache.py#L1), [`widgets/lyrics/metadata.py`](../widgets/lyrics/metadata.py#L183) |
-| Provider order and bounded concurrency | [`widgets/lyrics/fetch.py`](../widgets/lyrics/fetch.py#L22), [`widgets/lyrics/concurrency.py`](../widgets/lyrics/concurrency.py#L1) |
-| Local LRC and Apple Music cache adapters | [`widgets/lyrics/providers/local.py`](../widgets/lyrics/providers/local.py#L1), [`widgets/lyrics/providers/apple_cache.py`](../widgets/lyrics/providers/apple_cache.py#L1) |
-| Remote provider adapters | [`widgets/lyrics/providers/qqmusic.py`](../widgets/lyrics/providers/qqmusic.py#L1), [`widgets/lyrics/providers/netease.py`](../widgets/lyrics/providers/netease.py#L1), [`widgets/lyrics/providers/lrcapi.py`](../widgets/lyrics/providers/lrcapi.py#L1), [`widgets/lyrics/providers/lrclib.py`](../widgets/lyrics/providers/lrclib.py#L1) |
-| Candidate normalization and acceptance | [`widgets/lyrics/metadata.py`](../widgets/lyrics/metadata.py#L48), [`widgets/lyrics/matching.py`](../widgets/lyrics/matching.py#L1) |
-| LRC parsing and active-line selection | [`widgets/lyrics/lrc.py`](../widgets/lyrics/lrc.py#L1), [`widgets/lyrics/layout.py`](../widgets/lyrics/layout.py#L1) |
-| Viewport measurement and persistence | [`widgets/lyrics/viewport.py`](../widgets/lyrics/viewport.py#L1), [`widgets/lyrics/text_width.js`](../widgets/lyrics/text_width.js#L1) |
-| Output shaping and last-frame preservation | [`widgets/lyrics/output.py`](../widgets/lyrics/output.py#L1) |
-| Track-change workflow | [`actions/track-changed.sh`](../actions/track-changed.sh#L1), [`widgets/lyrics/cli.py`](../widgets/lyrics/cli.py#L100) |
-| Runtime diagnostics | [`widgets/lyrics/diagnostics.py`](../widgets/lyrics/diagnostics.py#L1), [`widgets/lyrics/debug.py`](../widgets/lyrics/debug.py#L1) |
+| Package entry and CLI dispatch | [`widgets/lyrics/__main__.py`](../../widgets/lyrics/__main__.py), [`widgets/lyrics/cli.py`](../../widgets/lyrics/cli.py) |
+| BTT shell integration | [`widgets/now-playing-lyrics.sh`](../../widgets/now-playing-lyrics.sh), [`bttpreset/Default.bttpreset`](../../bttpreset/Default.bttpreset) |
+| Track sampling and player fallback | [`widgets/lyrics/sources/apple_music.py`](../../widgets/lyrics/sources/apple_music.py), [`widgets/lyrics/sources/media_remote.py`](../../widgets/lyrics/sources/media_remote.py), [`widgets/lyrics/cli.py`](../../widgets/lyrics/cli.py) |
+| Main state machine and output decisions | [`widgets/lyrics/display/render.py`](../../widgets/lyrics/display/render.py) |
+| Widget lock, helper spawning, retry display timing | [`widgets/lyrics/runtime/locking.py`](../../widgets/lyrics/runtime/locking.py) |
+| Cache identity and atomic persistence | [`widgets/lyrics/runtime/cache.py`](../../widgets/lyrics/runtime/cache.py), [`widgets/lyrics/text/metadata.py`](../../widgets/lyrics/text/metadata.py) |
+| Provider order and bounded concurrency | [`widgets/lyrics/fetch.py`](../../widgets/lyrics/fetch.py), [`widgets/lyrics/runtime/concurrency.py`](../../widgets/lyrics/runtime/concurrency.py) |
+| Local LRC and Apple Music cache adapters | [`widgets/lyrics/providers/local.py`](../../widgets/lyrics/providers/local.py), [`widgets/lyrics/providers/apple_cache.py`](../../widgets/lyrics/providers/apple_cache.py) |
+| Remote provider adapters | [`widgets/lyrics/providers/qqmusic.py`](../../widgets/lyrics/providers/qqmusic.py), [`widgets/lyrics/providers/netease.py`](../../widgets/lyrics/providers/netease.py), [`widgets/lyrics/providers/lrcapi.py`](../../widgets/lyrics/providers/lrcapi.py), [`widgets/lyrics/providers/lrclib.py`](../../widgets/lyrics/providers/lrclib.py) |
+| Candidate normalization and acceptance | [`widgets/lyrics/text/metadata.py`](../../widgets/lyrics/text/metadata.py), [`widgets/lyrics/text/matching.py`](../../widgets/lyrics/text/matching.py) |
+| LRC parsing and active-line selection | [`widgets/lyrics/text/lrc.py`](../../widgets/lyrics/text/lrc.py), [`widgets/lyrics/display/layout.py`](../../widgets/lyrics/display/layout.py) |
+| Output shaping and last-frame preservation | [`widgets/lyrics/runtime/output.py`](../../widgets/lyrics/runtime/output.py) |
+| Track-change workflow | [`actions/track-changed.sh`](../../actions/track-changed.sh), [`widgets/lyrics/cli.py`](../../widgets/lyrics/cli.py) |
+| Runtime diagnostics | [`widgets/lyrics/diag/diagnostics.py`](../../widgets/lyrics/diag/diagnostics.py), [`widgets/lyrics/diag/debug.py`](../../widgets/lyrics/diag/debug.py) |
 
 ## Verification Map
 
-No automated test suite or test configuration is currently present. A rebuild
-should add focused tests around the pure decisions first, then integration
-checks around detached processes and BTT.
+`tests/run.sh` runs the suite on stdlib `unittest` alone — the widgets run
+under whatever `python3` BetterTouchTool's PATH finds, with no site-packages,
+so the tests need nothing installed either. Every `lyrics.config` path is
+redirected into a temporary sandbox before Python starts, so a run never
+touches `cache/lyrics` or `logs/`.
 
-| Behavior to verify | Focused evidence |
+```sh
+tests/run.sh                    # everything
+tests/run.sh lyrics.test_lrc    # one module
+```
+
+The pure decisions are covered; the detached processes and BTT integration
+are not, and remain observational.
+
+| Behaviour to verify | Focused evidence |
 | --- | --- |
-| State gate | Feed denied, paused, idle, placeholder, and playing snapshots to the render decision and compare exact output/status strings. |
-| Last-frame preservation | Run a tick with no usable sample or a cache miss and verify stdout remains the prior output. |
-| Cache safety | Write valid, malformed, `not_found`, and `cache_error` records; verify atomic replacement, cleanup, and retry deadlines. |
-| Matching | Exercise aliases, CJK normalization, duration differences, instrumental candidates, and the `0.60` acceptance threshold. |
-| Provider fallback | Make local, Apple cache, QQ Music, NetEase, LrcAPI, and LRCLIB paths succeed/fail in order; verify the first acceptable result wins. |
-| LRC timing | Parse offsets, enhanced timestamps, duplicate timestamps, and an empty/no-line interval. |
-| Layout | Verify punctuation/space wrapping, two-row limits, continuation indentation, and marquee delay/rate at narrow and fallback widths. |
-| Concurrency | Hold widget and per-track locks; verify the old frame is emitted and stale locks can be removed. |
-| Track changes | Run `actions/track-changed.sh` with a synthetic UUID; verify detached execution, `settled`/`timeout`, pre-warm behavior, and repaint request. |
-| BTT integration | Verify periodic invocation, play/pause clearing, track-change repaint, and widget hiding on empty output against the preset. |
-| Diagnostics | Compare `logs/lyrics/render.json`, `logs/lyrics/trace.tsv`, and the shared widget trace during a single-widget failure and a BTT-wide freeze. |
+| Cache safety | [`tests/lyrics/test_cache.py`](../../tests/lyrics/test_cache.py) — valid, malformed, `not_found`, and `cache_error` records; atomic replacement, cleanup, retry deadlines. |
+| Matching | [`tests/lyrics/test_matching.py`](../../tests/lyrics/test_matching.py), [`tests/lyrics/test_metadata.py`](../../tests/lyrics/test_metadata.py) — aliases, CJK normalization, duration differences, instrumental candidates, the `0.60` threshold. |
+| LRC timing | [`tests/lyrics/test_lrc.py`](../../tests/lyrics/test_lrc.py) — offsets, enhanced timestamps, duplicate timestamps, empty intervals. |
+| Layout | [`tests/lyrics/test_layout.py`](../../tests/lyrics/test_layout.py) — punctuation/space wrapping, two-row limits, continuation indentation, marquee delay and rate. |
+| Concurrency and locking | [`tests/lyrics/test_concurrency.py`](../../tests/lyrics/test_concurrency.py), [`tests/lyrics/test_locking.py`](../../tests/lyrics/test_locking.py) — bounded provider racing; held and stale locks. |
+| Output shaping | [`tests/lyrics/test_output.py`](../../tests/lyrics/test_output.py) — last-frame preservation and widget JSON. |
+| State gate | Not covered. Feed denied, paused, idle, placeholder, and playing snapshots to the render decision and compare exact output/status strings. |
+| Provider fallback | Not covered end to end. Make local, Apple cache, QQ Music, NetEase, LrcAPI, and LRCLIB paths succeed/fail in order; verify the first acceptable result wins. |
+| Track changes | Not covered. Run `actions/track-changed.sh` with a synthetic UUID; verify detached execution, `settled`/`timeout`, pre-warm behaviour, and repaint request. |
+| BTT integration | Not covered. Verify periodic invocation, play/pause clearing, track-change repaint, and widget hiding on empty output against the preset. |
+| Diagnostics | Not covered. Compare `logs/lyrics/render.json`, `logs/lyrics/trace.tsv`, and the shared widget trace during a single-widget failure. |
 
 Useful operator checks are `python3 -m lyrics --report`,
 `python3 -m lyrics --diagnose`, and inspection of the render and trace files.
 These are observational checks, not substitutes for deterministic unit tests.
 
+## Retired: viewport measurement
+
+**Retired 2026-08-13**: the detached JXA measurement worker
+(`display/viewport.py`, `display/text_width.js`, `--measure`) and per-track
+`viewport.json` metrics were removed. Width is now a fixed cell count —
+`config.LYRIC_WIDTH_CELLS`, defaulting to the widget's 400 px slot at
+`BTT_LYRICS_PX_PER_CELL` px per cell, overridable with `BTT_LYRICS_WIDTH` —
+and character widths come from the east-asian-width heuristic in
+`display/layout.py`. The removed files and `tests/lyrics/test_viewport.py`
+are recoverable from git history if per-track measured widths are wanted
+again.
+
 ## Known Gaps
 
-- There are no automated tests, so the branch contracts above are reconstructed
+- The render state machine, provider fallback order, track-change flow, and BTT
+  integration have no automated tests; those branch contracts are reconstructed
   from implementation and operational evidence rather than regression-tested.
 - The exact BetterTouchTool scheduling and `refresh_widget` guarantees are
-  external behavior. The repository can request a repaint but cannot prove BTT
-  will dispatch it during an AppKit or shell-runner freeze.
+  external behaviour. The repository can request a repaint but cannot prove BTT
+  will dispatch it.
 - Apple Music, `nowplaying-cli`, MediaRemote, QQ Music, NetEase, LrcAPI, LRCLIB, OpenCC, and
   Apple Music's `Cache.db` are external dependency boundaries. Their response
   schemas, permissions, rate limits, and availability need integration checks.
@@ -375,6 +496,3 @@ These are observational checks, not substitutes for deterministic unit tests.
   clock, and Apple Music placeholder transitions are inherently asynchronous;
   callers must preserve `unknown`, `timeout`, and unavailable states rather
   than inventing track identity.
-- The README documents a BetterTouchTool/AppKit freeze outside this repository.
-  The diagnostic traces can identify it, but no Lyrics implementation change
-  can repair that upstream scheduling failure.
