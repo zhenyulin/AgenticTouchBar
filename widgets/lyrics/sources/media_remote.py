@@ -231,7 +231,8 @@ def read_media_remote() -> dict[str, Any]:
         "album": album,
         "duration": duration,
         "position": position,
-        # Which player this sample came from; see viewport.lyric_budget_px
-        # for why the lyric budget grows for non-Apple Music sources.
+        # Which player this sample came from; widgets/now-playing.sh reads
+        # it for its allowlist fallback (media_remote samples are rejected
+        # there -- they come from the holder the allowlist already refused).
         "source": "media_remote",
     }

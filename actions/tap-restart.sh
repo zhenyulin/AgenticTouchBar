@@ -8,16 +8,9 @@
 # before that restart: BTT may kill this process the moment the restart
 # action runs.
 #
-# What is left to record is the restart itself. This used to also write a
-# `manual-before` row into the freeze guard's ledger (logs/restart.tsv)
-# together with the guard's last per-probe assessment, so later analysis
-# could ask why the guard had not caught that freeze on its own. The guard
-# is gone -- the BTT upgrade fixed the AppKit freeze it existed for -- and
-# nothing closes those rows any more, so the ledger write went with it.
-#
-# The trace markers stay: they are read by the widget traces themselves,
-# not by the guard, and without one a restart silently inflates the next
-# run-duration measurement.
+# What is left to record is the restart itself. The trace markers are read
+# by the widget traces themselves, and without one a restart silently
+# inflates the next run-duration measurement.
 #
 
 set -u

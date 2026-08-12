@@ -372,19 +372,6 @@ btt_cached_widget_main() {
             "$self" --refresh "$BTT_WIDGET_UUID"
     fi
 
-    # A widget may hide itself while another widget's condition holds:
-    # BTT_WIDGET_HIDE_CHECK names a function returning 0 when this widget
-    # must print nothing, which makes BTT remove it from the Touch Bar
-    # (the same empty-text mechanism the lyrics widget uses). The value
-    # was still refreshed above, so it is fresh when the widget comes
-    # back. Used by opencode-quota.sh: the lyrics widget hides OpenCode
-    # while the Now Playing + Lyrics pair is short of space.
-    if [[ -n "${BTT_WIDGET_HIDE_CHECK:-}" ]] && "$BTT_WIDGET_HIDE_CHECK"; then
-        btt_trace widget "$started" hidden
-        printf '\n'
-        return 0
-    fi
-
     outcome=cached
     (( fresh != 0 )) && outcome=stale
     (( force )) && outcome=forced

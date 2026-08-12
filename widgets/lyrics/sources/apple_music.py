@@ -20,8 +20,8 @@ import time
 from typing import Any
 
 from .. import config
-from ..runtime.cache import atomic_write_json
 from ..fetch import start_sampler
+from ..runtime.cache import atomic_write_json
 from ..runtime.output import log_error
 
 
@@ -88,9 +88,9 @@ def read_apple_music() -> dict[str, Any]:
         "album": album.strip(),
         "duration": max(duration_value, 0.0),
         "position": max(position_value, 0.0),
-        # Which player this sample came from. The viewport budget grows by
-        # one word's width when the source is not Apple Music, because the
-        # Star widget beside the lyric only renders for Apple Music.
+        # Which player this sample came from. widgets/now-playing.sh reads
+        # it for its allowlist fallback: a media_remote sample could come
+        # from the very holder the allowlist just rejected.
         "source": "apple_music",
     }
     return track

@@ -25,16 +25,6 @@
 # and a stale one still prints, so when a song ends they come back with the
 # previous values instantly while a detached refresh fetches new ones.
 #
-# While something plays they emit nothing, and BTT hides a script widget
-# whose text is empty -- the same rule that hides the Lyrics widget. The Now
-# Playing play/pause action makes the flip instant: it records the state via
-# actions/weather-state.sh and refreshes both widgets. Without a tap, this
-# widget's own interval picks the change up from the sampler's
-# cache/lyrics/state.json within its hold window. The hide is disabled for
-# now (HIDE_WHILE_PLAYING=0): the widgets always render, and setting the
-# flag to 1 gives the slot back to the pair while something plays.
-#
-
 set -u
 set -o pipefail
 PATH="/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin"
@@ -63,16 +53,6 @@ BTT_WIDGET_NAME="weather"
 # A refresh is one get_weather call; a lock older than this is dead.
 BTT_WIDGET_REFRESH_MAX_RUN=60
 
-REPO_DIR="${BTT_REPO_DIR:-$HOME/Documents/BTT}"
-LYRICS_STATE="$REPO_DIR/cache/lyrics/state.json"
-# How fresh the Now Playing tap's recorded state must be to win over the
-# sampler, and how old a sampler sample may be before the state is unknown.
-TAP_STATE_MAX_AGE="${BTT_WEATHER_TAP_MAX_AGE:-5}"
-SAMPLE_MAX_AGE="${BTT_WEATHER_SAMPLE_MAX_AGE:-8}"
-# The weather widgets used to hide while something plays, handing their
-# slot to the Now Playing + Lyrics pair. Disabled for now: they always
-# render; set to 1 to re-enable the hide.
-HIDE_WHILE_PLAYING=0
 # How long a fetched result is reused before the sources are asked again.
 WEATHER_TTL="${BTT_WEATHER_TTL:-300}"
 # Both sources return Celsius, so the script converts when needed.
@@ -156,39 +136,8 @@ if (( REFRESH_MODE )); then
     exit 1
 fi
 
-playing_now() {
-    local now st ts
-    now="$(date +%s)"
-
-    # The Now Playing tap knows the new state before the sampler does;
-    # prefer its record while it is fresh.
-    if btt_cache_get weather-tap-state "$TAP_STATE_MAX_AGE" >/dev/null 2>&1; then
-        st="$(btt_cache_get weather-tap-state 999999999 2>/dev/null || true)"
-        [[ "$st" == "playing" ]] && return 0
-        [[ "$st" == "paused" ]] && return 1
-    fi
-
-    # Otherwise follow the sampler, mirroring the Lyrics widget's rule.
-    if [[ -f "$LYRICS_STATE" ]]; then
-        st="$(jq -r '.track.state // ""' "$LYRICS_STATE" 2>/dev/null)"
-        ts="$(jq -r '.sampled_at // 0' "$LYRICS_STATE" 2>/dev/null)"
-        ts="${ts%.*}"
-        if [[ "$ts" =~ ^[0-9]+$ ]] && (( now - ts <= SAMPLE_MAX_AGE )); then
-            [[ "$st" == "playing" ]] && return 0
-        fi
-    fi
-
-    return 1
-}
-
-if (( HIDE_WHILE_PLAYING )) && playing_now; then
-    # Empty text: BTT hides the widget.
-    exit 0
-fi
-
 # Render only from the cache: a fresh value wins, and a stale one still
-# prints, so a reveal after a long playback republishes the previous values
-# instantly, while a detached refresh re-fetches conditions (Open-Meteo, or
+# prints while a detached refresh re-fetches conditions (Open-Meteo, or
 # BTT's Apple WeatherKit as a fallback) -- the widget path never blocks on
 # AppleScript or the network. A tap's force flag refreshes even while the
 # value is fresh: the widget greys out while the refresh lock is held, and

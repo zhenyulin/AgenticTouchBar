@@ -48,20 +48,6 @@ ALLOWED_BUNDLE_IDS="${BTT_NOW_PLAYING_ALLOWED:-com.apple.Music com.tencent.QQMus
 # that has not been re-imported.
 LYRICS_UUID="${BTT_LYRICS_WIDGET_UUID:-E19BB023-5060-4A56-95C8-6E7402779870}"
 
-# The two rows, matching what the Lyrics widget measures its viewport
-# against (BTT_LYRICS_NOW_PLAYING_LINE1/LINE2 in widgets/lyrics/config.py):
-# the formats live in one place so display and measurement stay in step.
-# With the stock pair the widget takes whichever of ({album} ▸ {title},
-# {artist}) and ({title}, {artist} ▸ {album}) keeps its widest row
-# narrower -- that row is what the widget's width comes to, so the narrower
-# one leaves more of the shared row for the lyric -- and
-# widgets/lyrics/display/viewport.py mirrors that choice so the measured
-# width stays the drawn width.
-# zsh brace expansion would mangle {album} inside a ${VAR:-default}, so the
-# defaults are applied in the Python below instead.
-LINE1_FMT="${BTT_LYRICS_NOW_PLAYING_LINE1:-}"
-LINE2_FMT="${BTT_LYRICS_NOW_PLAYING_LINE2:-}"
-
 CACHE_DIR="${BTT_WIDGET_CACHE_DIR:-${BTT_REPO_DIR:-$HOME/Documents/BTT}/cache}"
 ASSETS_DIR="${BTT_REPO_DIR:-$HOME/Documents/BTT}/assets"
 # The Lyrics sampler's state, consulted when the session holder is not one of
@@ -76,7 +62,7 @@ helper_state() {
     # Music keeps publishing rate 1 while paused and never republishes on a
     # pause -- measured here at 9 s of rate 1 after BTT's own Play or Pause
     # action -- so the rate alone left the album cover on screen where the
-    # play icon belongs. specs/LYRICS.md records the same finding for the
+    # play icon belongs. specs/design/LYRICS.md records the same finding for the
     # lyrics sampler, which is why this helper exists.
     #
     # It asks MediaRemote for the flag Control Center's own Now Playing tile
@@ -124,8 +110,8 @@ HELPER="$(helper_state)" || HELPER=""
 # track. The Python treats an unusable payload as an empty dictionary.
 RAW="$(raw_state)" || RAW=""
 
-python3 - "$RAW" "$ALLOWED_BUNDLE_IDS" "$LINE1_FMT" "$LINE2_FMT" \
-    "$CACHE_DIR" "$BTT_WIDGET_UUID" "$ASSETS_DIR" "$LYRICS_UUID" \
+python3 - "$RAW" "$ALLOWED_BUNDLE_IDS" "$CACHE_DIR" "$BTT_WIDGET_UUID" \
+    "$ASSETS_DIR" "$LYRICS_UUID" \
     "$SAMPLER_STATE" "$HELPER" <<'PY'
 import base64
 import hashlib
@@ -153,9 +139,7 @@ def allowed_ids(allowed):
 
 
 def strip_parens(text):
-    # "Song (feat. X)" -> "Song"; leftover double spaces collapse. The
-    # Lyrics viewport strips identically (widgets/lyrics/viewport.py), so
-    # the measured Now Playing width stays the width this widget draws.
+    # "Song (feat. X)" -> "Song"; leftover double spaces collapse.
     return re.sub(r"\s+", " ", re.sub(r"\([^)]*\)", "", text)).strip()
 
 
@@ -563,17 +547,13 @@ def clear_lyrics_for_change(identity, cache_dir, lyrics_uuid):
 (
     payload,
     allowed,
-    line1_fmt,
-    line2_fmt,
     cache_dir,
     widget_uuid,
     assets_dir,
     lyrics_uuid,
     state_path,
     helper_payload,
-) = sys.argv[1:11]
-line1_fmt = line1_fmt or "{album} ▸ {title}"
-line2_fmt = line2_fmt or "{artist}"
+) = sys.argv[1:9]
 try:
     info = json.loads(payload)
 except (json.JSONDecodeError, UnicodeDecodeError):
@@ -644,33 +624,9 @@ else:
     icon = play_icon(cache_dir, assets_dir) or player_icon(player, cache_dir)
 
 fields = {"title": title, "artist": artist, "album": album}
-
-
-def row_extent(formats):
-    """How long the longer of two rows comes out, in characters.
-
-    That row is what the widget's width comes to. The font sizes BTT draws
-    the rows in live in the preset alone (bttpreset/Default.bttpreset), so
-    the choice between layouts is made on character count: rough, but this
-    runs on BTT's one second tick, where the Cocoa measurement the Lyrics
-    widget pays for (an osascript launch) does not belong.
-    """
-    return max(len(line_format.format(**fields)) for line_format in formats)
-
-
-# Choose the layout when the stock pair is in use: of ({album} ▸ {title},
-# {artist}) and ({title}, {artist} ▸ {album}), keep the one whose widest row
-# is narrower, so the widget takes less of the row and the lyric beside it
-# gets the rest (ties keep the stock order). The Lyrics viewport mirrors
-# this (widgets/lyrics/display/viewport.py); custom BTT_LYRICS_NOW_PLAYING_*
-# formats are used verbatim.
-if line1_fmt == "{album} ▸ {title}" and line2_fmt == "{artist}" and artist:
-    balanced = ("{title}", "{artist} ▸ {album}")
-    if row_extent(balanced) < row_extent((line1_fmt, line2_fmt)):
-        line1_fmt, line2_fmt = balanced
-rows = [line1_fmt.format(**fields)]
+rows = ["{album} ▸ {title}".format(**fields)]
 if artist:
-    rows.append(line2_fmt.format(**fields))
+    rows.append("{artist}".format(**fields))
 text = "\n".join(rows)
 if not widget_uuid:
     print(text)

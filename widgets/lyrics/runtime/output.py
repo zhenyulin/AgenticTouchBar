@@ -99,8 +99,8 @@ def trace(mode: str, started: float, outcome: str, **fields: Any) -> None:
     elapsed_ms = (time.monotonic() - started) * 1000.0
     extra = " ".join(f"{key}={value}" for key, value in fields.items())
     # Same columns as lib/btt-widget.sh writes, so one --report covers every
-    # widget: a freeze is a property of BetterTouchTool, not of one script,
-    # and it is only diagnosable with all of them side by side.
+    # widget side by side and shows whether a problem is one script's or
+    # shared across them.
     line = f"{time.time():.3f}\tlyrics\t{mode}\t{elapsed_ms:.0f}\t{outcome}\t{extra}\n"
 
     oversized = False
@@ -114,8 +114,8 @@ def trace(mode: str, started: float, outcome: str, **fields: Any) -> None:
         return
 
     if oversized:
-        # One generation kept, so the trace costs at most twice the cap and a
-        # freeze is still inspectable just after a rotation.
+        # One generation kept, so the trace costs at most twice the cap and
+        # recent history stays inspectable just after a rotation.
         try:
             os.replace(
                 config.TRACE_PATH,

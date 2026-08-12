@@ -1,5 +1,5 @@
 """Fitting a lyric line into the Touch Bar's fixed-width, proportional-font
-viewport: measuring, cropping, wrapping onto extra rows, and scrolling."""
+viewport: cropping, wrapping onto extra rows, and scrolling."""
 
 from __future__ import annotations
 
@@ -12,11 +12,6 @@ from .. import config
 def character_width(character: str) -> float:
     if unicodedata.combining(character):
         return 0
-    from .viewport import stored_character_width
-
-    measured = stored_character_width(character)
-    if measured is not None:
-        return measured / config.PIXELS_PER_CELL
     return 2 if unicodedata.east_asian_width(character) in {"W", "F", "A"} else 1
 
 

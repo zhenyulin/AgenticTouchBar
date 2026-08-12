@@ -21,124 +21,20 @@ from pathlib import Path
 # took. Interpreter startup and the imports above cost a further ~65 ms that
 # nothing inside the script can measure; treat traced widget times as that
 # much short of the true figure. The constant does not matter for spotting a
-# freeze, which shows up as a gap between runs or as one run taking seconds.
+# stall, which shows up as a gap between runs or as one run taking seconds.
 LOADED_AT = time.monotonic()
 
 # ---- User-tunable defaults -------------------------------------------------
-# The Touch Bar renders a proportional font, so a pixel budget tracks the
-# real row width better than a raw character count. Measured glyph advances
-# are normalized to layout cells with PIXELS_PER_CELL; character_width falls
-# back to narrow = 1 and CJK/wide = 2 when no measurement exists.
+# The lyric renders at one fixed width, counted in layout cells: a narrow
+# glyph is 1 cell and CJK/wide is 2 (see display/layout.py). The default
+# matches the Lyrics widget's own BTTTBWidgetWidth (400) in
+# bttpreset/Default.bttpreset at PIXELS_PER_CELL points per cell, so the
+# frame never overflows the widget's slot. BTT_LYRICS_WIDTH overrides the
+# width directly in cells.
 PIXELS_PER_CELL = float(os.environ.get("BTT_LYRICS_PX_PER_CELL", "7.0"))
-# How much of the row the lyric gets is not fixed: it is whatever the Now
-# Playing widget immediately to its left is not using, and that widget grows
-# and shrinks with the title and album it is showing (see viewport.py).
-# LYRIC_WIDTH_BUDGET_PX is what the two of them may take together.
-#
-# Calibrated against the preset layout in bttpreset/Default.bttpreset: the
-# Now Playing widget's negative paddings -- BTTTouchBarItemPadding -5,
-# BTTTouchBarFreeSpaceAfterButton -10, and the Lyrics widget's own
-# BTTTouchBarItemPadding -5 -- let the pair's text use 20 px more than its
-# nominal slot sum, so the budget is text width plus that margin credit.
-# Measured at these settings (2026-08-11): a typical album/title row is
-# ~268 px at the 11 pt Now Playing font, and a nine-word lyric line is
-# ~284 px including the prefix at 13 pt; 570 leaves both on screen together
-# with headroom, where 485 wrapped the same line with visible free space to
-# its right.
-LYRIC_WIDTH_BUDGET_PX = float(os.environ.get("BTT_LYRICS_WIDTH_BUDGET_PX", "570"))
-# The Star widget (★/☆) draws only while Apple Music is the player; with
-# QQ Music or anything else it renders empty and BTT hides it, freeing its
-# row slot -- BTTTouchBarButtonWidth 100 minus the 5 px item padding -- for
-# the Now Playing + lyric pair. They may take that much more of the row
-# (~95 px, about three words at the 13 pt lyrics font), and the pair's
-# budget grows by it only for non-Apple Music tracks
-# (see viewport.lyric_budget_px).
-LYRIC_EXTRA_WORD_PX = float(os.environ.get("BTT_LYRICS_EXTRA_WORD_PX", "95"))
-# Bounds on the lyric's own share. The floor stops a very long title from
-# squeezing the lyric down to a few characters -- past it the row overflows
-# the Touch Bar's right edge instead, which is at least still readable.
-# The cap is the Lyrics widget's own BTTTBWidgetWidth (400) in the preset.
-MIN_LYRIC_WIDTH_PX = float(os.environ.get("BTT_LYRICS_MIN_WIDTH_PX", "160"))
-MAX_LYRIC_WIDTH_PX = float(os.environ.get("BTT_LYRICS_MAX_WIDTH_PX", "400"))
-# Used until a track has been measured, and by any track whose measurement
-# fails. Deliberately the conservative width this widget used before it
-# measured anything, so a broken measurement degrades to the old behaviour
-# rather than to an overflowing row.
-FALLBACK_LYRIC_WIDTH_PX = float(os.environ.get("BTT_LYRICS_FALLBACK_WIDTH_PX", "200"))
-# Setting BTT_LYRICS_WIDTH overrides the whole calculation and picks a width
-# directly in cells, as before -- nothing is measured or spawned at all.
-_viewport_width_override = os.environ.get("BTT_LYRICS_WIDTH")
-VIEWPORT_WIDTH_OVERRIDE = (
-    int(_viewport_width_override) if _viewport_width_override is not None else None
+LYRIC_WIDTH_CELLS = int(
+    os.environ.get("BTT_LYRICS_WIDTH", str(max(round(400 / PIXELS_PER_CELL), 1)))
 )
-
-# The Now Playing widget's own settings, mirrored from widgets/now-playing.sh
-# (the script widget that replaced BTT's native Now Playing widget in
-# bttpreset/Default.bttpreset). The script reads the same two format
-# variables, so display and measurement share one knob. Line 1 is album
-# first with the ▸ separator: for "What a Wonderful World" it reads
-# "What a Wonderful World ▸ What a Wonderful World" at 13 pt.
-NOW_PLAYING_LINE_FORMATS = (
-    os.environ.get("BTT_LYRICS_NOW_PLAYING_LINE1", "{album} ▸ {title}"),
-    os.environ.get("BTT_LYRICS_NOW_PLAYING_LINE2", "{artist}"),
-)
-# Mirrored from the shell widgets in bttpreset/Default.bttpreset. The Now
-# Playing widget sits beside the Lyrics widget and now sets the same
-# BTTTouchBarButtonFontSize, so the two read as one row rather than as a
-# small caption next to a larger lyric.
-LYRICS_FONT_SIZE = float(os.environ.get("BTT_LYRICS_FONT_SIZE", "13"))
-NOW_PLAYING_FONT_SIZE = float(os.environ.get("BTT_LYRICS_NOW_PLAYING_FONT", "13"))
-# BTT fits a two-row widget into the same fixed height by drawing the second
-# row smaller than the first -- around 10-11 pt against a 13 pt first row
-# (the same observation CONTINUATION_INDENT below is calibrated against).
-# Both widgets on this part of the row set 13 pt, so they share this size
-# too, and the second row of either one is measured with it.
-SECOND_ROW_FONT_SIZE = float(os.environ.get("BTT_LYRICS_SECOND_ROW_FONT", "10.5"))
-# How much Now Playing text the widget can actually show before BTT
-# truncates it. Calibrated 2026-08-12 against the Saint-Saëns Organ
-# Symphony: both rows were visible through "Poco a" (row 1) and "No. 3"
-# (row 2), i.e. ~527 px of the 11 pt text -- far past the 400 pt box's
-# nominal 365 pt text budget (BTTTBWidgetWidth 400 minus the 30 pt cover
-# icon and 5 pt gap), so the box is not the limiter it looked like. The
-# prediction caps at the observed visible extent; a longer title truncates
-# rather than costing the lyric any more of the row. The cap is a width on
-# the row, not a character count, so it survives the font size change above
-# -- the same title simply reaches it sooner at 13 pt.
-NOW_PLAYING_MAX_TEXT_PX = float(os.environ.get("BTT_LYRICS_NOW_PLAYING_MAX_PX", "527"))
-# The OpenCode quota widget (widgets/opencode-quota.sh), the row's last
-# item. While the Now Playing + Lyrics pair is short of space the lyrics
-# widget hides it (BTT removes script widgets whose text is empty) and the
-# pair's budget grows by the slot it frees: the widest of its two text
-# rows at OPENCODE_FONT_SIZE, plus the icon (BTTTouchBarItemIconWidth 22),
-# the gap after it (BTTTouchBarIconTextOffset 5), and the widget's own
-# negative item padding and free space, all from bttpreset/Default.bttpreset.
-OPENCODE_FONT_SIZE = float(os.environ.get("BTT_LYRICS_OPENCODE_FONT", "15"))
-OPENCODE_ICON_PX = float(os.environ.get("BTT_LYRICS_OPENCODE_ICON_PX", "22"))
-OPENCODE_ICON_OFFSET_PX = float(
-    os.environ.get("BTT_LYRICS_OPENCODE_ICON_OFFSET_PX", "5")
-)
-OPENCODE_ITEM_PADDING_PX = float(os.environ.get("BTT_LYRICS_OPENCODE_PADDING_PX", "-5"))
-OPENCODE_FREE_SPACE_PX = float(
-    os.environ.get("BTT_LYRICS_OPENCODE_FREE_SPACE_PX", "-10")
-)
-# What the OpenCode widget shows before its first value, and the widest it
-# can plausibly ever show -- the default the slot calculation falls back to.
-OPENCODE_DEFAULT_TEXT = "100%\n7d"
-# How long an untouched hide flag is believed: the lyrics widget rewrites it
-# every tick while the pair is cramped, so an old flag belongs to a lyrics
-# widget that stopped running, and OpenCode comes back.
-OPENCODE_HIDE_MAX_AGE_SECONDS = float(
-    os.environ.get("BTT_LYRICS_OPENCODE_HIDE_MAX_AGE", "90")
-)
-# The OpenCode widget's BetterTouchTool UUID, for the update_touch_bar_widget
-# / refresh_widget kicks that hide and restore it. Mirrors
-# actions/set-widget-variables.sh (BTT_WIDGET_OPENCODE_UUID).
-OPENCODE_WIDGET_UUID = os.environ.get(
-    "BTT_WIDGET_OPENCODE_UUID", "AE01C9E2-9EC6-4329-8358-8389BFB850F8"
-)
-# Generous: this runs in the detached helper, never on the widget path, and
-# the only thing a tighter bound would buy is a missing measurement.
-MEASURE_TIMEOUT_SECONDS = float(os.environ.get("BTT_LYRICS_MEASURE_TIMEOUT", "8.0"))
 SYNC_OFFSET_SECONDS = float(os.environ.get("BTT_LYRICS_OFFSET", "0.0"))
 SCROLL_LONG_LINES = os.environ.get("BTT_LYRICS_SCROLL", "1") not in {
     "0",
@@ -213,35 +109,15 @@ STATE_PATH = CACHE_DIR / "state.json"
 # Where the hand-tracked MediaRemote position is kept between samples.
 MEDIA_REMOTE_POSITION_PATH = CACHE_DIR / "media_remote_position.json"
 LAST_TEXT_PATH = CACHE_DIR / "last.txt"
-# The lyric's current share of the Touch Bar row, measured once per track by
-# the --measure helper and read back by every tick. See viewport.py.
-VIEWPORT_PATH = CACHE_DIR / "viewport.json"
 VALUE_PATH = CACHE_DIR / "lyrics.value"
-# The quota value the OpenCode widget is drawing (cache/opencode-quota.value
-# lives beside the other widgets' values, not under cache/lyrics).
-OPENCODE_VALUE_PATH = Path(
-    os.environ.get(
-        "BTT_LYRICS_OPENCODE_VALUE", str(REPO_DIR / "cache" / "opencode-quota.value")
-    )
-)
-# Where the lyrics widget leaves the "pair is cramped" signal the OpenCode
-# widget's own tick honours; see render.update_opencode_visibility.
-OPENCODE_HIDE_PATH = CACHE_DIR / "opencode-hide"
-# The cramped-pair hide is disabled for now: the lyrics widget leaves the
-# OpenCode widget alone and never claims its slot. Set to True to hand the
-# slot back to the pair while it is short of space (see
-# render.update_opencode_visibility and viewport.effective_budget_px).
-OPENCODE_HIDE_ENABLED = False
 # What the last rendering tick put on screen, and when that frame is due to
 # change. Written only by ticks that render something of their own -- see
 # render.write_render_receipt -- and read back by render.last_rendered_key,
 # which is how the next tick's fresh process knows what is already up there.
 #
-# It lives beside the trace rather than in CACHE_DIR because the freeze guard
-# (retired 2026-08-12, see specs/CONSTRAINTS.md) read it from launchd, which
-# gets EPERM opening anything under cache/. Nothing outside the widget reads
-# it now; the path stays put because moving it would only strand the receipt
-# a fresh widget process expects to find.
+# It lives beside the trace rather than in CACHE_DIR; nothing outside the
+# widget reads it, and moving it would strand the receipt a fresh widget
+# process expects to find.
 RENDER_PATH = LOG_DIR / "lyrics" / "render.json"
 TRACE_PATH = LOG_DIR / "lyrics" / "trace.tsv"
 WATCH_PATH = LOG_DIR / "lyrics" / "watch.tsv"
@@ -252,7 +128,7 @@ SHELL_TRACE_PATH = (
     Path(os.environ.get("BTT_WIDGET_LOG_DIR", str(LOG_DIR))) / "trace.tsv"
 )
 # One line per run at a one second interval is roughly 5 MB a day, so the cap
-# holds several hours -- long enough to still cover a freeze noticed later.
+# holds several hours -- long enough to still cover a stall noticed later.
 TRACE_MAX_BYTES = int(os.environ.get("BTT_LYRICS_TRACE_MAX_BYTES", "4000000"))
 TRACE_ENABLED = os.environ.get("BTT_LYRICS_TRACE", "1") not in {"0", "false", "False"}
 LRCLIB_API_BASE = "https://lrclib.net/api"
@@ -315,7 +191,7 @@ TRACK_FOLLOW_INTERVAL = float(os.environ.get("BTT_LYRICS_TRACK_FOLLOW_STEP", "0.
 # The Lyrics and Now Playing widgets' BTT UUIDs, so the event watcher (the
 # --sample helper and the --track-changed follow in cli.py) can run the
 # closing sequence -- clear the lyric, then hide the row. Mirrors
-# actions/set-widget-variables.sh, like OPENCODE_WIDGET_UUID above.
+# actions/set-widget-variables.sh.
 LYRICS_WIDGET_UUID = os.environ.get(
     "BTT_LYRICS_WIDGET_UUID", "E19BB023-5060-4A56-95C8-6E7402779870"
 )

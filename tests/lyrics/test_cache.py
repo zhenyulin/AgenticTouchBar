@@ -8,8 +8,6 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from tests.lyrics.support import track  # noqa: F401  (pins config paths first)
-
 from lyrics import config
 from lyrics.runtime.cache import (
     atomic_write_json,
@@ -18,6 +16,8 @@ from lyrics.runtime.cache import (
     read_cache,
     read_compatible_cache,
 )
+
+from tests.lyrics.support import track  # noqa: F401  (pins config paths first)
 
 
 def ok_record(**overrides):
@@ -154,8 +154,8 @@ class ReadCompatibleCache(CacheDirTestCase):
         self.assertEqual(read_compatible_cache("new", track())["status"], "ok")
 
     def test_a_non_dict_neighbour_is_ignored(self):
-        # REGRESSION: the sampler's own state.json and viewport.json live in
-        # this directory too, and a truncated or hand-edited file can be any
+        # REGRESSION: the sampler's own state.json lives in this directory
+        # too, and a truncated or hand-edited file can be any
         # JSON shape. A bare list or null used to reach .get() and raise
         # AttributeError, which the scan's except clause did not catch -- so a
         # single stray file killed every render tick.

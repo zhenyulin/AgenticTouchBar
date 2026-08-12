@@ -1,35 +1,16 @@
-"""Fitting a lyric into the Touch Bar row: measuring, cropping, wrapping and
-scrolling.
+"""Fitting a lyric into the Touch Bar row: cropping, wrapping and scrolling.
 
-Everything here is pure. The one outside input is the stored measurement that
-`character_width` consults, which the tests hand over by patching
-`viewport.read_viewport` -- never by measuring, which would cost an osascript
-launch and make the numbers depend on the machine's fonts.
+Everything here is pure. Character widths come from the narrow/CJK class
+heuristic in `layout.character_width` -- nothing is measured.
 """
-
-from tests.lyrics.support import track  # noqa: F401  (pins config paths)
 
 import unittest
 from unittest.mock import patch
 
 from lyrics import config
-from lyrics.display import layout, viewport
+from lyrics.display import layout
 
-
-def measured(widths_px: dict[str, float]):
-    """Pretend the last measurement stored these glyph advances, in points.
-
-    `character_width` reaches the metrics through `viewport.read_viewport`, so
-    replacing that one function covers every caller below it.
-    """
-    return patch.object(
-        viewport, "read_viewport", lambda: {"character_widths": dict(widths_px)}
-    )
-
-
-def pixels_per_cell(value: float = 7.0):
-    """Pin the px-per-cell divisor, which is environment-tunable."""
-    return patch.object(config, "PIXELS_PER_CELL", value)
+from tests.lyrics.support import track  # noqa: F401  (pins config paths)
 
 
 class CharacterWidthTests(unittest.TestCase):
@@ -50,27 +31,6 @@ class CharacterWidthTests(unittest.TestCase):
         # A decomposed "e" + combining acute costs one cell in total.
         self.assertEqual(layout.display_width("e\u0301"), 1)
 
-    def test_measured_width_overrides_the_class_default(self):
-        with pixels_per_cell(7.0), measured({"a": 3.5}):
-            self.assertEqual(layout.character_width("a"), 0.5)
-
-    def test_measured_width_overrides_the_wide_default_too(self):
-        # A measurement beats the east-asian-width guess, not just the ASCII
-        # one: the guess is only there for glyphs the helper never measured.
-        with pixels_per_cell(7.0), measured({"中": 7.0}):
-            self.assertEqual(layout.character_width("中"), 1.0)
-
-    def test_unmeasured_character_falls_back_to_the_class_default(self):
-        with pixels_per_cell(7.0), measured({"a": 3.5}):
-            self.assertEqual(layout.character_width("b"), 1)
-            self.assertEqual(layout.character_width("中"), 2)
-
-    def test_unusable_stored_metrics_fall_back_to_the_class_default(self):
-        with pixels_per_cell(7.0), measured({"a": "wide"}):
-            self.assertEqual(layout.character_width("a"), 1)
-        with patch.object(viewport, "read_viewport", lambda: {}):
-            self.assertEqual(layout.character_width("a"), 1)
-
 
 class DisplayWidthTests(unittest.TestCase):
     def test_display_width_of_empty_text_is_zero(self):
@@ -78,10 +38,6 @@ class DisplayWidthTests(unittest.TestCase):
 
     def test_display_width_sums_mixed_scripts(self):
         self.assertEqual(layout.display_width("ab中"), 4)
-
-    def test_display_width_sums_fractional_cells(self):
-        with pixels_per_cell(7.0), measured({"a": 3.5, "b": 10.5}):
-            self.assertEqual(layout.display_width("aab"), 2.5)
 
 
 class CropCellsTests(unittest.TestCase):
@@ -107,10 +63,6 @@ class CropCellsTests(unittest.TestCase):
         # A crop that lands mid-gap would otherwise start the row with a
         # space, which reads as a ragged left edge while scrolling.
         self.assertEqual(layout.crop_cells("a bcd e", 1, 4), "bcd")
-
-    def test_crop_cells_respects_fractional_widths(self):
-        with pixels_per_cell(7.0), measured({"a": 3.5}):
-            self.assertEqual(layout.crop_cells("aaaa", 0, 1), "aa")
 
     def test_crop_cells_zero_width_is_empty(self):
         self.assertEqual(layout.crop_cells("abc", 0, 0), "")
@@ -156,7 +108,9 @@ class WrapLyricTests(unittest.TestCase):
             self.addCleanup(patcher.stop)
 
     def test_wrap_lyric_keeps_a_fitting_line_on_one_row(self):
-        self.assertEqual(layout.wrap_lyric("short line", [20.0, 13.0], 2), ["short line"])
+        self.assertEqual(
+            layout.wrap_lyric("short line", [20.0, 13.0], 2), ["short line"]
+        )
 
     def test_wrap_lyric_breaks_at_punctuation_keeping_the_mark_on_its_row(self):
         self.assertEqual(
@@ -214,8 +168,8 @@ class WrapLyricTests(unittest.TestCase):
         self.assertEqual("".join(rows).replace(" ", ""), text.replace(" ", ""))
 
     def test_wrap_at_breaks_measures_each_row_against_its_own_width(self):
-        # render.py gives row 2 a different budget from row 1 (the viewport
-        # minus CONTINUATION_INDENT), so the second cut must use row 2's own
+        # render.py gives row 2 a different width from row 1 (the lyric
+        # width minus CONTINUATION_INDENT), so the second cut must use row 2's own
         # width. Same text, same row 1, but a roomier row 2 swallows one more
         # phrase -- which only happens if the width is read per row.
         text = "a, bb, ccc, dddd"
@@ -273,7 +227,7 @@ class MarqueeTests(unittest.TestCase):
             self.assertEqual(layout.marquee(self.text, 60.0, 10.0), "abcdefghi…")
 
     def test_marquee_without_a_width_returns_the_whole_line(self):
-        # A zero viewport means "unknown"; cropping to nothing would blank the
+        # A zero width means "unknown"; cropping to nothing would blank the
         # widget, so the line is handed back untouched.
         self.assertEqual(layout.marquee(self.text, 60.0, 0.0), self.text)
 
@@ -282,19 +236,25 @@ class CurrentLyricLineTests(unittest.TestCase):
     LINES = [(5.0, "first"), (10.0, "second"), (20.0, "third")]
 
     def test_current_lyric_line_picks_the_line_that_started_last(self):
-        self.assertEqual(layout.current_lyric_line(self.LINES, 12.5), ("second", 2.5, 1))
+        self.assertEqual(
+            layout.current_lyric_line(self.LINES, 12.5), ("second", 2.5, 1)
+        )
 
     def test_current_lyric_line_includes_its_own_timestamp(self):
         # At exactly the timestamp the new line is already on screen, with no
         # elapsed time yet -- which is what stops the scroll from jumping.
-        self.assertEqual(layout.current_lyric_line(self.LINES, 10.0), ("second", 0.0, 1))
+        self.assertEqual(
+            layout.current_lyric_line(self.LINES, 10.0), ("second", 0.0, 1)
+        )
 
     def test_current_lyric_line_before_the_first_timestamp_is_none(self):
         # The intro has no line yet; index -1 tells the caller so.
         self.assertEqual(layout.current_lyric_line(self.LINES, 1.0), (None, 0.0, -1))
 
     def test_current_lyric_line_after_the_last_timestamp_holds_it(self):
-        self.assertEqual(layout.current_lyric_line(self.LINES, 100.0), ("third", 80.0, 2))
+        self.assertEqual(
+            layout.current_lyric_line(self.LINES, 100.0), ("third", 80.0, 2)
+        )
 
     def test_current_lyric_line_of_an_empty_lyric_is_none(self):
         self.assertEqual(layout.current_lyric_line([], 12.5), (None, 0.0, -1))

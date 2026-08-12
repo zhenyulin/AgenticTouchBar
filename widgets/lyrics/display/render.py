@@ -4,21 +4,27 @@ from __future__ import annotations
 
 import json
 import os
-import subprocess
 import time
 from typing import Any
 
 from .. import config
-from ..sources.apple_music import _last_sample_age_ms, current_track, is_placeholder_track
-from ..runtime.cache import atomic_write_json, cache_path, read_compatible_cache
 from ..fetch import start_background_fetch
-from .layout import crop_cells, current_lyric_line, display_width, marquee, wrap_lyric
-from ..runtime.locking import acquire_widget_lock, fetch_waiting_seconds, release_widget_lock
+from ..providers.apple_cache import apple_cache_record
+from ..runtime.cache import atomic_write_json, cache_path, read_compatible_cache
+from ..runtime.locking import (
+    acquire_widget_lock,
+    fetch_waiting_seconds,
+    release_widget_lock,
+)
+from ..runtime.output import emit, emit_last_output, log_error, trace
+from ..sources.apple_music import (
+    _last_sample_age_ms,
+    current_track,
+    is_placeholder_track,
+)
 from ..text.lrc import parse_lrc
 from ..text.metadata import track_cache_key
-from ..runtime.output import emit, emit_last_output, log_error, trace
-from ..providers.apple_cache import apple_cache_record
-from .viewport import ensure_viewport, pair_short_of_space, viewport_cells
+from .layout import crop_cells, current_lyric_line, display_width, marquee, wrap_lyric
 
 # What this tick is putting on the Touch Bar, filled in as the tick renders
 # and written out once by widget_main. BetterTouchTool runs the widget as a
@@ -67,67 +73,13 @@ def marker_font_color(track: dict[str, Any]) -> str:
     return f"{gray},{gray},{gray},255"
 
 
-def update_opencode_visibility(cramped: bool) -> None:
-    """Hide the OpenCode widget while the pair is cramped, restore it after.
-
-    BetterTouchTool removes a script widget whose text is empty, so hiding
-    is the same `update_touch_bar_widget <uuid> text ""` the preset uses to
-    hide Lyrics when Music quits; restoring is a refresh_widget. Each call
-    is an osascript launch (~200 ms), so one runs only on a state change.
-    The flag file is the durable signal in between -- the OpenCode widget's
-    own tick honours it too, which also covers a kick that never lands.
-    """
-    path = config.OPENCODE_HIDE_PATH
-    hidden = path.is_file()
-    if cramped == hidden:
-        if cramped:
-            # The flag's age is how the OpenCode widget tells a live "hide"
-            # from a lyrics widget that stopped running; keep it fresh.
-            try:
-                path.touch()
-            except OSError as exc:
-                log_error(f"Could not touch {path}: {exc}")
-        return
-
-    try:
-        if cramped:
-            path.touch()
-        else:
-            path.unlink()
-    except OSError as exc:
-        log_error(f"Could not update {path}: {exc}")
-        return
-
-    action = "update_touch_bar_widget" if cramped else "refresh_widget"
-    text = ' text ""' if cramped else ""
-    _btt_osascript(
-        f'tell application "BetterTouchTool" to {action} '
-        f'"{config.OPENCODE_WIDGET_UUID}"{text}'
-    )
-
-
-def _btt_osascript(script: str) -> None:
-    """One AppleScript line for BetterTouchTool, detached and forgettable."""
-    try:
-        subprocess.Popen(
-            ["/usr/bin/osascript", "-e", script],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            start_new_session=True,
-        )
-    except OSError as exc:
-        log_error(f"osascript to BTT failed: {exc}")
-
-
 def write_render_receipt(outcome: str) -> None:
     """Record what went on screen this tick.
 
     Read back by last_rendered_key on the next tick; the rest of the payload
     (`at`, `outcome`, `state`, `index`, `next_change_at`) is the diagnostic
-    record of that frame. It used to be the freeze guard's evidence that the
-    display had stopped moving -- the guard is retired, so nothing reads
-    those fields now, but they cost one write of an already-open file and
-    they are what makes logs/lyrics/render.json worth looking at by hand.
+    record of that frame -- what makes logs/lyrics/render.json worth looking
+    at by hand.
     """
     if outcome in REPRINT_OUTCOMES:
         return
@@ -226,10 +178,8 @@ def render_widget(
     lyric, elapsed, index = current_lyric_line(lines, position)
 
     # The one thing only this function knows: when the frame it is about to
-    # return stops being correct, as a wall clock time. It let the freeze
-    # guard judge a stuck display without parsing any LRC; with the guard
-    # retired it survives in the receipt as the record of what this frame
-    # was scheduled to do.
+    # return stops being correct, as a wall clock time. It survives in the
+    # receipt as the record of what this frame was scheduled to do.
     _RECEIPT["index"] = index
     if state == "playing" and index + 1 < len(lines):
         _RECEIPT["next_change_at"] = time.time() + max(
@@ -244,9 +194,9 @@ def render_widget(
     if lyric is None:
         return prefix + title
 
-    viewport = viewport_cells()
-    first_width = max(viewport - display_width(prefix), 8)
-    other_width = max(viewport - display_width(config.CONTINUATION_INDENT), 8)
+    cells = config.LYRIC_WIDTH_CELLS
+    first_width = max(cells - display_width(prefix), 8)
+    other_width = max(cells - display_width(config.CONTINUATION_INDENT), 8)
     rows = wrap_lyric(lyric, [first_width, other_width], config.MAX_LYRIC_ROWS)
 
     if len(rows) == 1 and config.MAX_LYRIC_ROWS > 1 and index + 1 < len(lines):
@@ -287,19 +237,6 @@ def render_tick() -> str:
 
     state = track.get("state")
     _RECEIPT["state"] = state or ""
-    # The Now Playing + Lyrics pair is on screen in exactly these states,
-    # so those are the only ones that can crowd the row. While it does,
-    # the OpenCode widget hides to hand its slot over; the decision is
-    # re-taken every tick and the kick only fires on a change. The hide is
-    # disabled for now (config.OPENCODE_HIDE_ENABLED), so cramped stays
-    # False: the first tick clears any flag the old behaviour left behind
-    # and restores the widget, then the call no-ops.
-    key = track_cache_key(track) if state in {"playing", "paused"} else None
-    update_opencode_visibility(
-        config.OPENCODE_HIDE_ENABLED
-        and key is not None
-        and pair_short_of_space(track, key)
-    )
     if state == "denied":
         emit("⚠ Allow BTT → Music")
         return "denied"
@@ -321,10 +258,6 @@ def render_tick() -> str:
 
     key = track_cache_key(track)
     _RECEIPT["key"] = key
-    # How wide the Now Playing widget beside this one has grown depends on
-    # the track, so the room left for the lyric is re-measured whenever the
-    # track changes -- in the background, never in this tick.
-    ensure_viewport(key, track)
     cached = read_compatible_cache(key, track)
     now = time.time()
 
@@ -389,8 +322,8 @@ def widget_main() -> int:
 
     if not acquire_widget_lock():
         # Two runs overlapping means ticks are taking longer than the widget's
-        # interval. That is the shape of a freeze building, so it is worth a
-        # line of its own rather than being lost inside the normal path.
+        # interval, so it is worth a line of its own rather than being lost
+        # inside the normal path.
         emit_last_output()
         trace("widget", started, "locked")
         return 0
