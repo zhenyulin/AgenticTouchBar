@@ -121,7 +121,7 @@ BTT's shell actions can see them (BTT environment variables or `~/.zshenv`).
 | `CLASH_LATENCY_MIN_MS`, `CLASH_LATENCY_MAX_MS` | `150`, `500` | Latency colour bands |
 | `CLAUDE_QUOTA_MAX_AGE`, `CODEX_QUOTA_MAX_AGE`, `OPENCODE_QUOTA_MAX_AGE` | `300` | Quota cache freshness (seconds) |
 | `BTT_LYRICS_*` | — | Lyrics tunables — see [`specs/design/LYRICS.md`](specs/design/LYRICS.md) |
-| `BTT_NOW_PLAYING_ALLOWED` | `com.apple.Music com.tencent.QQMusicMac` | Now Playing widget: space-separated bundle ids allowed to hold the row (matched case-insensitively) |
+| `BTT_NOW_PLAYING_ALLOWED` | `com.apple.Music com.tencent.QQMusicMac` | Space-separated bundle ids allowed to hold the Now Playing row and to drive the Lyrics sampler's MediaRemote fallback (matched case-insensitively; Lyrics drops `com.apple.Music`, which it reads directly) |
 | `BTT_WEATHER_UNIT`, `BTT_WEATHER_TTL` | `celsius`, `300` | Weather widgets: unit (celsius/fahrenheit) and get_weather cache TTL (seconds) |
 
 ## The Lyrics feature

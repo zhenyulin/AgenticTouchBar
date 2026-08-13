@@ -59,7 +59,7 @@ flowchart TD
     D --> C
     C --> E{Player state}
     E -->|denied| F[Try nowplaying-cli]
-    E -->|stopped or not running| G[Try MediaRemote]
+    E -->|stopped or not running| G[Try MediaRemote, allowed holders]
     E -->|playing| H[Keep projected position]
 ```
 
@@ -210,7 +210,8 @@ synchronisation never requires a live position query.
 | Sample is old but still within the maximum usable age | Start a detached sampler and use the old sample | The current frame remains usable while fresh state is acquired. |
 | Sample is older than the usable-age limit or absent | Start a sampler and return no usable track | The last rendered frame is reprinted; no blank intermediate frame is introduced. |
 | Apple Music responds with permission denied | Try `nowplaying-cli` | A usable alternate sample may continue playback; otherwise the denied state is rendered. |
-| Music is stopped or not running | Try MediaRemote | A non-Music player may supply the track; otherwise the widget becomes idle. |
+| Music is stopped or not running | Try MediaRemote | A player on the shared allowlist (QQ Music by default) may supply the track; otherwise the widget becomes idle. |
+| MediaRemote's holder is not on the allowlist (a browser, most often) | Report not_running | A YouTube tab cannot hijack the lyric; the gate mirrors `widgets/now-playing.sh` and shares `BTT_NOW_PLAYING_ALLOWED`. |
 | AppleScript fails for a reason other than permission denial | Keep the previous sample | The widget avoids replacing valid state with an unverified failure. |
 | MediaRemote changes title or artist | Reset its locally tracked position | Subsequent playback position starts from the new track's sample. |
 | MediaRemote reports a new raw elapsed time | Re-anchor the projected position to it | QQ Music refreshes this field on seek/pause/resume/restart, so in-player seeks are followed on the next sample. |

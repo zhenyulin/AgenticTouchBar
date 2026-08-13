@@ -105,9 +105,22 @@ NOWPLAYING_STATE_BIN = os.environ.get(
     str(Path.home() / "Library" / "Application Support" / "BTT" / "nowplaying-state"),
 )
 NETWORK_TIMEOUT_SECONDS = float(os.environ.get("BTT_LYRICS_NETWORK_TIMEOUT", "4.0"))
-# Already covered by the direct AppleScript path, and better: MediaRemote
-# never reports Apple Music's live position, only a stale 0.
-MEDIA_REMOTE_IGNORED_BUNDLE_IDS = {"com.apple.Music"}
+# Which MediaRemote session holders the fallback accepts. An allowlist, not
+# a denylist, mirroring widgets/now-playing.sh: browsers are many and keep
+# appearing, real players are few and fixed, so a YouTube tab can never
+# hijack the lyric. Shares BTT_NOW_PLAYING_ALLOWED with now-playing.sh so
+# one knob tunes both widgets; com.apple.Music is dropped here regardless --
+# the direct AppleScript path already covers it, and better: MediaRemote
+# never reports Music's live position, only a stale 0. Compared case-folded,
+# like now-playing.sh, because vendors spell their own ids inconsistently
+# (QQ Music registers com.tencent.QQMusicMac).
+MEDIA_REMOTE_ALLOWED_BUNDLE_IDS = {
+    bundle_id.lower()
+    for bundle_id in os.environ.get(
+        "BTT_NOW_PLAYING_ALLOWED", "com.apple.Music com.tencent.QQMusicMac"
+    ).split()
+    if bundle_id.lower() != "com.apple.music"
+}
 
 REPO_DIR = Path(os.environ.get("BTT_REPO_DIR", Path(__file__).resolve().parents[2]))
 CACHE_DIR = Path(

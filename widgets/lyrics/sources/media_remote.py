@@ -151,11 +151,12 @@ def _track_identity(title: str, artist: str) -> str:
 
 
 def read_media_remote() -> dict[str, Any]:
-    """The system-wide Now Playing track, from whichever app currently holds it.
+    """The system-wide Now Playing track, when an allowed player holds it.
 
     Returns {"state": "not_running"} when nothing is playing anywhere, or
-    when the current holder is Apple Music itself -- see
-    MEDIA_REMOTE_IGNORED_BUNDLE_IDS.
+    when the current holder is not on config.MEDIA_REMOTE_ALLOWED_BUNDLE_IDS
+    -- a browser playing a YouTube tab included. The allowlist mirrors
+    widgets/now-playing.sh, so the same holders drive both widgets.
     """
     if not config.ENABLE_MEDIA_REMOTE:
         return {"state": "not_running"}
@@ -166,7 +167,9 @@ def read_media_remote() -> dict[str, Any]:
 
     title = str(raw.get("title") or "").strip()
     bundle_id = raw.get("clientBundleIdentifier") or ""
-    if not title or bundle_id in config.MEDIA_REMOTE_IGNORED_BUNDLE_IDS:
+    # Case-folded, like now-playing.sh (QQ Music registers
+    # com.tencent.QQMusicMac).
+    if not title or bundle_id.lower() not in config.MEDIA_REMOTE_ALLOWED_BUNDLE_IDS:
         return {"state": "not_running"}
 
     artist = str(raw.get("artist") or "").strip()

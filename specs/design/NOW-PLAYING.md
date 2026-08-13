@@ -47,7 +47,7 @@ The widget is configured in
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
-| `BTT_NOW_PLAYING_ALLOWED` | `com.apple.Music com.tencent.QQMusicMac` | Space-separated bundle ids allowed to hold the row, compared case-folded. |
+| `BTT_NOW_PLAYING_ALLOWED` | `com.apple.Music com.tencent.QQMusicMac` | Space-separated bundle ids allowed to hold the row, compared case-folded. The Lyrics sampler's MediaRemote fallback honors the same knob (minus `com.apple.Music`, which the sampler reads directly). |
 | `BTT_LYRICS_WIDGET_UUID` | `E19BB023-5060-4A56-95C8-6E7402779870` | Lyrics widget cleared on a track change; defaulted rather than passed in, so the widget survives a preset that was never re-imported. |
 | `BTT_WIDGET_CACHE_DIR` | `$BTT_REPO_DIR/cache` | Artwork, player icons, identity file, clear marker. |
 | `BTT_LYRICS_CACHE_DIR` | `$BTT_REPO_DIR/cache/lyrics` | Where `state.json` — the sampler fallback — is read from. |
