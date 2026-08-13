@@ -149,6 +149,14 @@ widget out. Grey is simply what the widget looks like while its refresh lock
 is held, which makes the dim frame mean something: it lasts exactly as long as
 the work does, whether a tap or an ordinary tick started it.
 
+One caveat to the dim frame: a label that is a color emoji (the weather icon
+instance) ignores the RGB of `font_color` — Apple Color Emoji glyphs draw
+from their own bitmap, so an opaque grey RGB would leave the emoji at full
+colour. The glyph still composites the **alpha** of the fill colour, so an
+emoji-only instance dims by fading: `BTT_WIDGET_DIM_COLOR="255,255,255,140"`
+in `widgets/weather.sh` renders the emoji at ~55% over the black bar, which
+reads as grey.
+
 `btt_color_at_progress <0..100>` interpolates each channel from the dim colour
 to the normal colour and keeps the normal alpha.
 
@@ -187,6 +195,13 @@ timestamp, so touching a file is enough to renew it.
 reap a lock older than max_run
   -> mkdir cache/<name>.refreshing   (atomic create-only-if-absent)
   -> btt_spawn_detached zsh -c 'trap "" HUP; "$@"; rmdir lock; redraw'
+
+The redraw asks BTT to `refresh_widget` the spawning UUID first, then each
+UUID in `BTT_WIDGET_REDRAW_UUIDS` -- sibling widget instances that share this
+refresh lock and cache entry. The two weather instances share
+`cache/weather.data` and both paint the dim frame while its lock is held, so
+without the list the instance that lost the `mkdir` race stayed grey until
+its own next tick.
 ```
 
 **Properties:**
@@ -198,6 +213,9 @@ reap a lock older than max_run
 - The redraw is attempted at 0 s, 0.5 s, and 2 s after the lock is dropped,
   each attempt skipped unless `pgrep -x BetterTouchTool` succeeds —
   `osascript` auto-launches a dead BTT, undoing a manual quit.
+- The redraw list is a plain space-separated string passed as a positional to
+  the detached wrapper (not an environment variable), so nothing the widget
+  script exports leaks into the detached shell.
 - Fully detached, never `nohup … &`. `btt_spawn_detached` runs a Python
   double fork (`os.fork()` → `os.setsid()` → `os.execvp()`), which moves the
   child into a session of its own while keeping it in the same

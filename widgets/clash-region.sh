@@ -12,6 +12,11 @@ btt_parse_widget_args "$@"
 
 BTT_WIDGET_NAME="clash-region"
 BTT_WIDGET_COLOR_OVERRIDE="${CLASH_FONT_COLOR:-}"
+# The label is a country flag emoji: those glyphs ignore font_color's RGB,
+# so the shared grey dim colour would not show on it at all. They still
+# honour the alpha channel, so the dim frame fades the flag instead -- the
+# same trick as the weather icon instance in weather.sh.
+BTT_WIDGET_DIM_COLOR="255,255,255,140"
 BTT_WIDGET_REFRESH_MAX_RUN=30
 # The flag is the whole widget, so a run with nothing cached yet shows the
 # generic globe rather than the shared ellipsis.

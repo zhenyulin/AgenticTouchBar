@@ -30,17 +30,24 @@ PATH="/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin"
 # here rather than by btt_parse_widget_args, which knows only the first two.
 REFRESH_MODE=0
 MODE="text"
-UUID_CANDIDATE=""
+UUID_CANDIDATES=()
 for arg in "$@"; do
     case "$arg" in
         --refresh)   REFRESH_MODE=1 ;;
         --text|text) MODE="text" ;;
         --icon|icon) MODE="icon" ;;
         --*)         exit 2 ;;
-        *)           UUID_CANDIDATE="$arg" ;;
+        *)           UUID_CANDIDATES+=("$arg") ;;
     esac
 done
-BTT_WIDGET_UUID="${UUID_CANDIDATE:-${BTT_WIDGET_UUID:-}}"
+# The preset passes both weather widget UUIDs, own first. Siblings go to
+# BTT_WIDGET_REDRAW_UUIDS: both instances paint the dim frame while the
+# shared weather refresh lock is held, and the refresh wrapper must repaint
+# both when it drops the lock, or the non-spawning one stays grey.
+BTT_WIDGET_UUID="${UUID_CANDIDATES[1]:-${BTT_WIDGET_UUID:-}}"
+for (( i = 2; i <= ${#UUID_CANDIDATES[@]}; i++ )); do
+    BTT_WIDGET_REDRAW_UUIDS+="${BTT_WIDGET_REDRAW_UUIDS:+ }${UUID_CANDIDATES[i]}"
+done
 
 SELF="${0:A}"
 source "${SELF:h}/lib/btt-widget.sh"
@@ -52,6 +59,12 @@ BTT_WIDGET_VALUE_NAME="weather.data"
 BTT_WIDGET_REFRESH_MAX_RUN=60
 BTT_WIDGET_RENDER=render_conditions
 BTT_WIDGET_REFRESH_DETAIL=describe_conditions
+
+# Apple Color Emoji glyphs ignore the RGB of font_color, so the shared grey
+# dim colour would not show on the icon instance's emoji at all. They do
+# still honour the alpha channel, so the icon instance's dim frame fades the
+# glyph instead: white at ~55% over the black bar reads as a greyed emoji.
+[[ "$MODE" == icon ]] && BTT_WIDGET_DIM_COLOR="255,255,255,140"
 
 # How long a fetched result is reused before the sources are asked again.
 WEATHER_TTL="${BTT_WEATHER_TTL:-300}"

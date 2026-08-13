@@ -72,6 +72,13 @@ BTT_WIDGET_FORCE_MAX_AGE="${BTT_WIDGET_FORCE_MAX_AGE:-10}"
 # Optional icon, so that a dimmed frame keeps the widget's icon.
 BTT_WIDGET_ICON="${BTT_WIDGET_ICON:-}"
 
+# Extra widget UUIDs to redraw after this widget's refresh completes, beyond
+# the one that spawned it. Widget instances sharing one refresh lock -- the
+# two weather widgets share cache/weather.data -- all paint the dim frame
+# while the lock is held, but only the spawner's UUID was asked to redraw,
+# so a sibling stayed grey until its own next tick. Space-separated.
+BTT_WIDGET_REDRAW_UUIDS="${BTT_WIDGET_REDRAW_UUIDS:-}"
+
 # Trace file shared by every widget, read by
 # `widgets/now-playing-lyrics.sh --report`. Set to 0 to turn tracing off.
 BTT_WIDGET_TRACE="${BTT_WIDGET_TRACE:-1}"
@@ -332,7 +339,7 @@ btt_refresh_detached() {
     # tick.
     btt_spawn_detached /bin/zsh -c '
             trap "" HUP
-            lock="$1"; uuid="$2"; shift 2
+            lock="$1"; uuid="$2"; redraw_uuids="$3"; shift 3
             "$@"
             rmdir "$lock" 2>/dev/null
             if [[ -n "$uuid" ]]; then
@@ -341,10 +348,14 @@ btt_refresh_detached() {
                     # osascript auto-launches a dead BTT, undoing a manual
                     # quit; the redraw only makes sense while BTT is up.
                     /usr/bin/pgrep -x BetterTouchTool >/dev/null 2>&1 || continue
-                    /usr/bin/osascript -e "tell application \"BetterTouchTool\" to refresh_widget \"$uuid\"" >/dev/null 2>&1
+                    # The spawner first, then any sibling instances that share
+                    # this refresh lock and painted the dim frame too.
+                    for widget_uuid in "$uuid" ${=redraw_uuids}; do
+                        /usr/bin/osascript -e "tell application \"BetterTouchTool\" to refresh_widget \"$widget_uuid\"" >/dev/null 2>&1
+                    done
                 done
             fi
-        ' refresh-wrapper "$lock" "$uuid" "$@"
+        ' refresh-wrapper "$lock" "$uuid" "${BTT_WIDGET_REDRAW_UUIDS:-}" "$@"
 
     return 0
 }
@@ -370,6 +381,9 @@ btt_refresh_detached() {
 #                             widget's own name. The two weather widgets share
 #                             one weather.data entry, so a refresh started by
 #                             either serves both.
+#   BTT_WIDGET_REDRAW_UUIDS   space-separated sibling widget UUIDs to redraw
+#                             once the refresh finishes, so every instance
+#                             sharing this refresh is repainted white.
 #   BTT_WIDGET_RENDER         function mapping the cached value to the text to
 #                             publish, as <render> <value>. For a widget whose
 #                             cache holds source data rather than a label --
