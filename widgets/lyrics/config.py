@@ -104,6 +104,12 @@ NOWPLAYING_STATE_BIN = os.environ.get(
     "BTT_LYRICS_NOWPLAYING_STATE_BIN",
     str(Path.home() / "Library" / "Application Support" / "BTT" / "nowplaying-state"),
 )
+# How old the shared MediaRemote dictionary (MEDIA_REMOTE_RAW_PATH, defined
+# with the other paths below) may be before the sampler asks for its own. The
+# widget that writes it ticks every second.
+MEDIA_REMOTE_RAW_MAX_AGE_SECONDS = float(
+    os.environ.get("BTT_NOW_PLAYING_RAW_MAX_AGE", "5.0")
+)
 NETWORK_TIMEOUT_SECONDS = float(os.environ.get("BTT_LYRICS_NETWORK_TIMEOUT", "4.0"))
 # Which MediaRemote session holders the fallback accepts. An allowlist, not
 # a denylist, mirroring widgets/now-playing.sh: browsers are many and keep
@@ -133,7 +139,25 @@ STATE_PATH = CACHE_DIR / "state.json"
 # Where the hand-tracked MediaRemote position is kept between samples.
 MEDIA_REMOTE_POSITION_PATH = CACHE_DIR / "media_remote_position.json"
 LAST_TEXT_PATH = CACHE_DIR / "last.txt"
-VALUE_PATH = CACHE_DIR / "lyrics.value"
+# The raw MediaRemote dictionary widgets/now-playing.sh writes on its own one
+# second tick (via widgets/lib/media-remote.sh). The sampler reads it rather
+# than running nowplaying-cli a second time: the two widgets sit side by side
+# and want the same answer, and the call costs ~0.22 s.
+#
+# It is also the only source of the session holder's bundle id. The compiled
+# state helper drops every NSData value, and the holder's id arrives inside
+# one (ClientPropertiesData) -- so the helper alone cannot satisfy
+# MEDIA_REMOTE_ALLOWED_BUNDLE_IDS above, and a sampler that trusted it for the
+# id saw an empty string and rejected every track.
+MEDIA_REMOTE_RAW_PATH = Path(
+    os.environ.get(
+        "BTT_NOW_PLAYING_RAW_PATH",
+        str(
+            Path(os.environ.get("BTT_WIDGET_CACHE_DIR", str(REPO_DIR / "cache")))
+            / "now-playing.raw.json"
+        ),
+    )
+)
 # What the last rendering tick put on screen, and when that frame is due to
 # change. Written only by ticks that render something of their own -- see
 # render.write_render_receipt -- and read back by render.last_rendered_key,

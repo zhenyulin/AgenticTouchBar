@@ -20,12 +20,31 @@
 //       -o ~/Library/Application\ Support/BTT/nowplaying-state
 //
 // Prints one JSON object: an "isPlaying" boolean plus the Now Playing info
-// dictionary under its kMRMediaRemoteNowPlayingInfo* keys, with artwork and
-// anything else NSJSONSerialization cannot encode dropped. Reads as
+// dictionary under its kMRMediaRemoteNowPlayingInfo* keys. Reads as
 // {"isPlaying": false} when no app is playing (or MediaRemote is silent,
 // after an internal timeout).
+//
+// NSData values need care, because two of them are the whole reason a caller
+// asks MediaRemote anything:
+//
+//   ...ArtworkData           the album cover. Emitted as base64, the same
+//                            shape nowplaying-cli get-raw produces, so a
+//                            caller that has this helper does not also need
+//                            nowplaying-cli (~0.22 s) for the cover.
+//   ...ClientPropertiesData  a serialized protobuf describing the session
+//                            holder. The holder's bundle id is in there and
+//                            nowhere else in this dictionary -- the widgets'
+//                            allowlists are built on it. Decoded through
+//                            MediaRemote's own private protobuf class when
+//                            that is available, and published under the
+//                            ...ClientBundleIdentifier key nowplaying-cli
+//                            synthesizes, so both sources read alike.
+//
+// Every other NSData is still dropped: nothing reads them, and base64 of an
+// unknown blob is only cost.
 
 #import <Foundation/Foundation.h>
+#import <objc/runtime.h>
 
 // Private MediaRemote framework; declared here so no headers are needed.
 extern void MRMediaRemoteGetNowPlayingInfo(
@@ -33,11 +52,60 @@ extern void MRMediaRemoteGetNowPlayingInfo(
 extern void MRMediaRemoteGetNowPlayingApplicationIsPlaying(
     dispatch_queue_t queue, void (^completion)(BOOL isPlaying));
 
+static NSString *const kArtworkKey = @"kMRMediaRemoteNowPlayingInfoArtworkData";
+static NSString *const kClientPropertiesKey =
+    @"kMRMediaRemoteNowPlayingInfoClientPropertiesData";
+static NSString *const kBundleIdentifierKey =
+    @"kMRMediaRemoteNowPlayingInfoClientBundleIdentifier";
+
+// The session holder's bundle id, out of the client-properties protobuf.
+//
+// _MRNowPlayingClientProtobuf is private and undeclared, so every step is
+// checked before it is taken and the whole thing is wrapped: a helper that
+// crashes here would take the play/pause state down with it, and the callers
+// have another way to learn the bundle id (nowplaying-cli). Returns nil
+// whenever the class, the initializer or the property is not what we expect.
+static NSString *BundleIdentifierFromClientProperties(NSData *properties) {
+    if (properties.length == 0) {
+        return nil;
+    }
+    Class protobuf = objc_getClass("_MRNowPlayingClientProtobuf");
+    if (protobuf == nil ||
+        ![protobuf instancesRespondToSelector:@selector(initWithData:)]) {
+        return nil;
+    }
+    @try {
+        id client = [[protobuf alloc] performSelector:@selector(initWithData:)
+                                           withObject:properties];
+        if (client == nil) {
+            return nil;
+        }
+        id identifier = [client valueForKey:@"bundleIdentifier"];
+        if ([identifier isKindOfClass:[NSString class]] &&
+            [(NSString *)identifier length] > 0) {
+            return identifier;
+        }
+    } @catch (NSException *exception) {
+        // Private API drifted; the caller falls back to nowplaying-cli.
+    }
+    return nil;
+}
+
 static NSDictionary *JSONSafeInfo(NSDictionary *info) {
     NSMutableDictionary *safe = [NSMutableDictionary dictionary];
     for (NSString *key in info) {
         id value = info[key];
         if ([value isKindOfClass:[NSData class]]) {
+            NSData *data = (NSData *)value;
+            if ([key isEqualToString:kArtworkKey]) {
+                safe[key] = [data base64EncodedStringWithOptions:0];
+            } else if ([key isEqualToString:kClientPropertiesKey]) {
+                NSString *bundleIdentifier =
+                    BundleIdentifierFromClientProperties(data);
+                if (bundleIdentifier != nil) {
+                    safe[kBundleIdentifierKey] = bundleIdentifier;
+                }
+            }
             continue;
         }
         if ([value isKindOfClass:[NSDate class]]) {
@@ -64,6 +132,14 @@ static NSDictionary *JSONSafeInfo(NSDictionary *info) {
 // freed block was a SIGSEGV. Each query gets a fresh semaphore, and the two
 // queries run one after the other: that is the combination verified stable
 // under repeated invocation, so the sampler's once-a-second run is safe.
+//
+// The info block must also take ownership of what it is handed. This file is
+// compiled without ARC, and MediaRemote passes an autoreleased dictionary
+// that it drains on its own queue as soon as the block returns -- so simply
+// assigning it left main messaging freed memory once the semaphore came back.
+// Measured on 2026-08-13: a binary built from the assigning version crashed
+// 18 runs out of 20, while the copy below is clean. Anything read out of the
+// completion has to be copied or retained here, not just pointed at.
 
 int main(void) {
     dispatch_queue_t queue =
@@ -94,7 +170,7 @@ int main(void) {
     sem = dispatch_semaphore_create(0);
     __block NSDictionary *info = nil;
     void (^infoBlock)(NSDictionary *) = [^(NSDictionary *dict) {
-        info = dict;
+        info = [dict copy];
         dispatch_semaphore_signal(sem);
     } copy];
     MRMediaRemoteGetNowPlayingInfo(queue, infoBlock);

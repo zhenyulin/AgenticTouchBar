@@ -9,8 +9,8 @@ Python — no plugin, no daemon, no background service.
 
 | Path | Contents |
 | --- | --- |
-| `widgets/` | One script per widget, plus `lib/` (shared widget runtime, Clash helpers) and `lyrics/` (the Lyrics feature package) |
-| `actions/` | Helpers invoked by widget taps, media keys, and setup |
+| `widgets/` | One script per widget, plus `lib/` (shared widget runtime, quota widgets, Clash and MediaRemote helpers) and `lyrics/` (the Lyrics feature package) |
+| `actions/` | Helpers invoked by widget taps, media keys, and setup, plus `lib/` (shared BTT-control support) |
 | `bttpreset/` | Exported BTT preset (`Default.bttpreset`) and `backup.bttpreset` |
 | `cache/`, `logs/` | Runtime state and diagnostics, created automatically |
 
@@ -70,11 +70,10 @@ playing YouTube included. The `now-playing.sh` script widget replaces it:
 it prints the track only when the holder's bundle id is in
 `BTT_NOW_PLAYING_ALLOWED` (an allowlist, not a denylist, because browsers
 are many and players are few) and prints nothing otherwise, which makes
-BTT hide it. It reads the track from `nowplaying-cli get-raw` (the only
-source carrying the holder's bundle id) but takes play/pause from the
-`nowplaying-state` helper's `isPlaying`, because the published playback rate
-lies: QQ Music keeps reporting rate 1 while paused, which left the album
-cover on screen where the play icon belongs — the same finding
+BTT hide it. It takes play/pause from the `nowplaying-state` helper's
+`isPlaying`, because the published playback rate lies: QQ Music keeps
+reporting rate 1 while paused, which left the album cover on screen where the
+play icon belongs — the same finding
 [`specs/design/LYRICS.md`](specs/design/LYRICS.md) records for the lyrics sampler. The
 preset ships it in place of the native widget (same UUID,
 so `BTT_WIDGET_NOW_PLAYING_UUID` keeps working): 1 s refresh, tap toggles
@@ -87,6 +86,16 @@ Playing is one of the widgets merged into groups, so the same long-press
 closes the group from inside it. Long-pressing the Lyrics widget opens the
 player (named trigger → `now-playing-app.sh`), which is where that action
 used to live on Now Playing.
+
+The track itself comes from whichever MediaRemote source can answer in full.
+The `nowplaying-state` helper is asked first because it is the cheaper of the
+two (~0.05 s against `nowplaying-cli`'s ~0.22 s, on a widget that runs every
+second); when the session's holder does not publish the bundle id and the
+artwork the helper needs to answer alone, `nowplaying-cli get-raw` supplies
+them. Either way the dictionary is written to `cache/now-playing.raw.json`,
+where the Lyrics sampler and the Star widget's gate read it instead of
+querying MediaRemote again — see
+[`widgets/lib/media-remote.sh`](widgets/lib/media-remote.sh).
 
 Each widget script takes its BTT widget UUID as an optional first argument,
 which taps and detached refreshes use to address the widget. Refresh
@@ -122,6 +131,8 @@ BTT's shell actions can see them (BTT environment variables or `~/.zshenv`).
 | `CLAUDE_QUOTA_MAX_AGE`, `CODEX_QUOTA_MAX_AGE`, `OPENCODE_QUOTA_MAX_AGE` | `300` | Quota cache freshness (seconds) |
 | `BTT_LYRICS_*` | — | Lyrics tunables — see [`specs/design/LYRICS.md`](specs/design/LYRICS.md) |
 | `BTT_NOW_PLAYING_ALLOWED` | `com.apple.Music com.tencent.QQMusicMac` | Space-separated bundle ids allowed to hold the Now Playing row and to drive the Lyrics sampler's MediaRemote fallback (matched case-insensitively; Lyrics drops `com.apple.Music`, which it reads directly) |
+| `BTT_NOW_PLAYING_STATE_BIN`, `BTT_NOW_PLAYING_CLI` | the compiled helper in BTT's support directory, `nowplaying-cli` on `PATH` | The two MediaRemote sources (`widgets/lib/media-remote.sh`); overriding either is how a fixture drives these scripts, since they set their own `PATH` |
+| `BTT_NOW_PLAYING_RAW_PATH`, `BTT_NOW_PLAYING_RAW_MAX_AGE` | `$BTT_REPO_DIR/cache/now-playing.raw.json`, `5` | The raw Now Playing dictionary the Now Playing widget writes each tick, and how old the Lyrics sampler and the Star widget's gate may find it before asking for their own |
 | `BTT_WEATHER_UNIT`, `BTT_WEATHER_TTL` | `celsius`, `300` | Weather widgets: unit (celsius/fahrenheit) and get_weather cache TTL (seconds) |
 
 ## The Lyrics feature

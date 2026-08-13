@@ -17,18 +17,12 @@ set -u
 
 zmodload zsh/datetime
 
-REPO_DIR="${BTT_REPO_DIR:-$HOME/Documents/BTT}"
-LOG_DIR="${BTT_LOG_DIR:-$REPO_DIR/logs}"
-# Shared with actions/btt-quit.sh: one log for the manual BTT control actions.
-LOG="$LOG_DIR/btt-control.log"
+# Shared with actions/btt-quit.sh: one log, and one way to find BTT's pid.
+source "${0:A:h}/lib/btt-control.sh"
+
+LOG_DIR="$BTT_CONTROL_LOG_DIR"
 WIDGET_TRACE_FILE="${BTT_WIDGET_TRACE_FILE:-$LOG_DIR/trace.tsv}"
 LYRICS_TRACE_FILE="${BTT_LYRICS_TRACE_FILE:-$LOG_DIR/lyrics/trace.tsv}"
-
-mkdir -p "$LOG_DIR" 2>/dev/null
-
-log() {
-	echo "$(date '+%Y-%m-%d %H:%M:%S') $*" >> "$LOG"
-}
 
 # Seconds spanned by the ticks since the last `+` marker row.
 restart_duration() {
@@ -51,10 +45,6 @@ restart_duration() {
 	' "$file" 2>/dev/null || printf '0\n'
 }
 
-btt_pid() {
-	/usr/bin/pgrep -x BetterTouchTool 2>/dev/null | /usr/bin/awk 'NR == 1 { print; exit }'
-}
-
 # --- Record the manual restart ----------------------------------------------
 
 restart_id="$EPOCHREALTIME"
@@ -67,4 +57,4 @@ printf '+\t%s\tBTT manual restart\n' "$(restart_duration "$WIDGET_TRACE_FILE")" 
 printf '+\t%s\tBTT manual restart\n' "$(restart_duration "$LYRICS_TRACE_FILE")" \
 	>> "$LYRICS_TRACE_FILE" 2>/dev/null || true
 
-log "manual restart requested via Date/Time widget tap -- btt_pid=$(btt_pid) (restart_id=${restart_id})"
+btt_control_log "manual restart requested via Date/Time widget tap -- btt_pid=$(btt_control_pid) (restart_id=${restart_id})"

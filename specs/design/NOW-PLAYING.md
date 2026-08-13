@@ -58,7 +58,8 @@ The widget is configured in
 ```text
 Now Playing widget
 ├── Decide whose track the row shows
-│   ├── Read MediaRemote's holder bundle id (nowplaying-cli get-raw)
+│   ├── Read MediaRemote's holder bundle id (nowplaying-state, else
+│   │   nowplaying-cli get-raw)
 │   ├── Accept a holder on the allowlist, case-folded
 │   ├── Fall back to the Lyrics sampler when a browser holds the session
 │   └── Print nothing when neither names an allowed player
@@ -90,10 +91,13 @@ Now Playing widget
 ```mermaid
 flowchart TD
     A["BTT invokes now-playing.sh"] --> B["nowplaying-state: isPlaying + info"]
-    B --> C["nowplaying-cli get-raw, bounded at 1.5 s"]
-    C -->|"no nowplaying-cli"| D["Use the helper payload; no bundle id"]
+    B --> B2{"Helper carried the bundle id and the artwork?"}
+    B2 -->|yes| D["Use the helper payload; nowplaying-cli not run"]
+    B2 -->|no| C["nowplaying-cli get-raw, bounded at 1.5 s"]
+    C -->|"no nowplaying-cli"| D2["Reuse the last shared dictionary"]
     C --> E{"Holder on the allowlist?"}
     D --> E
+    D2 --> E
     E -->|yes| F["Identity, rate, artwork from the payload"]
     E -->|no| G{"Sampler state usable?"}
     G -->|no| H["Print nothing; exit 0"]
@@ -126,7 +130,7 @@ showing.
 | Sampler `source` is `media_remote` | Rejected | Those samples come from the very holder just rejected; accepting them would undo the allowlist. |
 | `com.apple.music` is not in the allowlist | Rejected | The fallback cannot smuggle in a player the operator excluded. |
 | Sample missing, malformed, or older than 8 s | Rejected | Nothing prints; BTT hides a script widget whose text is empty. |
-| `nowplaying-cli` is absent | Helper payload only | The helper omits the holder's bundle id, so the gate fails closed — degraded, never a wrong player. |
+| `nowplaying-cli` is absent | The helper payload, or the last shared dictionary | Since the 2026-08-13 rebuild the helper decodes the holder's bundle id out of `ClientPropertiesData`; when the session's holder publishes neither that nor artwork, and no recent dictionary is on disk, the gate fails closed — degraded, never a wrong player. |
 
 `SAMPLE_MAX_AGE_SECONDS` (8.0) mirrors `STATE_MAX_AGE_SECONDS` in
 `widgets/lyrics/config.py`, which is what the Lyrics widget itself allows

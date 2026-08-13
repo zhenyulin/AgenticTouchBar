@@ -77,8 +77,32 @@ BTT_WIDGET_ICON="${BTT_WIDGET_ICON:-}"
 BTT_WIDGET_TRACE="${BTT_WIDGET_TRACE:-1}"
 BTT_WIDGET_TRACE_MAX_BYTES="${BTT_WIDGET_TRACE_MAX_BYTES:-2000000}"
 
-# EPOCHREALTIME gives sub-second timestamps without forking `date`.
+# EPOCHREALTIME gives sub-second timestamps without forking `date`; zstat
+# gives mtime and size without forking `find` or `stat`. Both matter because
+# every widget run pays for them, and BTT runs all of them through one
+# script-runner service (see below).
 zmodload zsh/datetime 2>/dev/null || true
+zmodload zsh/stat 2>/dev/null || true
+
+
+# ---------------------------------------------------------------------------
+# Public: the argument shape every widget script shares
+#
+#   <script> [--refresh] [widget-uuid]
+#
+# Sets REFRESH_MODE and BTT_WIDGET_UUID in the caller. Every widget parsed
+# these by hand, identically; weather.sh still parses its own because it also
+# takes a --text/--icon mode flag in any position.
+# ---------------------------------------------------------------------------
+
+btt_parse_widget_args() {
+    typeset -g REFRESH_MODE=0
+    if [[ "${1:-}" == "--refresh" ]]; then
+        REFRESH_MODE=1
+        shift
+    fi
+    typeset -g BTT_WIDGET_UUID="${1:-${BTT_WIDGET_UUID:-}}"
+}
 
 
 # ---------------------------------------------------------------------------
@@ -102,8 +126,18 @@ btt__quota_reset_file() {
 }
 
 # Younger than max_age?
+#
+# Freshness is checked one to three times per widget run, across nine widgets,
+# so it is worth doing without a fork: `zstat` is a builtin, `/usr/bin/find`
+# was a process. The find form is kept for a zsh built without zsh/stat.
 btt__is_fresh() {
-    [[ -n "$(/usr/bin/find "$1" -maxdepth 0 -mtime -"${2}"s 2>/dev/null)" ]]
+    local -a info
+    if (( ${+builtins[zstat]} )); then
+        zstat -A info +mtime -- "$1" 2>/dev/null || return 1
+        (( EPOCHSECONDS - info[1] < $2 ))
+    else
+        [[ -n "$(/usr/bin/find "$1" -maxdepth 0 -mtime -"${2}"s 2>/dev/null)" ]]
+    fi
 }
 
 
@@ -157,11 +191,16 @@ btt_trace() {
         "$(( (now - started) * 1000 ))" "$outcome" "$extra" \
         >> "$file" 2>/dev/null || return 0
 
-    # These widgets tick every 30-60s, so checking the size each time costs
-    # nothing worth avoiding. One generation is kept, as for the lyrics trace.
-    local size
-    size="$(/usr/bin/stat -f%z "$file" 2>/dev/null || printf '0')"
-    if (( size > BTT_WIDGET_TRACE_MAX_BYTES )); then
+    # One generation is kept, as for the lyrics trace. The size comes from the
+    # zstat builtin rather than /usr/bin/stat: this runs on the 1s widgets too,
+    # and a fork per trace line is a fork per tick.
+    local -a info
+    if (( ${+builtins[zstat]} )); then
+        zstat -A info +size -- "$file" 2>/dev/null || return 0
+    else
+        info=( "$(/usr/bin/stat -f%z "$file" 2>/dev/null || printf '0')" )
+    fi
+    if (( info[1] > BTT_WIDGET_TRACE_MAX_BYTES )); then
         mv -f "$file" "$file.1" 2>/dev/null || true
     fi
 
@@ -327,6 +366,17 @@ btt_refresh_detached() {
 #   BTT_WIDGET_EMPTY_TEXT     what to publish when there is no cached value
 #                             yet; the default ellipsis suits a text widget,
 #                             clash-region.sh prefers its globe.
+#   BTT_WIDGET_VALUE_NAME     the cache entry to read, when it is not this
+#                             widget's own name. The two weather widgets share
+#                             one weather.data entry, so a refresh started by
+#                             either serves both.
+#   BTT_WIDGET_RENDER         function mapping the cached value to the text to
+#                             publish, as <render> <value>. For a widget whose
+#                             cache holds source data rather than a label --
+#                             weather.sh caches the conditions JSON and draws
+#                             either the temperature or an icon from it. It
+#                             owns the empty case too, so BTT_WIDGET_EMPTY_TEXT
+#                             does not apply when one is set.
 # ---------------------------------------------------------------------------
 
 btt_cached_widget_main() {
@@ -334,13 +384,19 @@ btt_cached_widget_main() {
     local self="${2-}"
     local value_max_age="${3:-300}"
     local compute_value="${4-}"
+    local value_name="${BTT_WIDGET_VALUE_NAME:-$BTT_WIDGET_NAME}"
     local started
     started="$(btt_now)"
 
     if (( refresh_mode )); then
         local refreshed
         refreshed="$("$compute_value")"
-        btt_cache_put "$BTT_WIDGET_NAME" "$refreshed"
+        # A refresh that produced nothing leaves the last good value in place:
+        # every widget here reports its own failures as text ("No curl",
+        # "NO CODEXBAR", "Timeout"), so an empty result means the refresh
+        # itself did not finish, and blanking the widget would lose the value
+        # it could still be showing. The trace still records it as empty.
+        [[ -n "$refreshed" ]] && btt_cache_put "$value_name" "$refreshed"
 
         local refresh_outcome
         # "NO CODEXBAR" from the quota widgets, "No curl" from the Clash ones.
@@ -349,7 +405,14 @@ btt_cached_widget_main() {
             *ERR*|NO\ *|No\ *)      refresh_outcome=error ;;
             *)                      refresh_outcome=ok ;;
         esac
-        btt_trace refresh "$started" "$refresh_outcome" "value=$refreshed"
+        # The value is the useful trace detail for a widget that caches its
+        # own label. One that caches source data says so itself, rather than
+        # pasting a JSON document into the trace -- see weather.sh.
+        local detail="value=$refreshed"
+        if [[ -n "${BTT_WIDGET_REFRESH_DETAIL:-}" ]]; then
+            detail="$("$BTT_WIDGET_REFRESH_DETAIL" "$refreshed")"
+        fi
+        btt_trace refresh "$started" "$refresh_outcome" "$detail"
 
         if [[ -n "${BTT_WIDGET_REFRESH_HOOK:-}" ]]; then
             "$BTT_WIDGET_REFRESH_HOOK" "$started" "$refreshed"
@@ -358,7 +421,7 @@ btt_cached_widget_main() {
     fi
 
     local value fresh force outcome
-    value="$(btt_cache_get "$BTT_WIDGET_NAME" "$value_max_age")"
+    value="$(btt_cache_get "$value_name" "$value_max_age")"
     fresh=$?
 
     force=0
@@ -377,7 +440,12 @@ btt_cached_widget_main() {
     (( force )) && outcome=forced
     [[ -n "$value" ]] || outcome=empty
     btt_trace widget "$started" "$outcome"
-    btt_publish "${value:-${BTT_WIDGET_EMPTY_TEXT:-…}}"
+
+    if [[ -n "${BTT_WIDGET_RENDER:-}" ]]; then
+        btt_publish "$("$BTT_WIDGET_RENDER" "$value")"
+    else
+        btt_publish "${value:-${BTT_WIDGET_EMPTY_TEXT:-…}}"
+    fi
 }
 
 
@@ -635,30 +703,50 @@ btt_current_color() {
 
 # ---------------------------------------------------------------------------
 # Internal: output BTT widget JSON
+#
+# Built in the shell rather than by a helper process. Both helpers this used
+# to call are expensive on a path every widget takes on every redraw:
+# `osascript -l JavaScript` measured 91 ms and `jq -cn` 23 ms, against ~0 for
+# parameter expansion. Seven widget instances redraw through here.
+#
+# A JSON string needs four escapes to be correct -- backslash, double quote,
+# and the two line breaks -- and BTT widget text is UTF-8, which JSON carries
+# literally. Any other C0 control character is dropped rather than escaped:
+# none can appear in a widget label, and a stray one would otherwise produce
+# JSON that BTT silently refuses to parse.
+#
+# The result is returned in REPLY, so that building it costs no subshell
+# either.
 # ---------------------------------------------------------------------------
+
+btt__json_escape() {
+    local text="${1-}"
+    text="${text//\\/\\\\}"
+    text="${text//\"/\\\"}"
+    text="${text//$'\n'/\\n}"
+    text="${text//$'\r'/\\r}"
+    text="${text//$'\t'/\\t}"
+    text="${text//[$'\C-a'-$'\C-h'$'\C-k'$'\C-l'$'\C-n'-$'\C-_']/}"
+    REPLY="$text"
+}
 
 btt__emit_json() {
     local text="${1-}"
     local color="${2:-$BTT_WIDGET_COLOR}"
     local icon="${BTT_WIDGET_ICON:-}"
+    local json
 
-    if [[ -n "$icon" && -f "$icon" ]] && command -v jq >/dev/null 2>&1; then
-        jq -cn \
-            --arg text "$text" \
-            --arg color "$color" \
-            --arg icon "$icon" \
-            '{text: $text, font_color: $color, icon_path: $icon}'
-        return
+    btt__json_escape "$text"
+    json="{\"text\":\"$REPLY\""
+    btt__json_escape "$color"
+    json+=",\"font_color\":\"$REPLY\""
+
+    if [[ -n "$icon" && -f "$icon" ]]; then
+        btt__json_escape "$icon"
+        json+=",\"icon_path\":\"$REPLY\""
     fi
 
-    /usr/bin/osascript -l JavaScript - "$text" "$color" <<'JXA'
-function run(argv) {
-    return JSON.stringify({
-        text: argv[0],
-        font_color: argv[1]
-    });
-}
-JXA
+    printf '%s}\n' "$json"
 }
 
 

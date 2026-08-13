@@ -51,11 +51,14 @@ def remember_output(text: str) -> None:
 
     A run that cannot take the widget lock has nothing of its own to show;
     printing this beats blanking the widget for a tick.
+
+    One file, not two: this used to write the same text to last.txt and to
+    lyrics.value, and nothing ever read the second one. Both writes were on
+    the one second widget path.
     """
     try:
         config.CACHE_DIR.mkdir(parents=True, exist_ok=True)
         config.LAST_TEXT_PATH.write_text(text, encoding="utf-8")
-        config.VALUE_PATH.write_text(text, encoding="utf-8")
     except OSError:
         pass
 

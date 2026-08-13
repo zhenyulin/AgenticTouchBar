@@ -54,78 +54,57 @@ ASSETS_DIR="${BTT_REPO_DIR:-$HOME/Documents/BTT}/assets"
 # The Lyrics sampler's state, consulted when the session holder is not one of
 # ours. Mirrors CACHE_DIR / STATE_PATH in widgets/lyrics/config.py.
 SAMPLER_STATE="${BTT_LYRICS_CACHE_DIR:-${BTT_REPO_DIR:-$HOME/Documents/BTT}/cache/lyrics}/state.json"
-STATE_BIN="${BTT_NOW_PLAYING_STATE_BIN:-$HOME/Library/Application Support/BTT/nowplaying-state}"
 
-helper_state() {
-    # The compiled state helper, for one field nothing else has: isPlaying.
-    #
-    # kMRMediaRemoteNowPlayingInfoPlaybackRate is not a playback state. QQ
-    # Music keeps publishing rate 1 while paused and never republishes on a
-    # pause -- measured here at 9 s of rate 1 after BTT's own Play or Pause
-    # action -- so the rate alone left the album cover on screen where the
-    # play icon belongs. specs/design/LYRICS.md records the same finding for the
-    # lyrics sampler, which is why this helper exists.
-    #
-    # It asks MediaRemote for the flag Control Center's own Now Playing tile
-    # draws, and costs ~0.1 s as a compiled binary.
-    [[ -x "$STATE_BIN" ]] && "$STATE_BIN" 2>/dev/null
-}
+source "${0:A:h}/lib/media-remote.sh"
 
-raw_state() {
-    # nowplaying-cli get-raw first: the state helper above omits
-    # kMRMediaRemoteNowPlayingInfoClientBundleIdentifier, and this widget's
-    # allowlist gate cannot work without the holder's bundle id.
-    # Subshell: zsh runs an EXIT trap set inside a function when the
-    # function returns, after its locals are gone -- "$tmp" would be
-    # unset in the trap. A subshell keeps plain variables alive until the
-    # trap fires, and its exit status becomes the function's.
-    (
-        cli="$(command -v nowplaying-cli 2>/dev/null || true)"
-        if [[ -x "$cli" ]]; then
-            # nowplaying-cli can hang when no app holds a session; bound
-            # the wait.
-            tmp="$(mktemp)"
-            trap 'rm -f "$tmp"' EXIT
-            "$cli" get-raw >"$tmp" 2>/dev/null &
-            pid=$!
-            for _ in {1..30}; do
-                kill -0 "$pid" 2>/dev/null || break
-                sleep 0.05
-            done
-            kill "$pid" 2>/dev/null
-            wait "$pid" 2>/dev/null
-            cat "$tmp"
-            exit 0
-        fi
-        # Last resort: the helper lacks the bundle id, so the gate fails
-        # closed (nothing prints) -- degraded, but never a wrong player.
-        print -r -- "$HELPER"
-    )
-}
+# The compiled state helper, for the one field nothing else has: isPlaying.
+#
+# kMRMediaRemoteNowPlayingInfoPlaybackRate is not a playback state. QQ Music
+# keeps publishing rate 1 while paused and never republishes on a pause --
+# measured here at 9 s of rate 1 after BTT's own Play or Pause action -- so
+# the rate alone left the album cover on screen where the play icon belongs.
+# specs/design/LYRICS.md records the same finding for the lyrics sampler,
+# which is why this helper exists.
+HELPER="$(media_remote_state)" || HELPER=""
 
-# Read before raw_state, which falls back to this answer rather than paying
-# for the helper a second time.
-HELPER="$(helper_state)" || HELPER=""
-# An empty answer is not the end of it: MediaRemote goes silent while an app
-# hands the session over, and the sampler fallback below may still have the
-# track. The Python treats an unusable payload as an empty dictionary.
-RAW="$(raw_state)" || RAW=""
+# The dictionary the row is drawn from: the holder's bundle id for the
+# allowlist gate, and the album artwork.
+#
+# The helper answers both since its 2026-08-13 rebuild, so ask it first and
+# only fall back to nowplaying-cli when this session's holder did not publish
+# them -- that call costs ~0.22 s against the helper's ~0.05 s, on a widget
+# BetterTouchTool runs every second.
+#
+# Either way the dictionary is handed to Python as a path, not as text -- see
+# lib/media-remote.sh for why. A call that produced nothing leaves the
+# previous file in place: MediaRemote goes silent while an app hands the
+# session over, and a stale dictionary a second old still names the right
+# track. Python treats an unreadable one as empty, and the sampler fallback
+# below may have the track anyway.
+RAW_PATH="$CACHE_DIR/now-playing.raw.json"
+if media_remote_state_is_complete "$HELPER"; then
+    mkdir -p "$CACHE_DIR" 2>/dev/null
+    print -r -- "$HELPER" > "$RAW_PATH.$$" 2>/dev/null &&
+        mv -f "$RAW_PATH.$$" "$RAW_PATH" 2>/dev/null
+else
+    media_remote_raw "$RAW_PATH" || true
+fi
 
-python3 - "$RAW" "$ALLOWED_BUNDLE_IDS" "$CACHE_DIR" "$BTT_WIDGET_UUID" \
+python3 - "$RAW_PATH" "$ALLOWED_BUNDLE_IDS" "$CACHE_DIR" "$BTT_WIDGET_UUID" \
     "$ASSETS_DIR" "$LYRICS_UUID" \
     "$SAMPLER_STATE" "$HELPER" <<'PY'
-import base64
-import hashlib
+# Imported here: what every tick needs. base64, hashlib, plistlib, struct,
+# subprocess and zlib are imported by the functions that use them instead --
+# measured at 47 ms for plistlib alone, 137 ms for the six together, on a
+# widget BetterTouchTool runs every second through the one script-runner
+# service every other widget is queued behind. None of the six is needed by a
+# tick that draws a cover it has already cached.
 import json
 import os
-import plistlib
 import re
-import struct
-import subprocess
 import sys
 import time
 import unicodedata
-import zlib
 from pathlib import Path
 
 
@@ -146,6 +125,9 @@ def strip_parens(text):
 
 
 def _png_chunk(tag, data):
+    import struct
+    import zlib
+
     return (
         struct.pack(">I", len(data)) + tag + data
         + struct.pack(">I", zlib.crc32(tag + data) & 0xFFFFFFFF)
@@ -161,6 +143,9 @@ def write_play_icon(path):
     stays small when BTT scales the icon into the widget's icon slot. The
     proportions mirror assets/now-playing-play.svg.
     """
+    import struct
+    import zlib
+
     width = height = 32
     raw = bytearray()
     # Triangle corners: A=(6,6) B=(28,16) C=(6,26); scanline fill.
@@ -216,10 +201,34 @@ def artwork_icon(info, cache_dir):
     The raw dict carries artwork as base64 (nowplaying-cli get-raw). The
     file name is hashed from the bytes so BetterTouchTool sees a new path
     per track instead of a stale icon; old covers are removed.
+
+    The same cover arrives on every tick of a track, and decoding a few
+    hundred KB of base64 and hashing the result to rediscover a file already
+    on disk is the widget's largest avoidable cost after the imports. So a
+    memo records which encoded payload produced which file, keyed by its
+    length and CRC -- both cheap over the string as it arrived. Only a payload
+    that does not match the memo is decoded, which in practice means only the
+    first tick of each track.
     """
     encoded = info.get("kMRMediaRemoteNowPlayingInfoArtworkData") or ""
     if not encoded:
         return None
+
+    import zlib
+
+    directory = Path(cache_dir)
+    memo_path = directory / "now-playing-artwork.memo"
+    key = f"{len(encoded)}:{zlib.crc32(encoded.encode('ascii', 'ignore')) & 0xFFFFFFFF}"
+
+    memo = read_json(memo_path)
+    if isinstance(memo, dict) and memo.get("key") == key:
+        cached = directory / str(memo.get("name") or "")
+        if cached.is_file():
+            return str(cached)
+
+    import base64
+    import hashlib
+
     try:
         data = base64.b64decode(encoded)
     except (ValueError, TypeError):
@@ -229,7 +238,6 @@ def artwork_icon(info, cache_dir):
     if not ext:
         return None
     name = f"now-playing-artwork-{hashlib.sha256(data).hexdigest()[:12]}{ext}"
-    directory = Path(cache_dir)
     path = directory / name
     if not path.exists():
         try:
@@ -240,6 +248,7 @@ def artwork_icon(info, cache_dir):
                     old.unlink(missing_ok=True)
         except OSError:
             return None
+    write_json(memo_path, {"key": key, "name": name})
     return str(path)
 
 
@@ -271,6 +280,8 @@ def icns_png(data):
     PLAYER_ICON_MIN_PIXELS wide is preferred (the largest, when every face
     is smaller); the ancient uncompressed faces are skipped.
     """
+    import struct
+
     if data[:4] != b"icns":
         return None
     (declared,) = struct.unpack(">I", data[4:8])
@@ -297,6 +308,9 @@ def icns_png(data):
 
 def app_icns(bundle_id):
     """The .icns file of an installed app, found by bundle id, or None."""
+    import plistlib
+    import subprocess
+
     try:
         found = subprocess.run(
             ["/usr/bin/mdfind", f"kMDItemCFBundleIdentifier == '{bundle_id}'"],
@@ -349,6 +363,8 @@ def player_icon(bundle_id, cache_dir):
             return None
     except OSError:
         pass
+
+    import struct
 
     icns = app_icns(bundle_id)
     png = None
@@ -543,6 +559,8 @@ def clear_lyrics_for_change(identity, cache_dir, lyrics_uuid):
     # back from an empty row (first run, or nothing was playing) has nothing
     # to clear, and a marker naming no track would match no sample anyway.
     if previous and previous.get("title") and lyrics_uuid:
+        import subprocess
+
         marker = dict(previous)
         marker["at"] = time.time()
         write_json(Path(cache_dir) / "lyrics-cleared", marker)
@@ -568,7 +586,7 @@ def clear_lyrics_for_change(identity, cache_dir, lyrics_uuid):
 
 
 (
-    payload,
+    raw_path,
     allowed,
     cache_dir,
     widget_uuid,
@@ -577,10 +595,11 @@ def clear_lyrics_for_change(identity, cache_dir, lyrics_uuid):
     state_path,
     helper_payload,
 ) = sys.argv[1:9]
-try:
-    info = json.loads(payload)
-except (json.JSONDecodeError, UnicodeDecodeError):
-    info = {}
+# The dictionary is read from the file the shell half wrote, rather than
+# taken from argv: it carries the album artwork as base64 -- see
+# widgets/lib/media-remote.sh. A missing or unreadable one is an empty
+# dictionary; the sampler fallback below may still have the track.
+info = read_json(Path(raw_path))
 if not isinstance(info, dict):
     info = {}
 

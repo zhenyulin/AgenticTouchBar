@@ -8,8 +8,12 @@ import time
 from typing import Any
 
 from .. import config
-from ..fetch import start_background_fetch
-from ..providers.apple_cache import apple_cache_record
+
+# fetch and providers.apple_cache are imported by the two functions below that
+# use them, not here. Between them they pull in every provider module, sqlite3
+# and xml.etree -- ~30 ms of imports on a widget path that runs every second
+# and reaches them only on a cache miss (fetch) or once per track
+# (apple_cache).
 from ..runtime.cache import atomic_write_json, cache_path, read_compatible_cache
 from ..runtime.locking import (
     acquire_widget_lock,
@@ -274,6 +278,8 @@ def render_tick() -> str:
         # record, and later ticks skip the lookup until the fetch retry rolls
         # the record over (retry_after in fetch.py).
         if config.APPLE_CACHE_ENABLED and not cached.get("apple_checked"):
+            from ..providers.apple_cache import apple_cache_record
+
             try:
                 apple_record = apple_cache_record(track)
             except Exception as exc:
@@ -290,6 +296,8 @@ def render_tick() -> str:
             atomic_write_json(cache_path(key), cached)
 
     if cached is None:
+        from ..fetch import start_background_fetch
+
         try:
             start_background_fetch(key, track)
         except Exception as exc:
@@ -308,6 +316,8 @@ def render_tick() -> str:
 
     retry_after = float(cached.get("retry_after", 0) or 0)
     if retry_after and now >= retry_after:
+        from ..fetch import start_background_fetch
+
         try:
             cache_path(key).unlink()
         except OSError:

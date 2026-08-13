@@ -41,48 +41,54 @@ clash_fetch_proxies() {
         "$API/proxies"
 }
 
+# The selected leaf node, following each group's `now` down to a proxy that
+# selects nothing further.
+#
+# One jq pass rather than up to four per hop over eight hops: the controller's
+# /proxies document is ~180 KB here, and the loop this replaces re-parsed the
+# whole of it on every jq call it made.
 clash_resolve_node() {
-    local current="$ROOT_GROUP"
-    local proxies_json proxy_json next next_json
+    local proxies_json
 
     clash_setup_curl
     proxies_json="$(clash_fetch_proxies)" || return 1
 
-    if ! jq -e --arg name "$current" '.proxies | has($name)' <<< "$proxies_json" >/dev/null 2>&1; then
-        current="$(jq -r '
-            .proxies
-            | to_entries[]
-            | select((.value.all // []) | length > 0)
-            | .key
-        ' <<< "$proxies_json" | head -n 1)"
-        [[ -n "$current" ]] || return 1
-    fi
+    jq -er --arg root "$ROOT_GROUP" '
+        .proxies as $all
 
-    for _ in {1..8}; do
-        proxy_json="$(jq -c --arg name "$current" '.proxies[$name] // empty' <<< "$proxies_json")"
-        [[ -n "$proxy_json" ]] || return 1
-        next="$(jq -r '.now // empty' <<< "$proxy_json" 2>/dev/null)" || return 1
+        # The configured group, or the first group that selects anything --
+        # a controller may not carry the name this repo defaults to.
+        | (if $all | has($root) then $root
+           else [$all | to_entries[]
+                 | select((.value.all // []) | length > 0)
+                 | .key] | first
+           end) as $start
+        | if $start == null then empty else
 
-        if [[ -z "$next" || "$next" == "$current" ]]; then
-            printf '%s' "$current"
-            return 0
-        fi
-
-        next_json="$(jq -c --arg name "$next" '.proxies[$name] // empty' <<< "$proxies_json")"
-        if [[ -n "$next_json" ]]; then
-            current="$next"
-            continue
-        fi
-
-        current="$(jq -r --argjson proxy "$proxy_json" '
-            .proxies as $all
-            | $proxy.all[]?
-            | select($all[.] != null)
-        ' <<< "$proxies_json" 2>/dev/null | head -n 1)"
-        [[ -n "$current" ]] || return 1
-    done
-
-    return 1
+        reduce range(0; 8) as $_ ({current: $start, settled: false, failed: false};
+            if .settled or .failed then .
+            else
+                .current as $name
+                | $all[$name] as $proxy
+                | if $proxy == null then .failed = true
+                  else
+                      ($proxy.now // "") as $next
+                      # Selecting nothing, or itself, makes this the leaf.
+                      | if $next == "" or $next == $name then .settled = true
+                        elif $all | has($next) then .current = $next
+                        else
+                            # `now` names something the document does not
+                            # describe: fall back to the first member it does.
+                            ([$proxy.all[]? | select($all[.] != null)] | first) as $member
+                            | if $member == null then .failed = true
+                              else .current = $member
+                              end
+                        end
+                  end
+            end)
+        | if .settled then .current else empty end
+        end
+    ' <<< "$proxies_json" 2>/dev/null
 }
 
 clash_region_code_from_name() {

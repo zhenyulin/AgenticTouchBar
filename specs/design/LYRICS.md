@@ -400,7 +400,7 @@ repeat, and non-blocking to the BTT shell runner.
 
 | State class | Examples | Semantics |
 | --- | --- | --- |
-| Reusable durable state | Per-track lyric JSON, `state.json`, `last.txt`, `lyrics.value`, `media_remote_position.json` | Survives a process and avoids repeating expensive work. |
+| Reusable durable state | Per-track lyric JSON, `state.json`, `last.txt`, `media_remote_position.json` | Survives a process and avoids repeating expensive work. |
 | Diagnostic durable state | `error.log`, `logs/lyrics/trace.tsv`, `logs/lyrics/render.json` | Explains outcomes and separates widget failures from BTT scheduling failures. |
 | Ephemeral coordination | `widget.lock`, `sampler.lock`, per-track locks, detached helpers, fetch deadlines | Prevents overlap and bounds work; stale locks are recoverable. |
 | Integration residue | BTT UUID `.force` files | Intended for shared shell widgets; Lyrics and Star currently do not consume them. |

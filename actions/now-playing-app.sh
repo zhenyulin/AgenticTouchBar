@@ -8,8 +8,8 @@
 # takes over Now Playing, even when Apple Music is still running. BTT's
 # BTTCurrentlyPlayingApp variable proved unreliable for that switch, so this
 # resolves the holder from the same MediaRemote source the lyrics pipeline
-# reads (nowplaying-cli get-raw). Prints nothing when no app holds Now
-# Playing, or when the query fails.
+# reads. Prints nothing when no app holds Now Playing, or when the query
+# fails.
 #
 # Holding the session is not the same as being the player, though: a browser
 # that starts a video takes Now Playing over while Apple Music keeps playing,
@@ -20,6 +20,10 @@
 # the same fallback widgets/now-playing.sh makes, so the two agree on whose
 # track the row is showing.
 #
+# The dictionary comes from the shared cache the Now Playing widget refreshes
+# every second (widgets/lib/media-remote.sh), so the Star widget's own gate
+# costs a file read rather than another ~0.22 s nowplaying-cli call.
+#
 # Usage: now-playing-app.sh
 # Prints: com.apple.Music | com.microsoft.edgemac | ... | (nothing)
 #
@@ -28,44 +32,27 @@ set -u
 
 PATH="/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin"
 
+REPO_DIR="${BTT_REPO_DIR:-${0:A:h:h}}"
+source "$REPO_DIR/widgets/lib/btt-widget.sh"
+source "$REPO_DIR/widgets/lib/media-remote.sh"
+
 # The Lyrics sampler's state, consulted below. Mirrors CACHE_DIR /
 # STATE_PATH in widgets/lyrics/config.py.
 SAMPLER_STATE="${BTT_LYRICS_CACHE_DIR:-${BTT_REPO_DIR:-$HOME/Documents/BTT}/cache/lyrics}/state.json"
 
-# A missing nowplaying-cli, or an empty answer, is no longer the end of it:
-# the sampler fallback below can still name the player.
-OUTPUT=""
-CLI="$(command -v nowplaying-cli 2>/dev/null || true)"
-if [[ -x "$CLI" ]]; then
-    # nowplaying-cli can hang when no app holds a session; run it in the
-    # background and bound the wait at 1.5 s.
-    tmp="$(mktemp)"
-    trap 'rm -f "$tmp"' EXIT
-
-    "$CLI" get-raw >"$tmp" 2>/dev/null &
-    pid=$!
-    for _ in {1..30}; do
-        kill -0 "$pid" 2>/dev/null || break
-        sleep 0.05
-    done
-    kill "$pid" 2>/dev/null
-    wait "$pid" 2>/dev/null
-
-    OUTPUT="$(<"$tmp")"
-fi
+RAW_PATH="$(media_remote_raw_shared 2)"
 
 python3 -c '
 import json
 import sys
 import time
 
-# Mirrors STATE_MAX_AGE_SECONDS in widgets/lyrics/config.py: how stale the
-# sampler state may be before it stops being believed.
-SAMPLE_MAX_AGE_SECONDS = 8.0
+raw_path, state_path, max_age = sys.argv[1:4]
 
 try:
-    info = json.load(sys.stdin)
-except (json.JSONDecodeError, UnicodeDecodeError):
+    with open(raw_path, encoding="utf-8") as handle:
+        info = json.load(handle)
+except (OSError, ValueError):
     info = {}
 if not isinstance(info, dict):
     info = {}
@@ -78,10 +65,10 @@ if holder == "com.apple.Music":
 # Apple Music playing behind whoever holds the session is still the player
 # the row is about -- see the note at the top of this script.
 try:
-    with open(sys.argv[1], encoding="utf-8") as handle:
+    with open(state_path, encoding="utf-8") as handle:
         sample = json.load(handle)
     track = sample["track"]
-    fresh = time.time() - float(sample["sampled_at"]) <= SAMPLE_MAX_AGE_SECONDS
+    fresh = time.time() - float(sample["sampled_at"]) <= float(max_age)
 except (OSError, ValueError, KeyError, TypeError):
     track, fresh = None, False
 
@@ -95,4 +82,4 @@ if (
     sys.exit(0)
 
 print(holder)
-' "$SAMPLER_STATE" <<<"$OUTPUT"
+' "$RAW_PATH" "$SAMPLER_STATE" "$MEDIA_REMOTE_SAMPLE_MAX_AGE"

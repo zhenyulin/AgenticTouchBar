@@ -5,13 +5,10 @@ set -u
 set -o pipefail
 PATH="/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin"
 
-REFRESH_MODE=0
-if [[ "${1:-}" == "--refresh" ]]; then REFRESH_MODE=1; shift; fi
-if [[ -n "${1:-}" ]]; then BTT_WIDGET_UUID="$1"; shift; else BTT_WIDGET_UUID="${BTT_WIDGET_UUID:-}"; fi
-
 SELF="${0:A}"
 source "${SELF:h}/lib/btt-widget.sh"
 source "${SELF:h}/lib/clash.sh"
+btt_parse_widget_args "$@"
 
 BTT_WIDGET_NAME="clash-region"
 BTT_WIDGET_COLOR_OVERRIDE="${CLASH_FONT_COLOR:-}"
@@ -27,7 +24,7 @@ compute_value() {
     command -v jq >/dev/null 2>&1 || { printf '🌐'; return; }
     local node
     node="$(clash_resolve_node)" || { printf '🌐'; return; }
-    printf '%s' "$(clash_region_flag "$node")"
+    clash_region_flag "$node"
 }
 
 btt_cached_widget_main "$REFRESH_MODE" "$SELF" "$VALUE_MAX_AGE" compute_value

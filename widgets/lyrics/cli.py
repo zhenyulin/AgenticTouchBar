@@ -1,34 +1,32 @@
-"""Argument dispatch: the modes this widget can be invoked in."""
+"""Argument dispatch: the modes this widget can be invoked in.
+
+Only what every mode needs is imported here. The rest is imported by the mode
+that uses it, because the mode that runs by far the most often -- the widget
+tick, every second, on the one script-runner service every BetterTouchTool
+widget shares -- needs almost none of it. Importing the diagnostics, the
+fetch pipeline and its six provider modules (which between them pull in
+sqlite3 and xml.etree) up here cost that tick ~40 ms to load code it never
+called.
+"""
 
 from __future__ import annotations
 
-import base64
 import json
-import signal
-import subprocess
 import sys
 import time
 from typing import Any
 
 from . import config
-from .diag.debug import clear_current_cache, diagnose_current
-from .diag.diagnostics import report_mode, watch_mode
-from .display.render import widget_main
-from .fetch import background_fetch, start_background_fetch
-from .runtime.cache import atomic_write_json, lock_path, read_cache
-from .runtime.locking import clear_lock
 from .runtime.output import log_error, trace
-from .sources.apple_music import (
-    is_placeholder_track,
-    read_apple_music,
-    read_state,
-    write_state,
-)
-from .sources.media_remote import read_media_remote
-from .text.metadata import track_cache_key
 
 
 def fetch_mode(arguments: list[str]) -> int:
+    import base64
+    import signal
+
+    from .fetch import background_fetch
+    from .runtime.cache import lock_path
+
     if len(arguments) != 2:
         return 2
     key, encoded_payload = arguments
@@ -60,6 +58,8 @@ def fetch_mode(arguments: list[str]) -> int:
 
 def request_widget_refresh(uuid: str) -> None:
     """Ask BTT to repaint the widget now, instead of at its next tick."""
+    import subprocess
+
     if not uuid:
         return
     try:
@@ -95,6 +95,8 @@ def _visible_track(track: dict[str, Any] | None) -> bool:
 
 def _btt_call(script: str) -> None:
     """One AppleScript line for BetterTouchTool, detached and forgettable."""
+    import subprocess
+
     try:
         subprocess.Popen(
             ["/usr/bin/osascript", "-e", script],
@@ -137,6 +139,8 @@ def closing_sequence(previous: dict[str, Any], hide_row: bool) -> None:
     cleared_while_sample_current), and the next sample that moves past it --
     the new track, or the stopped state -- drops the hold.
     """
+    from .runtime.cache import atomic_write_json
+
     marker = {"at": time.time()}
     for key in ("title", "artist", "album"):
         marker[key] = str(previous.get(key) or "")
@@ -215,6 +219,16 @@ def track_changed_mode(arguments: list[str]) -> int:
     shell actions on the same single XPC service as the widgets, so blocking
     here for a second would freeze the whole Touch Bar.
     """
+    from .fetch import start_background_fetch
+    from .runtime.cache import read_cache
+    from .sources.apple_music import (
+        is_placeholder_track,
+        read_apple_music,
+        read_state,
+        write_state,
+    )
+    from .text.metadata import track_cache_key
+
     started = time.monotonic()
     uuid = arguments[0] if arguments else config.LYRICS_WIDGET_UUID
     previous_track, _ = read_state()
@@ -288,6 +302,8 @@ def _media_remote_fallback() -> dict[str, Any] | None:
     Used when Apple Music has nothing of its own to report, so QQ Music and
     other non-scriptable players still show up.
     """
+    from .sources.media_remote import read_media_remote
+
     try:
         remote = read_media_remote()
     except Exception as exc:
@@ -303,6 +319,9 @@ def sample_mode() -> int:
     exact position. When it has nothing playing -- including when BTT is not
     authorized to ask it -- the system-wide Now Playing info is checked next.
     """
+    from .runtime.locking import clear_lock
+    from .sources.apple_music import read_apple_music, read_state, write_state
+
     started = time.monotonic()
     previous_track, previous_age = read_state()
     try:
@@ -370,18 +389,32 @@ def sample_mode() -> int:
 
 
 def main() -> int:
-    if len(sys.argv) >= 2 and sys.argv[1] == "--fetch":
+    mode = sys.argv[1] if len(sys.argv) >= 2 else ""
+
+    if mode == "--fetch":
         return fetch_mode(sys.argv[2:])
-    if len(sys.argv) >= 2 and sys.argv[1] == "--sample":
+    if mode == "--sample":
         return sample_mode()
-    if len(sys.argv) >= 2 and sys.argv[1] == "--report":
-        return report_mode(sys.argv[2:])
-    if len(sys.argv) >= 2 and sys.argv[1] == "--watch":
-        return watch_mode(sys.argv[2:])
-    if len(sys.argv) >= 2 and sys.argv[1] == "--track-changed":
+    if mode == "--track-changed":
         return track_changed_mode(sys.argv[2:])
-    if len(sys.argv) >= 2 and sys.argv[1] == "--diagnose":
+    if mode == "--report":
+        from .diag.diagnostics import report_mode
+
+        return report_mode(sys.argv[2:])
+    if mode == "--watch":
+        from .diag.diagnostics import watch_mode
+
+        return watch_mode(sys.argv[2:])
+    if mode == "--diagnose":
+        from .diag.debug import diagnose_current
+
         return diagnose_current()
-    if len(sys.argv) >= 2 and sys.argv[1] == "--clear-current":
+    if mode == "--clear-current":
+        from .diag.debug import clear_current_cache
+
         return clear_current_cache()
+
+    # The default, and the only mode BetterTouchTool itself runs.
+    from .display.render import widget_main
+
     return widget_main()

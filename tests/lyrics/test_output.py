@@ -34,7 +34,6 @@ class OutputTestCase(unittest.TestCase):
         for attribute, value in (
             ("CACHE_DIR", self.directory),
             ("LAST_TEXT_PATH", self.directory / "last.txt"),
-            ("VALUE_PATH", self.directory / "lyrics.value"),
             ("TRACE_PATH", self.directory / "trace.tsv"),
         ):
             patcher = patch.object(config, attribute, value)
@@ -84,7 +83,14 @@ class RememberOutput(OutputTestCase):
     def test_emit_records_what_it_printed(self):
         printed(emit, "hello")
         self.assertEqual(config.LAST_TEXT_PATH.read_text(encoding="utf-8"), "hello")
-        self.assertEqual(config.VALUE_PATH.read_text(encoding="utf-8"), "hello")
+
+    def test_records_the_value_in_one_file_only(self):
+        # last.txt is the remembered value. A second copy under lyrics.value
+        # was written on every tick and read by nothing.
+        printed(emit, "hello")
+        self.assertEqual(
+            sorted(path.name for path in config.CACHE_DIR.iterdir()), ["last.txt"]
+        )
 
     def test_reprints_the_remembered_value(self):
         # A tick that could not take the widget lock has nothing of its own to

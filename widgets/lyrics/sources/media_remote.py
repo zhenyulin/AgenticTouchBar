@@ -26,7 +26,6 @@ from __future__ import annotations
 
 import json
 import os
-import shutil
 import subprocess
 import time
 from typing import Any
@@ -40,9 +39,20 @@ _STATE_BIN_PATH: str | None = ""  # "" means not resolved yet; None means missin
 
 
 def _cli_path() -> str | None:
+    """nowplaying-cli's path, or None.
+
+    Walks PATH rather than calling shutil.which: importing shutil drags in the
+    archive registries (lzma, bz2, zstd) for ~15 ms, on a sampler that is a
+    fresh process twice a second.
+    """
     global _CLI_PATH
     if _CLI_PATH == "":
-        _CLI_PATH = shutil.which("nowplaying-cli")
+        _CLI_PATH = None
+        for directory in os.environ.get("PATH", "").split(os.pathsep):
+            candidate = os.path.join(directory, "nowplaying-cli")
+            if os.access(candidate, os.X_OK) and not os.path.isdir(candidate):
+                _CLI_PATH = candidate
+                break
     return _CLI_PATH
 
 
@@ -87,23 +97,8 @@ _RAW_FIELD_KEYS = {
 }
 
 
-def _read_raw() -> dict[str, Any] | None:
-    """The raw MediaRemote Now Playing dictionary, mapped to plain keys.
-
-    The compiled nowplaying-state helper is preferred: it returns the same
-    raw framework dictionary (the only view where QQ Music reports its
-    elapsed time -- the normalized ``get`` command always shows 0 for it)
-    plus an ``isPlaying`` flag from the framework's own playback state.
-    Without the helper, ``nowplaying-cli get-raw`` supplies the dictionary
-    alone and pause detection degrades to the playback rate.
-    """
-    if (state_bin := _state_bin()) is not None:
-        command = [state_bin]
-    elif (cli := _cli_path()) is not None:
-        command = [cli, "get-raw"]
-    else:
-        return None
-
+def _run_json(command: list[str]) -> dict[str, Any] | None:
+    """One bounded MediaRemote query, decoded."""
     try:
         result = subprocess.run(
             command,
@@ -124,15 +119,76 @@ def _read_raw() -> dict[str, Any] | None:
         payload = json.loads(result.stdout)
     except json.JSONDecodeError as exc:
         raise RuntimeError(f"Unexpected MediaRemote output: {result.stdout!r}") from exc
-    if not isinstance(payload, dict):
+    return payload if isinstance(payload, dict) else None
+
+
+def _shared_raw() -> dict[str, Any] | None:
+    """The dictionary widgets/now-playing.sh wrote on its own tick, if fresh.
+
+    That widget runs every second and already pays for nowplaying-cli, so a
+    sampler running it again a moment later spends ~0.22 s to learn the same
+    thing. Anything older than the max age is ignored: the widget is hidden
+    while nothing allowed is playing, and a dictionary from minutes ago would
+    resurrect a finished track.
+    """
+    path = config.MEDIA_REMOTE_RAW_PATH
+    try:
+        if time.time() - path.stat().st_mtime > config.MEDIA_REMOTE_RAW_MAX_AGE_SECONDS:
+            return None
+        with path.open("r", encoding="utf-8") as handle:
+            payload = json.load(handle)
+    except (OSError, ValueError):
         return None
+    return payload if isinstance(payload, dict) else None
+
+
+def _read_raw() -> dict[str, Any] | None:
+    """The raw MediaRemote Now Playing dictionary, mapped to plain keys.
+
+    Two sources, because neither answers the whole question:
+
+    The dictionary comes from nowplaying-cli -- preferably the copy
+    widgets/now-playing.sh already wrote (see _shared_raw). It is the only
+    view where QQ Music reports its elapsed time (the normalized ``get``
+    command always shows 0), and the only one carrying the session holder's
+    bundle id, which read_media_remote's allowlist needs.
+
+    ``isPlaying`` comes from the compiled nowplaying-state helper, which is
+    the only source for it; without the helper, pause detection degrades to
+    the playback rate and paused tracks keep scrolling.
+
+    The helper cannot stand in for the dictionary: it drops every NSData
+    value, and the bundle id arrives inside one. A sampler that read the
+    holder's id from the helper alone always saw an empty string, so the
+    allowlist rejected every track and the MediaRemote fallback -- QQ Music
+    and anything else non-scriptable -- never rendered at all.
+    """
+    payload = _shared_raw()
+    if payload is None and (cli := _cli_path()) is not None:
+        payload = _run_json([cli, "get-raw"])
+    if payload is None:
+        return None
+
     mapped = {
         name: payload[key] for key, name in _RAW_FIELD_KEYS.items() if key in payload
     }
-    is_playing = payload.get("isPlaying")
-    if is_playing is not None:
-        mapped["isPlaying"] = bool(is_playing)
-    return mapped
+
+    if (state_bin := _state_bin()) is not None:
+        state = _run_json([state_bin]) or {}
+        is_playing = state.get("isPlaying")
+        if is_playing is not None:
+            mapped["isPlaying"] = bool(is_playing)
+        # The helper's own dictionary is the more recent reading, and it
+        # carries the elapsed time the shared copy may be a second behind on.
+        # It is only trusted for the track it describes.
+        if str(state.get("kMRMediaRemoteNowPlayingInfoTitle") or "").strip() == str(
+            mapped.get("title") or ""
+        ).strip():
+            for key, name in _RAW_FIELD_KEYS.items():
+                if key in state:
+                    mapped[name] = state[key]
+
+    return mapped or None
 
 
 def _read_position_state() -> dict[str, Any]:

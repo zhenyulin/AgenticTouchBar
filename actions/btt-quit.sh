@@ -26,11 +26,8 @@
 
 set -u
 
-REPO_DIR="${BTT_REPO_DIR:-$HOME/Documents/BTT}"
-LOG_DIR="${BTT_LOG_DIR:-$REPO_DIR/logs}"
-# Shared with actions/tap-restart.sh: one log for the manual BTT control
-# actions.
-LOG="$LOG_DIR/btt-control.log"
+# Shared with actions/tap-restart.sh: one log, and one way to find BTT's pid.
+source "${0:A:h}/lib/btt-control.sh"
 
 # How long the graceful-quit Apple Event may take before SIGTERM.
 GRACEFUL_QUIT_WAIT="${BTT_QUIT_GRACEFUL_WAIT:-5}"
@@ -47,26 +44,17 @@ number_or() {
 GRACEFUL_QUIT_WAIT="$(number_or "$GRACEFUL_QUIT_WAIT" 5)"
 TERM_WAIT="$(number_or "$TERM_WAIT" 3)"
 
-log() {
-	echo "$(date '+%Y-%m-%d %H:%M:%S') $*" >> "$LOG" 2>/dev/null || true
-}
-
-btt_pid() {
-	/usr/bin/pgrep -x BetterTouchTool 2>/dev/null | /usr/bin/awk 'NR == 1 { print; exit }'
-}
-
 btt_still_running() {
 	kill -0 "$1" 2>/dev/null
 }
 
-mkdir -p "$LOG_DIR" 2>/dev/null || true
-log "manual quit requested"
+btt_control_log "manual quit requested"
 
 # --- 1. Kill the relauncher, so nothing can resurrect BTT -------------------
 
 relaunch_pids="$(/usr/bin/pgrep -x BTTRelaunch 2>/dev/null || true)"
 if [[ -n "$relaunch_pids" ]]; then
-	log "manual quit -- killing BTTRelaunch (pids: ${relaunch_pids//$'\n'/ })"
+	btt_control_log "manual quit -- killing BTTRelaunch (pids: ${relaunch_pids//$'\n'/ })"
 	print -r -- "${relaunch_pids//$'\n'/ }" | /usr/bin/xargs /bin/kill 2>/dev/null || true
 	for (( waited = 0; waited < 8; waited++ )); do
 		/usr/bin/pgrep -x BTTRelaunch >/dev/null 2>&1 || break
@@ -74,28 +62,28 @@ if [[ -n "$relaunch_pids" ]]; then
 	done
 	remaining="$(/usr/bin/pgrep -x BTTRelaunch 2>/dev/null || true)"
 	if [[ -n "$remaining" ]]; then
-		log "manual quit -- BTTRelaunch ignored SIGTERM -- SIGKILL"
+		btt_control_log "manual quit -- BTTRelaunch ignored SIGTERM -- SIGKILL"
 		print -r -- "${remaining//$'\n'/ }" | /usr/bin/xargs /bin/kill -KILL 2>/dev/null || true
 	fi
 fi
 
 # --- 2+3. Quit BTT: graceful Apple Event, then TERM, then KILL --------------
 
-pid="$(btt_pid)"
+pid="$(btt_control_pid)"
 if [[ -z "$pid" ]]; then
-	log "manual quit -- BTT was not running"
+	btt_control_log "manual quit -- BTT was not running"
 	print -r -- "BTT was not running."
 	exit 0
 fi
 
-log "manual quit -- asking BTT (pid=${pid}) to quit gracefully"
+btt_control_log "manual quit -- asking BTT (pid=${pid}) to quit gracefully"
 /usr/bin/osascript -e 'tell application "BetterTouchTool" to quit' >/dev/null 2>&1 &
 request_pid=$!
 for (( waited = 0; waited < GRACEFUL_QUIT_WAIT * 4; waited++ )); do
 	if ! btt_still_running "$pid"; then
 		kill "$request_pid" 2>/dev/null || true
 		wait "$request_pid" 2>/dev/null || true
-		log "manual quit -- BTT exited gracefully (pid=${pid})"
+		btt_control_log "manual quit -- BTT exited gracefully (pid=${pid})"
 		print -r -- "BTT quit (pid=${pid})."
 		exit 0
 	fi
@@ -104,27 +92,27 @@ done
 kill "$request_pid" 2>/dev/null || true
 wait "$request_pid" 2>/dev/null || true
 
-log "manual quit -- graceful quit timed out after ${GRACEFUL_QUIT_WAIT}s (pid=${pid}) -- SIGTERM"
+btt_control_log "manual quit -- graceful quit timed out after ${GRACEFUL_QUIT_WAIT}s (pid=${pid}) -- SIGTERM"
 kill "$pid" 2>/dev/null || true
 for (( waited = 0; waited < TERM_WAIT * 4; waited++ )); do
 	if ! btt_still_running "$pid"; then
-		log "manual quit -- BTT exited after SIGTERM (pid=${pid})"
+		btt_control_log "manual quit -- BTT exited after SIGTERM (pid=${pid})"
 		print -r -- "BTT quit (pid=${pid})."
 		exit 0
 	fi
 	sleep 0.25
 done
 
-log "manual quit -- BTT ignored SIGTERM for ${TERM_WAIT}s (pid=${pid}) -- SIGKILL"
+btt_control_log "manual quit -- BTT ignored SIGTERM for ${TERM_WAIT}s (pid=${pid}) -- SIGKILL"
 kill -KILL "$pid" 2>/dev/null || true
 for (( waited = 0; waited < 8; waited++ )); do
 	btt_still_running "$pid" || break
 	sleep 0.25
 done
 if btt_still_running "$pid"; then
-	log "manual quit -- BTT pid ${pid} did not exit after SIGKILL"
+	btt_control_log "manual quit -- BTT pid ${pid} did not exit after SIGKILL"
 	print -r -- "BTT pid ${pid} still alive after SIGKILL." >&2
 	exit 1
 fi
-log "manual quit -- BTT force-quit (pid=${pid})"
+btt_control_log "manual quit -- BTT force-quit (pid=${pid})"
 print -r -- "BTT force-quit (pid=${pid})."

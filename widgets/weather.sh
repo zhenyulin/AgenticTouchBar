@@ -14,23 +14,20 @@
 #   --refresh   fetch conditions and refresh the cache; runs detached,
 #               never in the widget path
 #
-# A tap (actions/tap-refresh.sh) drops a force flag and re-runs the widget:
-# the widget starts a detached refresh even while its cache is fresh, and
-# paints itself grey while the refresh lock is held. The redraw that ends
-# the refresh restores the normal color with the new value -- the same
-# dim-while-working frame the Clash widgets use. Both instances refresh
-# together, since they share one weather.data cache.
-#
-# The widgets render only from cache/weather.data.value: a fresh value wins,
-# and a stale one still prints, so when a song ends they come back with the
-# previous values instantly while a detached refresh fetches new ones.
+# Both instances share one weather.data cache entry and one refresh lock
+# (BTT_WIDGET_VALUE_NAME below), so a refresh started by either serves both
+# and both grey out while it runs. The cache holds the conditions rather than
+# a label, and BTT_WIDGET_RENDER draws the label from it -- everything else
+# about the lifecycle (the force flag a tap drops, the dim-while-working
+# frame, the trace) is the shared one in lib/btt-widget.sh.
 #
 set -u
 set -o pipefail
 PATH="/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin"
 
 # Flags in any order: --refresh, the mode (--text/--icon), and the widget
-# UUID the preset passes as a positional (like the Clash widgets).
+# UUID the preset passes as a positional (like the Clash widgets). Parsed
+# here rather than by btt_parse_widget_args, which knows only the first two.
 REFRESH_MODE=0
 MODE="text"
 UUID_CANDIDATE=""
@@ -48,14 +45,17 @@ BTT_WIDGET_UUID="${UUID_CANDIDATE:-${BTT_WIDGET_UUID:-}}"
 SELF="${0:A}"
 source "${SELF:h}/lib/btt-widget.sh"
 
-STARTED="$(btt_now)"
 BTT_WIDGET_NAME="weather"
+# One entry, drawn two ways.
+BTT_WIDGET_VALUE_NAME="weather.data"
 # A refresh is one get_weather call; a lock older than this is dead.
 BTT_WIDGET_REFRESH_MAX_RUN=60
+BTT_WIDGET_RENDER=render_conditions
+BTT_WIDGET_REFRESH_DETAIL=describe_conditions
 
 # How long a fetched result is reused before the sources are asked again.
 WEATHER_TTL="${BTT_WEATHER_TTL:-300}"
-# Both sources return Celsius, so the script converts when needed.
+# Both sources return Celsius, so the render converts when needed.
 UNIT="${BTT_WEATHER_UNIT:-celsius}"
 # Where to ask for conditions; the coordinates BTT's get_weather payload
 # carries (cache/weather.data.value .currently.metadata).
@@ -82,20 +82,31 @@ wmo_icon() {
 
 # Open-Meteo current conditions. Returns the same {"currently":
 # {temperature, humidity, icon}} shape BTT's payload had (humidity as a
-# 0-1 fraction), so the render path stays unchanged.
+# 0-1 fraction), so the render path stays unchanged. One jq run rather than
+# five: it validates the fields and builds the record in the same pass.
 fetch_open_meteo() {
-    local payload temp humidity code day
+    local payload
     payload="$(curl -fsS --connect-timeout 2 --max-time 5 \
         "https://api.open-meteo.com/v1/forecast?latitude=$WEATHER_LAT&longitude=$WEATHER_LON&current=temperature_2m,relative_humidity_2m,weather_code,is_day" 2>/dev/null)" || return 1
-    temp="$(jq -r '.current.temperature_2m' <<<"$payload" 2>/dev/null)"
-    humidity="$(jq -r '.current.relative_humidity_2m' <<<"$payload" 2>/dev/null)"
-    code="$(jq -r '.current.weather_code' <<<"$payload" 2>/dev/null)"
-    day="$(jq -r '.current.is_day' <<<"$payload" 2>/dev/null)"
-    [[ "$temp" =~ ^-?[0-9]+(\.[0-9]+)?$ ]] || return 1
-    [[ "$humidity" =~ ^[0-9]+(\.[0-9]+)?$ ]] || return 1
-    [[ "$code" =~ ^[0-9]+$ ]] || return 1
-    jq -cn --argjson t "$temp" --argjson h "$humidity" --arg icon "$(wmo_icon "$code" "$day")" \
-        '{currently: {temperature: $t, humidity: ($h / 100), icon: $icon}}'
+
+    local fields
+    fields="$(jq -r '
+        .current
+        | select(
+            (.temperature_2m | type) == "number"
+            and (.relative_humidity_2m | type) == "number"
+            and (.weather_code | type) == "number"
+          )
+        | "\(.temperature_2m)\t\(.relative_humidity_2m)\t\(.weather_code)\t\(.is_day // 1)"
+    ' <<<"$payload" 2>/dev/null)" || return 1
+    [[ -n "$fields" ]] || return 1
+
+    local temp humidity code day
+    IFS=$'\t' read -r temp humidity code day <<<"$fields"
+
+    jq -cn --argjson t "$temp" --argjson h "$humidity" \
+        --arg icon "$(wmo_icon "${code%%.*}" "${day%%.*}")" \
+        '{currently: {temperature: $t, humidity: ($h / 100), icon: $icon}, source: "open-meteo"}'
 }
 
 # Fallback: BTT's get_weather (Apple WeatherKit). Bounded, because a wedged
@@ -115,81 +126,66 @@ fetch_btt_weather() {
         kill "$pid" 2>/dev/null
         wait "$pid" 2>/dev/null
     )
-    cat "$tmp"
+    jq -c '. + {source: "btt"}' <"$tmp" 2>/dev/null
     rm -f "$tmp"
 }
 
-if (( REFRESH_MODE )); then
+compute_value() {
+    local json
     json="$(fetch_open_meteo)"
-    SOURCE=open-meteo
-    if [[ -z "$json" ]]; then
-        json="$(fetch_btt_weather)"
-        SOURCE=btt
-    fi
-    if [[ -n "$json" ]] && jq -e . >/dev/null 2>&1 <<<"$json"; then
-        btt_cache_put weather.data "$json"
-        summary="$(jq -r '"t=" + (.currently.temperature|tostring) + " h=" + ((.currently.humidity * 100)|round|tostring)' <<<"$json" 2>/dev/null || true)"
-        btt_trace refresh "$STARTED" ok "source=$SOURCE $summary"
-        exit 0
-    fi
-    btt_trace refresh "$STARTED" error "bad-json"
-    exit 1
-fi
+    [[ -n "$json" ]] || json="$(fetch_btt_weather)"
+    # Only a payload the render path can read is worth caching; anything else
+    # leaves the previous conditions in place for the next tick to draw.
+    [[ -n "$json" ]] && jq -e . >/dev/null 2>&1 <<<"$json" && printf '%s' "$json"
+}
 
-# Render only from the cache: a fresh value wins, and a stale one still
-# prints while a detached refresh re-fetches conditions (Open-Meteo, or
-# BTT's Apple WeatherKit as a fallback) -- the widget path never blocks on
-# AppleScript or the network. A tap's force flag refreshes even while the
-# value is fresh: the widget greys out while the refresh lock is held, and
-# the redraw that ends the refresh restores white with the new value.
-VALUE="$(btt_cache_get weather.data "$WEATHER_TTL")"
-FRESH=$?
-FORCE=0; btt_force_pending && FORCE=1
-if (( FRESH != 0 || FORCE )); then
-    btt_refresh_detached weather "$BTT_WIDGET_REFRESH_MAX_RUN" "$SELF" --refresh "$BTT_WIDGET_UUID"
-fi
-OUTCOME=cached; (( FRESH != 0 )) && OUTCOME=stale; (( FORCE )) && OUTCOME=forced; [[ -n "$VALUE" ]] || OUTCOME=empty
-btt_trace widget "$STARTED" "$OUTCOME"
+# What the refresh writes into the trace, in place of the whole document.
+describe_conditions() {
+    jq -r '"source=" + (.source // "?")
+        + " t=" + (.currently.temperature | tostring)
+        + " h=" + ((.currently.humidity * 100) | round | tostring)' \
+        <<<"${1-}" 2>/dev/null || printf 'source=?'
+}
 
-if [[ -z "$VALUE" ]]; then
+# The cached conditions, drawn as this instance's label. One jq run: the
+# render path used to spend two on jq and two more on awk.
+render_conditions() {
+    local value="${1-}"
+
+    if [[ -z "$value" ]]; then
+        # An icon widget with nothing to draw prints nothing, which is how BTT
+        # hides it; the text widget keeps a placeholder so the row holds shape.
+        [[ "$MODE" == icon ]] || printf -- '--'
+        return 0
+    fi
+
     if [[ "$MODE" == icon ]]; then
-        exit 0
-    else
-        btt_publish "--"
+        local icon
+        icon="$(jq -r '.currently.icon // ""' <<<"$value" 2>/dev/null)"
+        case "$icon" in
+            clear-day)          printf '☀️' ;;
+            clear-night)        printf '🌙' ;;
+            partly-cloudy-day)  printf '⛅' ;;
+            partly-cloudy-night) printf '☁️' ;;
+            cloudy)             printf '☁️' ;;
+            rain)               printf '🌧️' ;;
+            sleet)              printf '🌨️' ;;
+            snow)               printf '❄️' ;;
+            wind)               printf '💨' ;;
+            fog)                printf '🌫️' ;;
+            thunderstorm)       printf '⛈️' ;;
+            hail)               printf '🌨️' ;;
+            *)                  printf '🌡️' ;;
+        esac
+        return 0
     fi
-    exit 0
-fi
 
-if [[ "$MODE" == icon ]]; then
-    icon="$(jq -r '.currently.icon // ""' <<<"$VALUE")"
-    case "$icon" in
-        clear-day)          emoji="☀️" ;;
-        clear-night)        emoji="🌙" ;;
-        partly-cloudy-day)  emoji="⛅" ;;
-        partly-cloudy-night) emoji="☁️" ;;
-        cloudy)             emoji="☁️" ;;
-        rain)               emoji="🌧️" ;;
-        sleet)              emoji="🌨️" ;;
-        snow)               emoji="❄️" ;;
-        wind)               emoji="💨" ;;
-        fog)                emoji="🌫️" ;;
-        thunderstorm)       emoji="⛈️" ;;
-        hail)               emoji="🌨️" ;;
-        *)                  emoji="🌡️" ;;
-    esac
-    btt_publish "$emoji"
-    exit 0
-fi
+    jq -r --arg unit "$UNIT" '
+        (.currently.temperature // 0) as $c
+        | (if $unit == "fahrenheit" then $c * 9 / 5 + 32 else $c end) as $t
+        | (if $unit == "fahrenheit" then "F" else "C" end) as $suffix
+        | "\($t | round)°\($suffix)\n\(((.currently.humidity // 0) * 100) | round)%"
+    ' <<<"$value" 2>/dev/null
+}
 
-temp="$(jq -r '.currently.temperature // 0' <<<"$VALUE")"
-humidity="$(jq -r '.currently.humidity // 0' <<<"$VALUE")"
-if [[ "$UNIT" == fahrenheit ]]; then
-    temp="$(awk -v t="$temp" 'BEGIN{printf "%.0f", t * 9 / 5 + 32}')"
-    suffix="F"
-else
-    temp="$(awk -v t="$temp" 'BEGIN{printf "%.0f", t}')"
-    suffix="C"
-fi
-humidity="$(awk -v h="$humidity" 'BEGIN{printf "%.0f", h * 100}')"
-
-btt_publish "${temp}°${suffix}"$'\n'"${humidity}%"
+btt_cached_widget_main "$REFRESH_MODE" "$SELF" "$WEATHER_TTL" compute_value
