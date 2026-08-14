@@ -26,6 +26,17 @@ The levers that do move the gap:
 - `bttpreset/Default.bttpreset` is the canonical preset source. Preset
   changes land there; the backup is refreshed by manual export only.
 
+## BTT Date/Time widget format tokens are TR35 (2026-08-15)
+
+`BTTTouchBarDateFormat` uses Unicode TR35 date-field symbols: uppercase
+`MM` is the **month**, lowercase `mm` is **minutes**. The time widget's
+`"HH:MM"` (from the 2026-08-13 date/time split) rendered the month number
+as minutes — the clock looked like `03:08` all August and could never
+reach the real minute, reading as "lagged behind". Fixed to `"HH:mm"`.
+The date widget's `"MM-dd"` was always correct, which is what makes the
+pair asymmetric and the bug easy to miss. When editing widget formats,
+verify token case against the date widget's known-good sibling.
+
 ## Freeze-guard arc is closed (2026-08-13)
 
 The freeze guard and all of its observability were **removed**, not disabled:

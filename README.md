@@ -57,12 +57,16 @@ configured natively in BTT.
 | Weather | Temperature/humidity | `widgets/weather.sh --text` | 600 s | `actions/tap-refresh.sh` (text + icon) |
 | Weath Icon | Conditions icon | `widgets/weather.sh --icon` | 600 s | `actions/tap-refresh.sh` (text + icon) |
 
-Their refresh asks Open-Meteo first (no key, ~1 s, since the BTT-native
-weather provider is unreachable on this network) and falls back to BTT's
-`get_weather` (Apple WeatherKit). Tapping either one forces a shared
-detached refresh (they cache one `weather.data` value): the tapped widget
-greys out while the refresh runs and the redraw that ends it restores the
-normal color with the new value.
+Their refresh asks QWeather (和风天气) first: a domestic API that Clash
+routes DIRECT, so it keeps answering when the VPN node has timed out —
+Open-Meteo (no key) and BTT's `get_weather` (Apple WeatherKit), which die
+with the node, are fallbacks in that order. QWeather needs a free API key
+and API host from console.qweather.com (50k requests/month free; see
+Configuration; provider facts in
+[specs/reference/PROVIDERS.md](specs/reference/PROVIDERS.md)). Tapping either
+one forces a shared detached refresh (they cache one `weather.data` value):
+the tapped widget greys out while the refresh runs and the redraw that ends
+it restores the normal color with the new value.
 
 The native BTT Now Playing widget cannot be told to ignore specific apps —
 it follows whichever app owns the system Now Playing session, browsers
@@ -119,7 +123,8 @@ detached process and then refreshes the Lyrics (and Star) widgets.
 ## Configuration
 
 Scripts read environment variables with built-in defaults; set them where
-BTT's shell actions can see them (BTT environment variables or `~/.zshenv`).
+BTT's shell actions can see them (BTT environment variables, `~/.zshenv`, or
+— weather widgets only — `$BTT_REPO_DIR/.env`).
 
 | Variable | Default | Used by |
 | --- | --- | --- |
@@ -133,7 +138,8 @@ BTT's shell actions can see them (BTT environment variables or `~/.zshenv`).
 | `BTT_NOW_PLAYING_ALLOWED` | `com.apple.Music com.tencent.QQMusicMac` | Space-separated bundle ids allowed to hold the Now Playing row and to drive the Lyrics sampler's MediaRemote fallback (matched case-insensitively; Lyrics drops `com.apple.Music`, which it reads directly) |
 | `BTT_NOW_PLAYING_STATE_BIN`, `BTT_NOW_PLAYING_CLI` | the compiled helper in BTT's support directory, `nowplaying-cli` on `PATH` | The two MediaRemote sources (`widgets/lib/media-remote.sh`); overriding either is how a fixture drives these scripts, since they set their own `PATH` |
 | `BTT_NOW_PLAYING_RAW_PATH`, `BTT_NOW_PLAYING_RAW_MAX_AGE` | `$BTT_REPO_DIR/cache/now-playing.raw.json`, `5` | The raw Now Playing dictionary the Now Playing widget writes each tick, and how old the Lyrics sampler and the Star widget's gate may find it before asking for their own |
-| `BTT_WEATHER_UNIT`, `BTT_WEATHER_TTL` | `celsius`, `300` | Weather widgets: unit (celsius/fahrenheit) and get_weather cache TTL (seconds) |
+| `BTT_WEATHER_QW_HOST`, `BTT_WEATHER_QW_KEY` | — | Weather widgets: QWeather API host and key (console.qweather.com); unset either to skip QWeather and use the foreign sources only |
+| `BTT_WEATHER_UNIT`, `BTT_WEATHER_TTL` | `celsius`, `300` | Weather widgets: unit (celsius/fahrenheit) and weather cache TTL (seconds) |
 
 ## The Lyrics feature
 

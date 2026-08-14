@@ -3,10 +3,11 @@
 # BetterTouchTool weather widgets.
 #
 # The BTT-native weather widgets fetch from a provider this network cannot
-# reach (Clash drops it), so these widgets fetch conditions themselves: the
-# refresh asks Open-Meteo first (no key, fast, reachable from here) and
-# falls back to BetterTouchTool's own get_weather AppleScript command
-# (Apple WeatherKit) when it cannot.
+# reach (Clash drops it), so these widgets fetch conditions themselves. The
+# refresh asks QWeather (和风天气) first: its API host is domestic, so
+# Clash's DIRECT rule carries it even when the VPN node has timed out.
+# Open-Meteo and BTT's own get_weather AppleScript command (Apple
+# WeatherKit) both die with the node, so they are fallbacks only.
 #
 # Two instances, chosen by the mode flag:
 #   --text   "77°F" over "41%"      (the Weather widget)
@@ -51,11 +52,14 @@ done
 
 SELF="${0:A}"
 source "${SELF:h}/lib/btt-widget.sh"
+# Repo-local secrets (BTT_WEATHER_QW_HOST / BTT_WEATHER_QW_KEY live here):
+# plain KEY=value lines, shell-quoted if the value contains spaces.
+[[ -f "$BTT_REPO_DIR/.env" ]] && source "$BTT_REPO_DIR/.env"
 
 BTT_WIDGET_NAME="weather"
 # One entry, drawn two ways.
 BTT_WIDGET_VALUE_NAME="weather.data"
-# A refresh is one get_weather call; a lock older than this is dead.
+# A refresh is one fetch; a lock older than this is dead.
 BTT_WIDGET_REFRESH_MAX_RUN=60
 BTT_WIDGET_RENDER=render_conditions
 BTT_WIDGET_REFRESH_DETAIL=describe_conditions
@@ -74,6 +78,11 @@ UNIT="${BTT_WEATHER_UNIT:-celsius}"
 # carries (cache/weather.data.value .currently.metadata).
 WEATHER_LAT="${BTT_WEATHER_LAT:-38.5}"
 WEATHER_LON="${BTT_WEATHER_LON:-106.31}"
+# QWeather: domestic endpoints survive a timed-out VPN node. Both the key
+# and the project's API host come from console.qweather.com (50k req/month
+# free); unset either to skip QWeather and fall back to the foreign sources.
+QW_KEY="${BTT_WEATHER_QW_KEY:-}"
+QW_HOST="${BTT_WEATHER_QW_HOST:-}"
 
 # WMO weather code -> the icon names the render path below already maps to
 # emoji. is_day picks the night variant of clear/partly-cloudy.
@@ -90,6 +99,31 @@ wmo_icon() {
         95)   printf 'thunderstorm' ;;
         96|99) printf 'hail' ;;
         *)    printf 'cloudy' ;;
+    esac
+}
+
+# QWeather condition code -> the icon names the render path below already
+# maps to emoji. The current docs list has no night variants, but live
+# responses still carry the legacy 15x night codes (150 clear, 151-153
+# partly cloudy, 154 overcast).
+qweather_icon() {
+    local code="${1:-}"
+    case "$code" in
+        100)             printf 'clear-day' ;;
+        150)             printf 'clear-night' ;;
+        101|102|103)     printf 'partly-cloudy-day' ;;
+        151|152|153)     printf 'partly-cloudy-night' ;;
+        104|154)         printf 'cloudy' ;;
+        302|303|304)     printf 'thunderstorm' ;;
+        313)             printf 'sleet' ;;
+        404|405|406)     printf 'sleet' ;;
+        300|301|305|306|307|308|309|310|311|312|314|315|316|317|318|350|399) printf 'rain' ;;
+        400|401|402|403|407|408|409|410|499) printf 'snow' ;;
+        503|504|507|508) printf 'wind' ;;
+        500|501|502|509|510|511|512|513|514|515) printf 'fog' ;;
+        900)             printf 'clear-day' ;;
+        901)             printf 'snow' ;;
+        *)               printf 'cloudy' ;;
     esac
 }
 
@@ -122,6 +156,37 @@ fetch_open_meteo() {
         '{currently: {temperature: $t, humidity: ($h / 100), icon: $icon}, source: "open-meteo"}'
 }
 
+# QWeather current conditions. Same shape as the other fetchers, one jq
+# pass: humidity arrives as a 0-100 string, temperature as a string, and
+# only a payload whose fields validate is worth handing on.
+fetch_qweather() {
+    [[ -n "$QW_KEY" && -n "$QW_HOST" ]] || return 1
+    local payload
+    # --compressed: the API gzips every response, so plain curl gets bytes
+    # that jq cannot read.
+    payload="$(curl --compressed -fsS --connect-timeout 2 --max-time 5 \
+        "https://${QW_HOST}/v7/weather/now?location=${WEATHER_LON},${WEATHER_LAT}&key=${QW_KEY}" 2>/dev/null)" || return 1
+
+    local fields
+    fields="$(jq -r '
+        select(.code == "200") | .now
+        | select(
+            (.temp | type) == "string" and (.temp | test("^-?[0-9.]+$"))
+            and (.humidity | type) == "string" and (.humidity | test("^[0-9]+$"))
+            and (.icon | type) == "string"
+          )
+        | "\(.temp)\t\(.humidity)\t\(.icon)"
+    ' <<<"$payload" 2>/dev/null)" || return 1
+    [[ -n "$fields" ]] || return 1
+
+    local temp humidity code
+    IFS=$'\t' read -r temp humidity code <<<"$fields"
+
+    jq -cn --argjson t "$temp" --argjson h "$humidity" \
+        --arg icon "$(qweather_icon "$code")" \
+        '{currently: {temperature: $t, humidity: ($h / 100), icon: $icon}, source: "qweather"}'
+}
+
 # Fallback: BTT's get_weather (Apple WeatherKit). Bounded, because a wedged
 # BTT can make the call hang for minutes; osascript auto-launches a dead
 # BTT, so only query it while it is running.
@@ -145,7 +210,10 @@ fetch_btt_weather() {
 
 compute_value() {
     local json
-    json="$(fetch_open_meteo)"
+    # Domestic first: QWeather rides Clash's DIRECT rule, so it survives a
+    # timed-out VPN node; the foreign sources below both die with it.
+    json="$(fetch_qweather)"
+    [[ -n "$json" ]] || json="$(fetch_open_meteo)"
     [[ -n "$json" ]] || json="$(fetch_btt_weather)"
     # Only a payload the render path can read is worth caching; anything else
     # leaves the previous conditions in place for the next tick to draw.
