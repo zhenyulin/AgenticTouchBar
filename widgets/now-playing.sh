@@ -24,7 +24,8 @@
 #
 # Usage: now-playing.sh [widget-uuid]
 # BTT: JSON {"text": "<title>\n<artist> ‣ <album>" or "<album> ‣ <title>\n<artist>",
-#            whichever has the narrower widest row, "font_color": ...,
+#            whichever has the narrower widest row,
+#            "font_color": full white, a shade dimmed while paused,
 #            "icon_path": <album cover | player app icon | play icon>}
 # Terminal: plain text of the same chosen layout
 # Nothing when no allowed player holds Now Playing.
@@ -91,8 +92,7 @@ else
 fi
 
 python3 - "$RAW_PATH" "$ALLOWED_BUNDLE_IDS" "$CACHE_DIR" "$BTT_WIDGET_UUID" \
-    "$ASSETS_DIR" "$LYRICS_UUID" \
-    "$SAMPLER_STATE" "$HELPER" <<'PY'
+    "$ASSETS_DIR" "$LYRICS_UUID" "$SAMPLER_STATE" "$HELPER" <<'PY'
 # Imported here: what every tick needs. base64, hashlib, plistlib, struct,
 # subprocess and zlib are imported by the functions that use them instead --
 # measured at 47 ms for plistlib alone, 137 ms for the six together, on a
@@ -117,11 +117,6 @@ def allowed_ids(allowed):
     gate fails closed: the row goes blank for a player it should be drawing.
     """
     return {item.lower() for item in allowed.split()}
-
-
-def strip_parens(text):
-    # "Song (feat. X)" -> "Song"; leftover double spaces collapse.
-    return re.sub(r"\s+", " ", re.sub(r"\([^)]*\)", "", text)).strip()
 
 
 def _png_chunk(tag, data):
@@ -165,6 +160,11 @@ def write_play_icon(path):
         + _png_chunk(b"IEND", b"")
     )
     path.write_bytes(png)
+
+
+def strip_parens(text):
+    # "Song (feat. X)" -> "Song"; leftover double spaces collapse.
+    return re.sub(r"\s+", " ", re.sub(r"\([^)]*\)", "", text)).strip()
 
 
 def display_album(text):
@@ -657,9 +657,8 @@ if widget_uuid:
 
 # The album cover is the icon while playing, falling back to the player's
 # own app icon when the track carries no artwork -- a bare text row leaves
-# the reader nothing to place it by. A small play icon stands in while
-# paused, matching the native widget's HideWhenPaused: 0 (still showing the
-# track, but signalling it is not moving).
+# the reader nothing to place it by. The small play triangle takes the
+# slot while paused, and the text dims by a shade below.
 if playing:
     icon = cover or player_icon(player, cache_dir)
 else:
@@ -685,7 +684,12 @@ text = "\n".join(row for row in rows if row)
 if not widget_uuid:
     print(text)
 else:
-    payload = {"text": text, "font_color": "255,255,255,255"}
+    # Paused dims the text by a shade -- enough to read as paused, not
+    # enough to grey the row like a stale weather widget.
+    payload = {
+        "text": text,
+        "font_color": "255,255,255,255" if playing else "255,255,255,230",
+    }
     if icon:
         payload["icon_path"] = icon
     print(json.dumps(payload, ensure_ascii=False))

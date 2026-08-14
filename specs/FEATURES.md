@@ -35,7 +35,7 @@ by another script, and exits.
 
 | Widget | Shows | Script | Interval | Tap | Long press |
 | --- | --- | --- | --- | --- | --- |
-| Now Playing | Title over artist - album, album side by minimax width, with cover/app/play icon | `widgets/now-playing.sh` | 1 s | Play or Pause, then refresh Lyrics | Toggle the `Music` group |
+| Now Playing | Title over artist - album, album side by minimax width, with cover/app/play icon (slight dim while paused) | `widgets/now-playing.sh` | 1 s | Play or Pause, then refresh Lyrics | Toggle the `Music` group |
 | Lyrics | The synchronised lyric line | `widgets/now-playing-lyrics.sh` | 1 s | Repaint itself after 1.8 s | Open Player |
 | Star | `★` / `☆` for Apple Music | preset AppleScript + `actions/now-playing-app.sh` | 10 s | Toggle favourite | — |
 | Claude | 5 h and 7 d quota | `widgets/claude-quota.sh` | 600 s | Refresh itself | — |

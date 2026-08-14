@@ -47,7 +47,7 @@ configured natively in BTT.
 | Widget | Shows | Script | Refresh | Tap action |
 | --- | --- | --- | --- | --- |
 | Lyrics | Synchronised lyrics + now playing | `widgets/now-playing-lyrics.sh` | 1 s | Repaint after a short delay |
-| Now Playing | Title/album/artist + album-cover icon (the player's app icon when the track carries no cover; small play icon while paused) — only while an allowed player holds Now Playing (browsers ignored) | `widgets/now-playing.sh` | 1 s | Play or Pause + weather/lyrics refresh |
+| Now Playing | Title/album/artist + album-cover icon (the player's app icon when the track carries no cover; the play icon returns while paused, with slightly dimmed text) — only while an allowed player holds Now Playing (browsers ignored) | `widgets/now-playing.sh` | 1 s | Play or Pause + weather/lyrics refresh |
 | Codex | Codex quota | `widgets/codex-quota.sh` | 300 s | `actions/tap-refresh.sh` |
 | Claude | Claude 5 h / 7 d quota | `widgets/claude-quota.sh` | 600 s | `actions/tap-refresh.sh` |
 | OpenCode | OpenCode Go weekly quota | `widgets/opencode-quota.sh` | 300 s | `actions/tap-refresh.sh` |

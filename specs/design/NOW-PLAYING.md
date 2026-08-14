@@ -141,7 +141,8 @@ before treating a sample as gone.
 `kMRMediaRemoteNowPlayingInfoPlaybackRate` is not a playback state: QQ Music
 keeps publishing rate 1 while paused and never republishes on a pause —
 measured at 9 s of rate 1 after BTT's own Play or Pause action — so the rate
-alone left the album cover on screen where the play icon belongs.
+alone kept the row reading as playing (cover, full-white text) while it was
+paused.
 
 | Helper answer | Result |
 | --- | --- |
@@ -158,7 +159,7 @@ sampler, which is why the helper exists at all.
 | State | Order tried | Notes |
 | --- | --- | --- |
 | Playing | payload artwork → held cover → player app icon | A bare text row leaves the reader nothing to place the track by. |
-| Paused | `assets/now-playing-play.svg` → generated PNG → player app icon | Matches the native widget's `HideWhenPaused: 0`: still showing the track, but signalling it is not moving. |
+| Paused | `assets/now-playing-play.svg` → generated PNG → player app icon | Still showing the track, signalling it is not moving; the text dims by a shade. |
 
 - **Payload artwork.** Base64 under `kMRMediaRemoteNowPlayingInfoArtworkData`,
   sniffed as JPEG (`ff d8 ff`) or PNG (`89 50 4e 47`) and written to
@@ -175,6 +176,9 @@ sampler, which is why the helper exists at all.
   `icon_path` files; if it is missing, a 32×32 white triangle on transparency
   is generated once into `cache/now-playing-play.png` with `zlib` and `struct`
   alone, so the widget needs no image tools.
+- **Paused dim.** While paused the text dims by a shade
+  (`255,255,255,230`) — enough to read as paused, not enough to grey the
+  row like a stale weather widget.
 
 ### Row Layout
 
@@ -196,7 +200,7 @@ sampler, which is why the helper exists at all.
 
 ## Journey Contracts
 
-### One Widget Tick
+### Widget Tick Journey
 
 **Input:** an optional widget UUID, the MediaRemote payloads, and the
 sampler's `state.json`.
