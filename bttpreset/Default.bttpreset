@@ -780,7 +780,7 @@
             "BTTTouchBarButtonHoverColor" : "248.880000, 146.115000, 128.010000, 181.050000",
             "BTTTouchBarButtonHeight" : 15,
             "BTTTouchBarButtonWidth" : 100,
-            "BTTTouchBarDateFormat" : "HH:MM",
+            "BTTTouchBarDateFormat" : "HH:mm",
             "BTTTouchBarTimeZoneLocation" : "System Time Zone",
             "BTTTouchBarItemIconHeight" : 22,
             "BTTTouchBarButtonTextAlignment" : 0,
