@@ -53,7 +53,7 @@ configured natively in BTT.
 | OpenCode | OpenCode Go weekly quota | `widgets/opencode-quota.sh` | 300 s | `actions/tap-refresh.sh` |
 | 🌐 | Selected Clash node's region flag | `widgets/clash-region.sh` | 300 s | `actions/tap-refresh.sh` (region + latency) |
 | Latency | Selected Clash node's latency | `widgets/clash-latency.sh` | 300 s | `actions/tap-refresh.sh` (region + latency) |
-| Star | Favourite (★/☆) — only while Apple Music holds Now Playing | AppleScript in the preset + `actions/now-playing-app.sh` | 10 s | Toggle favourite |
+| Star | Favourite (★/☆) — only while Apple Music holds Now Playing; hidden with the row when the track ends | AppleScript in the preset + `actions/now-playing-app.sh` | 10 s | Toggle favourite |
 | Weather | Temperature/humidity | `widgets/weather.sh --text` | 600 s | `actions/tap-refresh.sh` (text + icon) |
 | Weath Icon | Conditions icon | `widgets/weather.sh --icon` | 600 s | `actions/tap-refresh.sh` (text + icon) |
 
@@ -119,6 +119,12 @@ intervals above are as exported in the preset.
 Media-key next/previous and the two-finger swipe triggers run
 `actions/track-changed.sh`, which hands the expensive lyric work to a
 detached process and then refreshes the Lyrics (and Star) widgets.
+
+When the player closes, the three music widgets leave together: whichever side
+notices first — the Now Playing widget's own tick or the Lyrics sampler —
+empties the Lyrics and Star widgets in the same `osascript` that settles the
+row. The Star widget would otherwise sit there alone until its 10 s
+AppleScript tick came round.
 
 ## Actions
 

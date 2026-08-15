@@ -37,7 +37,7 @@ by another script, and exits.
 | --- | --- | --- | --- | --- | --- |
 | Now Playing | Title over artist - album, album side by minimax width, with cover/app/play icon (slight dim while paused) | `widgets/now-playing.sh` | 1 s | Play or pause the row's own player, then refresh Lyrics | Toggle the `Music` group |
 | Lyrics | The synchronised lyric line | `widgets/now-playing-lyrics.sh` | 1 s | Repaint itself after 1.8 s | Open Player |
-| Star | `★` / `☆` for Apple Music | preset AppleScript + `actions/now-playing-app.sh` | 10 s | Toggle favourite | — |
+| Star | `★` / `☆` for Apple Music, emptied with the row when the track ends | preset AppleScript + `actions/now-playing-app.sh` | 10 s | Toggle favourite | — |
 | Claude | 5 h and 7 d quota | `widgets/claude-quota.sh` | 600 s | Refresh itself | — |
 | Codex | Quota and time to reset | `widgets/codex-quota.sh` | 300 s | Refresh itself | — |
 | OpenCode | Weekly quota | `widgets/opencode-quota.sh` | 300 s | Refresh itself | — |
@@ -162,5 +162,8 @@ verification map names.
 - `cache/lyrics/state.json` is consumed by two scripts outside the Lyrics
   package with the age and source rules copied into each, rather than shared.
 - Widget UUIDs are duplicated between `actions/set-widget-variables.sh`, the
-  preset, and one hard-coded pair in the Now Playing tap's AppleScript.
+  preset, one hard-coded pair in the Now Playing tap's AppleScript, and the
+  defaults the music row's scripts carry for each other (`widgets/now-playing.sh`
+  and `widgets/lyrics/config.py` each name the Lyrics, Now Playing and Star
+  widgets, so the closing sequence works against a preset never re-imported).
 - No `VISION.md` exists; the root `README.md` currently carries that role.

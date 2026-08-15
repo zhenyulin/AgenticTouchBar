@@ -118,7 +118,7 @@ def _btt_call(*statements: str) -> None:
         pass
 
 
-def _clear_lyric_then_row(hide_row: bool) -> None:
+def _clear_lyric_then_row(hide_row: bool, hide_star: bool = False) -> None:
     """Clear the Lyrics widget, then settle the Now Playing row -- in that order.
 
     The row is hidden when the track is gone for good, otherwise repainted at
@@ -127,6 +127,14 @@ def _clear_lyric_then_row(hide_row: bool) -> None:
     and a lyric outliving the row it belongs beside is the wrong order in the
     more visible direction -- the lyric kept rolling for seconds after the
     row it annotates had disappeared.
+
+    The Star widget goes out with the row. It shows nothing while Music is
+    stopped or gone (specs/design/STAR.md), but it reaches that on a 10 s
+    AppleScript tick of its own -- so left alone it stays on screen, beside a
+    row that has already disappeared, for up to ten seconds after the player
+    closed. Emptying it here is the same trick as the row's: BetterTouchTool
+    drops a script widget whose text is empty, and the widget's own next tick
+    computes the same empty answer.
     """
     statements = []
     if config.LYRICS_WIDGET_UUID:
@@ -142,6 +150,10 @@ def _clear_lyric_then_row(hide_row: bool) -> None:
             if hide_row
             else f'refresh_widget "{config.NOW_PLAYING_WIDGET_UUID}"'
         )
+    if hide_star and config.STAR_WIDGET_UUID:
+        statements.append(
+            f'update_touch_bar_widget "{config.STAR_WIDGET_UUID}" text ""'
+        )
     if statements:
         _btt_call(*statements)
 
@@ -154,7 +166,9 @@ def clear_marker() -> None:
         pass
 
 
-def closing_sequence(previous: dict[str, Any], hide_row: bool) -> None:
+def closing_sequence(
+    previous: dict[str, Any], hide_row: bool, hide_star: bool = False
+) -> None:
     """The closing sequence: clear the Lyrics widget, then settle the row.
 
     Runs in the event watcher (the sampler, or the track-change follow)
@@ -179,7 +193,7 @@ def closing_sequence(previous: dict[str, Any], hide_row: bool) -> None:
     except OSError:
         pass
 
-    _clear_lyric_then_row(hide_row)
+    _clear_lyric_then_row(hide_row, hide_star)
 
 
 def maybe_transition_sequence(
@@ -193,6 +207,11 @@ def maybe_transition_sequence(
     keeps showing the track by design (HideWhenPaused: 0), and on a track
     change it shows the new track itself.
 
+    The Star widget goes out on both endings, stop included, because that is
+    its own contract -- no favourite symbol to a player that is stopped or
+    gone (specs/design/STAR.md) -- and not on a pause or a track change, where
+    the star stays and simply follows the new track.
+
     A pause is not a closing transition -- the row keeps its track -- but the
     lyric still goes, because there is no current line to a track that is not
     moving. Both widgets would reach that on their own next tick, up to a
@@ -201,7 +220,9 @@ def maybe_transition_sequence(
     """
     state = (new or {}).get("state", "")
     if _visible_track(previous) and state in {"stopped", "not_running"}:
-        closing_sequence(previous, hide_row=(state == "not_running"))
+        closing_sequence(
+            previous, hide_row=(state == "not_running"), hide_star=True
+        )
     elif (
         _visible_track(previous)
         and _visible_track(new)

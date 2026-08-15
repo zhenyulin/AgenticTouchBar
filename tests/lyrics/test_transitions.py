@@ -111,10 +111,20 @@ class TransitionSequence(unittest.TestCase):
 
     def assert_lyric_cleared_first(self, statements):
         """The lyric leaves the screen before the row is touched, in one call."""
-        self.assertEqual(len(statements), 2)
+        self.assertGreaterEqual(len(statements), 2)
         self.assertIn(config.LYRICS_WIDGET_UUID, statements[0])
         self.assertIn('text ""', statements[0])
         self.assertIn(config.NOW_PLAYING_WIDGET_UUID, statements[1])
+
+    def assert_star_hidden(self, statements):
+        """The star goes out with the row, rather than on its own 10 s tick."""
+        self.assertEqual(len(statements), 3)
+        self.assertIn(config.STAR_WIDGET_UUID, statements[2])
+        self.assertIn('text ""', statements[2])
+
+    def assert_star_untouched(self, statements):
+        self.assertEqual(len(statements), 2)
+        self.assertNotIn(config.STAR_WIDGET_UUID, " ".join(statements))
 
     def marker(self):
         try:
@@ -130,6 +140,13 @@ class TransitionSequence(unittest.TestCase):
         self.assertIn('text ""', statements[1])
         self.assertEqual(self.marker()["title"], "Yellow")
 
+    def test_a_quit_player_takes_the_star_with_the_row(self):
+        # The star's own AppleScript tick is 10 s, so left alone it would sit
+        # on the Touch Bar beside a row that has already gone.
+        cli.maybe_transition_sequence(track(), {"state": "not_running"})
+
+        self.assert_star_hidden(self.statements())
+
     def test_a_stopped_player_clears_the_lyric_and_keeps_the_row(self):
         # A plain stop keeps the row showing its track (HideWhenPaused: 0).
         cli.maybe_transition_sequence(track(), {"state": "stopped"})
@@ -137,6 +154,12 @@ class TransitionSequence(unittest.TestCase):
         statements = self.statements()
         self.assert_lyric_cleared_first(statements)
         self.assertIn("refresh_widget", statements[1])
+
+    def test_a_stopped_player_hides_the_star(self):
+        # The star shows nothing while the player is stopped, row or no row.
+        cli.maybe_transition_sequence(track(), {"state": "stopped"})
+
+        self.assert_star_hidden(self.statements())
 
     def test_a_track_change_clears_the_lyric_then_repaints_the_row(self):
         cli.maybe_transition_sequence(track(), track(title="Trouble"))
@@ -146,12 +169,24 @@ class TransitionSequence(unittest.TestCase):
         self.assertIn("refresh_widget", statements[1])
         self.assertEqual(self.marker()["title"], "Yellow")
 
+    def test_a_track_change_leaves_the_star_on_screen(self):
+        # Still the same player; the star follows the new track instead
+        # (actions/track-changed.sh refreshes it).
+        cli.maybe_transition_sequence(track(), track(title="Trouble"))
+
+        self.assert_star_untouched(self.statements())
+
     def test_a_pause_clears_the_lyric_then_repaints_the_row(self):
         cli.maybe_transition_sequence(track(), track(state="paused"))
 
         statements = self.statements()
         self.assert_lyric_cleared_first(statements)
         self.assertIn("refresh_widget", statements[1])
+
+    def test_a_pause_leaves_the_star_on_screen(self):
+        cli.maybe_transition_sequence(track(), track(state="paused"))
+
+        self.assert_star_untouched(self.statements())
 
     def test_a_pause_leaves_no_marker_behind(self):
         # A paused track keeps its identity, so a marker naming it would

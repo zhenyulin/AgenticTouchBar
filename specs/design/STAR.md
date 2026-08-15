@@ -24,6 +24,7 @@ contract; the preset is the source of truth.
 | `actions/now-playing-app.sh` | The two scripts above and the Open Player trigger | Prints one bundle id, or nothing. With `--with-holder`, a second line carries the raw session holder — `actions/now-playing-toggle.sh` needs both, see [NOW-PLAYING.md](NOW-PLAYING.md#entry-points). |
 | `Open Player` named trigger | Long press on the Lyrics widget | Activates the app that bundle id names. |
 | `actions/track-changed.sh` | Media next/previous, two-finger swipes | Refreshes the Star widget along with Lyrics. |
+| Closing sequence | The track ends — `widgets/now-playing.sh` `leave_row`, or `cli.closing_sequence` from the sampler | Sets the widget's text to `""`, so it leaves with the row rather than on its own 10 s tick. See [Closing](#closing). |
 
 The widget is trigger `A05C5D37-7EAA-4F7B-AC00-23183CC8C6A1` in
 [`bttpreset/Default.bttpreset`](../../bttpreset/Default.bttpreset), merged
@@ -41,6 +42,9 @@ Star widget
 │   ├── ★ when favorited
 │   ├── ☆ when not
 │   └── "" while Music is stopped or not running
+├── Leave with the row rather than on the next tick
+│   ├── Emptied by the Now Playing widget when it hides the row
+│   └── Emptied by the Lyrics sampler when the track stops or the app quits
 └── Toggle on tap
     ├── Paint the new symbol before Apple Music has persisted it
     ├── Write `favorited` on the current track
@@ -84,6 +88,10 @@ answer, is not the end of it — the sampler fallback can still name the player.
 | Same, not favorited | `☆` |
 | Holder is not `com.apple.Music`, or Music is not running, or player state is stopped | `""` |
 
+The widget computes this every 10 s, which is the whole of the problem the
+closing sequence below exists to solve: the answer is already `""` the moment
+the player closes, but nothing asks for it until that tick comes round.
+
 ## Journey Contracts
 
 ### Toggle
@@ -112,6 +120,41 @@ records the change a moment later.
   (`Run Apple Script (async in background)`), so BTT's runner is not held for
   the round trip to Music.
 
+### Closing
+
+**Input:** the track ending — Apple Music quits, or stops.
+
+**Transformation:** whichever side notices runs the closing sequence, and
+`update_touch_bar_widget "<star-uuid>" text ""` rides in the same `osascript`
+as the lyric's clear:
+
+```text
+widgets/now-playing.sh leave_row   -> clear Lyrics, clear Star, then hide the row
+widgets/lyrics/cli.py  closing_sequence(hide_star=True)
+                                   -> clear Lyrics, settle the row, clear Star
+```
+
+**Output:** the star disappears with the row and the lyric, in one beat,
+instead of up to 10 s later.
+
+**Properties:**
+
+- Empty text is how it hides, the same as every other widget of the row; the
+  widget's own next tick recomputes the same `""`, so nothing has to be undone
+  when the player comes back.
+- Both sides do it, because either may notice first — the Now Playing widget
+  reads MediaRemote on BTT's one-second tick, the sampler reads Music over
+  AppleScript on its own. Emptying an already-empty widget costs nothing, so
+  the second one to arrive is harmless.
+- A stop empties the star while the row stays (`HideWhenPaused: 0`): the
+  star's own state table says `""` to a stopped player, the row's does not.
+- A pause and a track change leave it alone — a paused track still has a
+  favourite state, and a new track gets its symbol from the refresh
+  `actions/track-changed.sh` already sends.
+- The UUID is defaulted in both scripts (`BTT_STAR_WIDGET_UUID`), as the
+  Lyrics and Now Playing UUIDs are, so the pair keeps working against a preset
+  that has not been re-imported.
+
 ### Open Player
 
 **Input:** a long press on the Lyrics widget.
@@ -132,13 +175,19 @@ used to live on the Now Playing widget, whose long press now toggles the
 | Holder resolution | [`actions/now-playing-app.sh`](../../actions/now-playing-app.sh) |
 | Sampler state producer | [`widgets/lyrics/cli.py`](../../widgets/lyrics/cli.py) |
 | Repaint after a track change | [`actions/track-changed.sh`](../../actions/track-changed.sh) |
+| Clear when the row leaves | [`widgets/now-playing.sh`](../../widgets/now-playing.sh) `leave_row` |
+| Clear when the track ends | [`widgets/lyrics/cli.py`](../../widgets/lyrics/cli.py) `closing_sequence` |
 
 ## Verification Map
 
-No automated tests; both scripts live in the preset and need a live Music.
+The widget scripts live in the preset and need a live Music; the closing
+sequence's side of it is covered by
+[`tests/lyrics/test_transitions.py`](../../tests/lyrics/test_transitions.py).
 
 | Behaviour to verify | Focused evidence |
 | --- | --- |
+| Leaves with the row | Quit Apple Music while a track is on screen; the star, the lyric and the row all go in the same beat, not 10 s apart. |
+| Stays through a track change | Swipe to the next track; the star keeps its place and takes the new track's symbol. |
 | Holder gate | Play a video in a browser with Music stopped; `now-playing-app.sh` prints the browser's bundle id and the widget disappears. |
 | Sampler fallback | Play Music, then start a browser video; the script must still print `com.apple.Music` and the star must stay. |
 | Sample ageing | Backdate `sampled_at` in `cache/lyrics/state.json` past 8 s and confirm the fallback stops. |

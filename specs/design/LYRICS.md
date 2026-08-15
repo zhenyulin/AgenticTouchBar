@@ -233,15 +233,18 @@ write that ends the on-screen track, and always in the same order: **the lyric
 leaves the screen first, then the row is settled.** A lyric annotates the row
 beside it, so it must never outlive it.
 
-Both statements go to one `osascript` process (`cli._btt_call`), because two
-detached launches a millisecond apart are ordered by nothing.
+All the statements go to one `osascript` process (`cli._btt_call`), because two
+detached launches a millisecond apart are ordered by nothing. The Star widget
+is emptied by the same call when the track has ended, since its own AppleScript
+tick is 10 s and it would otherwise stay on screen that much longer than the
+pair beside it.
 
-| Transition | Row | Marker | Why |
-| --- | --- | --- | --- |
-| Player quit (`not_running`) | Hidden (empty text) | Written | The track is gone for good; BTT drops a script widget whose text is empty. Both statements are in one `osascript`, so the pair leaves together — which is all "the lyric goes first" can mean once the two are that close. A MediaRemote player reaches this row only because its lingering paused session is recognised as a quit (see the sampling table); without that it took the `paused` row below instead, and the row outlived the lyric by the 1.7 s MediaRemote took to let go. |
-| Stopped | Repainted | Written | The row keeps showing its track by design (`HideWhenPaused: 0`). |
-| Track identity changed | Repainted | Written | This widget's text sets the pair's width; repainting in the same beat collapses two visible jumps into one. |
-| Playing → paused | Repainted (dimmed) | **Not** written | There is no current line to a track that is not moving, so the lyric goes; but a paused track keeps its identity, and a marker naming it would still be holding the widget empty when playback resumes. |
+| Transition | Row | Star | Marker | Why |
+| --- | --- | --- | --- | --- |
+| Player quit (`not_running`) | Hidden (empty text) | Hidden | Written | The track is gone for good; BTT drops a script widget whose text is empty. Both statements are in one `osascript`, so the pair leaves together — which is all "the lyric goes first" can mean once the two are that close. A MediaRemote player reaches this row only because its lingering paused session is recognised as a quit (see the sampling table); without that it took the `paused` row below instead, and the row outlived the lyric by the 1.7 s MediaRemote took to let go. |
+| Stopped | Repainted | Hidden | Written | The row keeps showing its track by design (`HideWhenPaused: 0`), but the star shows nothing to a stopped player — that is its own contract, see [STAR.md](STAR.md#widget-state). |
+| Track identity changed | Repainted | Untouched | Written | This widget's text sets the pair's width; repainting in the same beat collapses two visible jumps into one. The star stays: same player, and `actions/track-changed.sh` refreshes it onto the new track. |
+| Playing → paused | Repainted (dimmed) | Untouched | **Not** written | There is no current line to a track that is not moving, so the lyric goes; but a paused track keeps its identity, and a marker naming it would still be holding the widget empty when playback resumes. |
 
 The marker (`cache/lyrics-cleared`) holds the widget empty while its own state
 sample still names the cleared track, so the half-second sampler cannot repaint

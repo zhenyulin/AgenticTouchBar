@@ -51,6 +51,11 @@ ALLOWED_BUNDLE_IDS="${BTT_NOW_PLAYING_ALLOWED:-com.apple.Music com.tencent.QQMus
 # that has not been re-imported.
 LYRICS_UUID="${BTT_LYRICS_WIDGET_UUID:-E19BB023-5060-4A56-95C8-6E7402779870}"
 
+# The Star widget on the other side of the row, emptied together with this
+# widget when the row leaves the screen -- see leave_row. Defaulted for the
+# same reason LYRICS_UUID is.
+STAR_UUID="${BTT_STAR_WIDGET_UUID:-A05C5D37-7EAA-4F7B-AC00-23183CC8C6A1}"
+
 CACHE_DIR="${BTT_WIDGET_CACHE_DIR:-${BTT_REPO_DIR:-$HOME/Documents/BTT}/cache}"
 ASSETS_DIR="${BTT_REPO_DIR:-$HOME/Documents/BTT}/assets"
 # The Lyrics sampler's state, consulted when the session holder is not one of
@@ -93,7 +98,7 @@ else
 fi
 
 python3 - "$RAW_PATH" "$ALLOWED_BUNDLE_IDS" "$CACHE_DIR" "$BTT_WIDGET_UUID" \
-    "$ASSETS_DIR" "$LYRICS_UUID" "$SAMPLER_STATE" "$HELPER" <<'PY'
+    "$ASSETS_DIR" "$LYRICS_UUID" "$SAMPLER_STATE" "$HELPER" "$STAR_UUID" <<'PY'
 # Imported here: what every tick needs. base64, hashlib, plistlib, struct,
 # subprocess and zlib are imported by the functions that use them instead --
 # measured at 47 ms for plistlib alone, 137 ms for the six together, on a
@@ -557,7 +562,7 @@ def write_json(path, payload):
             pass
 
 
-def clear_lyrics_for_change(identity, cache_dir, lyrics_uuid, wait=False):
+def clear_lyrics_for_change(identity, cache_dir, lyrics_uuid, wait=False, star_uuid=""):
     """Clear the Lyrics widget when this tick is about to change the row.
 
     This widget's text is what sets the pair's width, so a track change here
@@ -582,6 +587,10 @@ def clear_lyrics_for_change(identity, cache_dir, lyrics_uuid, wait=False):
     shares the single script-runner service this runs on. The one caller that
     waits is leave_row, because there the clear has to have landed before
     this process exits -- see its own note.
+
+    star_uuid, passed only by leave_row, empties the Star widget in the same
+    osascript: the two statements are ordered by running in one process, and
+    it is one launch rather than two on that shared runner.
     """
     path = Path(cache_dir) / "now-playing.identity"
     previous = read_json(path)
@@ -597,12 +606,13 @@ def clear_lyrics_for_change(identity, cache_dir, lyrics_uuid, wait=False):
         marker = dict(previous)
         marker["at"] = time.time()
         write_json(Path(cache_dir) / "lyrics-cleared", marker)
-        command = [
-            "/usr/bin/osascript",
-            "-e",
-            'tell application "BetterTouchTool" to '
-            f'update_touch_bar_widget "{lyrics_uuid}" text ""',
-        ]
+        statements = [f'update_touch_bar_widget "{lyrics_uuid}" text ""']
+        if star_uuid:
+            statements.append(f'update_touch_bar_widget "{star_uuid}" text ""')
+        script = "\n".join(
+            ('tell application "BetterTouchTool"', *statements, "end tell")
+        )
+        command = ["/usr/bin/osascript", "-e", script]
         try:
             if wait:
                 subprocess.run(
@@ -629,8 +639,8 @@ def clear_lyrics_for_change(identity, cache_dir, lyrics_uuid, wait=False):
     write_json(path, identity)
 
 
-def leave_row(cache_dir, widget_uuid, lyrics_uuid):
-    """Take the lyric with the row on the way out, then print nothing.
+def leave_row(cache_dir, widget_uuid, lyrics_uuid, star_uuid=""):
+    """Take the lyric and the star with the row on the way out, then print nothing.
 
     Printing nothing is how the row is hidden -- BetterTouchTool drops a
     script widget whose text is empty -- and the lyric beside it has to be
@@ -640,6 +650,13 @@ def leave_row(cache_dir, widget_uuid, lyrics_uuid):
     started by the Lyrics widget's own tick and can be a second behind this
     one, which reads MediaRemote directly.
 
+    The Star widget is emptied in the same breath. Nothing here can be playing
+    once the row goes -- no allowed player holds the session and the sampler
+    has no fresh track either -- so the star's own answer is already "";
+    it just would not ask until its 10 s AppleScript tick came round, leaving
+    a favourite symbol alone on the Touch Bar after the row and the lyric had
+    both gone.
+
     The clear is waited for here, unlike everywhere else in this file: the
     row disappears the moment this process exits, so a launch left in flight
     is exactly the race this exists to remove. A round trip to BetterTouchTool
@@ -648,7 +665,9 @@ def leave_row(cache_dir, widget_uuid, lyrics_uuid):
     already allows nowplaying-cli on any tick at all.
     """
     if widget_uuid:
-        clear_lyrics_for_change({}, cache_dir, lyrics_uuid, wait=True)
+        clear_lyrics_for_change(
+            {}, cache_dir, lyrics_uuid, wait=True, star_uuid=star_uuid
+        )
     sys.exit(0)
 
 
@@ -661,7 +680,8 @@ def leave_row(cache_dir, widget_uuid, lyrics_uuid):
     lyrics_uuid,
     state_path,
     helper_payload,
-) = sys.argv[1:9]
+    star_uuid,
+) = sys.argv[1:10]
 # The dictionary is read from the file the shell half wrote, rather than
 # taken from argv: it carries the album artwork as base64 -- see
 # widgets/lib/media-remote.sh. A missing or unreadable one is an empty
@@ -700,7 +720,7 @@ else:
     # still knows whether one of ours is playing behind it.
     track = sampled_track(state_path, allowed)
     if track is None:
-        leave_row(cache_dir, widget_uuid, lyrics_uuid)
+        leave_row(cache_dir, widget_uuid, lyrics_uuid, star_uuid)
     identity = {
         field: str(track.get(field) or "").strip()
         for field in ("title", "artist", "album")
@@ -722,7 +742,7 @@ title = strip_parens(identity["title"])
 artist = identity["artist"]
 album = display_album(identity["album"])
 if not title:
-    leave_row(cache_dir, widget_uuid, lyrics_uuid)
+    leave_row(cache_dir, widget_uuid, lyrics_uuid, star_uuid)
 
 # A terminal run prints a row and touches nothing else.
 if widget_uuid:

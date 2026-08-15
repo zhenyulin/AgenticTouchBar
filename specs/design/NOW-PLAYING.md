@@ -49,6 +49,7 @@ The widget is configured in
 | --- | --- | --- |
 | `BTT_NOW_PLAYING_ALLOWED` | `com.apple.Music com.tencent.QQMusicMac` | Space-separated bundle ids allowed to hold the row, compared case-folded. The Lyrics sampler's MediaRemote fallback honors the same knob (minus `com.apple.Music`, which the sampler reads directly). |
 | `BTT_LYRICS_WIDGET_UUID` | `E19BB023-5060-4A56-95C8-6E7402779870` | Lyrics widget cleared on a track change; defaulted rather than passed in, so the widget survives a preset that was never re-imported. |
+| `BTT_STAR_WIDGET_UUID` | `A05C5D37-7EAA-4F7B-AC00-23183CC8C6A1` | Star widget emptied together with the row when it leaves the screen ([Row Closing](#row-closing)); defaulted for the same reason. |
 | `BTT_WIDGET_CACHE_DIR` | `$BTT_REPO_DIR/cache` | Artwork, player icons, identity file, clear marker. |
 | `BTT_LYRICS_CACHE_DIR` | `$BTT_REPO_DIR/cache/lyrics` | Where `state.json` — the sampler fallback — is read from. |
 | `BTT_NOW_PLAYING_STATE_BIN` | `~/Library/Application Support/BTT/nowplaying-state` | Compiled `isPlaying` helper; built from `actions/nowplaying-state.m`. |
@@ -346,8 +347,8 @@ its own new width) into one.
 **Input:** a tick that has nothing to draw — no allowed holder in MediaRemote
 and no usable sampler sample — plus `cache/now-playing.identity`.
 
-**Transformation:** clear the Lyrics widget → **wait for that clear** → record
-an empty identity → exit printing nothing.
+**Transformation:** clear the Lyrics widget and the Star widget → **wait for
+that clear** → record an empty identity → exit printing nothing.
 
 **Why:** printing nothing is how the row is hidden, and BTT acts on it the
 moment this process exits. A fire-and-forget clear launched a step earlier is
@@ -365,6 +366,11 @@ that orders two separate processes.
 - Symmetric with the Lyrics sampler, which runs its own closing sequence
   (`cli.closing_sequence`) in one `osascript`: lyric first, then this row.
   Whichever side notices first wins, and both orders agree.
+- The Star widget is emptied in the same `osascript`, because its own
+  AppleScript tick is 10 s: nothing this widget draws can be playing once the
+  row goes, so the star's answer is already `""` — it just would not ask for
+  seconds, leaving a favourite symbol alone where the row and the lyric had
+  been. See [STAR.md](STAR.md#closing).
 - Every "nothing to draw" exit goes through it, including a sampled track that
   turns out to have no title.
 

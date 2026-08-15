@@ -46,7 +46,13 @@ TWO_ROW_BLOCK_PX = float(os.environ.get("BTT_LYRICS_TWO_ROW_PX", "22.0"))
 SECOND_ROW_FONT_PX = max(TWO_ROW_BLOCK_PX - FIRST_ROW_FONT_PX, 1.0)
 # One layout cell is half a CJK glyph, i.e. half the row's font size in px.
 SECOND_ROW_PX_PER_CELL = SECOND_ROW_FONT_PX / 2.0
-SYNC_OFFSET_SECONDS = float(os.environ.get("BTT_LYRICS_OFFSET", "0.0"))
+# Seconds added to the reported playback position before picking the lyric
+# line, i.e. how far ahead of the music the widget reads. The pipeline between
+# the player's real position and the pixels on screen -- sampling the player,
+# writing the state, BTT's own refresh -- costs the better part of a second, so
+# a lyric picked from the raw position lands late. Half a second of look-ahead
+# cancels that; raise it if lines still trail, lower it if they arrive early.
+SYNC_OFFSET_SECONDS = float(os.environ.get("BTT_LYRICS_OFFSET", "0.5"))
 SCROLL_LONG_LINES = os.environ.get("BTT_LYRICS_SCROLL", "1") not in {
     "0",
     "false",
@@ -244,15 +250,21 @@ PENDING_HOURGLASS_SECONDS = float(os.environ.get("BTT_LYRICS_PENDING_WAIT", "1.5
 # settles on the new track, and how often it is checked meanwhile.
 TRACK_FOLLOW_SECONDS = float(os.environ.get("BTT_LYRICS_TRACK_FOLLOW", "3.0"))
 TRACK_FOLLOW_INTERVAL = float(os.environ.get("BTT_LYRICS_TRACK_FOLLOW_STEP", "0.15"))
-# The Lyrics and Now Playing widgets' BTT UUIDs, so the event watcher (the
-# --sample helper and the --track-changed follow in cli.py) can run the
-# closing sequence -- clear the lyric, then hide the row. Mirrors
-# actions/set-widget-variables.sh.
+# The Lyrics, Now Playing and Star widgets' BTT UUIDs, so the event watcher
+# (the --sample helper and the --track-changed follow in cli.py) can run the
+# closing sequence -- clear the lyric, then hide the row and the star with it.
+# Mirrors actions/set-widget-variables.sh.
 LYRICS_WIDGET_UUID = os.environ.get(
     "BTT_LYRICS_WIDGET_UUID", "E19BB023-5060-4A56-95C8-6E7402779870"
 )
 NOW_PLAYING_WIDGET_UUID = os.environ.get(
     "BTT_NOW_PLAYING_WIDGET_UUID", "710F54C5-25B0-4A2C-B960-D9C0FE78B1B7"
+)
+# The Star widget runs on a 10 s AppleScript tick of its own, so it is the one
+# member of the row that would otherwise outlive a player by seconds -- see
+# specs/design/STAR.md.
+STAR_WIDGET_UUID = os.environ.get(
+    "BTT_STAR_WIDGET_UUID", "A05C5D37-7EAA-4F7B-AC00-23183CC8C6A1"
 )
 # Where the event watcher records the track the closing sequence cleared
 # (cache/lyrics-cleared, beside the other widgets' cache files). The Lyrics
