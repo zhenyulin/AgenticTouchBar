@@ -24,6 +24,7 @@
 #
 # Usage: now-playing.sh [widget-uuid]
 # BTT: JSON {"text": "<title>\n<artist> ‣ <album>" or "<album> ‣ <title>\n<artist>",
+#            the first while "<artist> ‣ <album>" stays narrow, then
 #            whichever has the narrower widest row,
 #            "font_color": full white, a shade dimmed while paused,
 #            "icon_path": <album cover | player app icon | play icon>}
@@ -189,6 +190,14 @@ def display_width(text):
         else 1
         for ch in text
     )
+
+
+# How wide "{artist} ‣ {album}" may get before the album is allowed to move
+# up to the first row. In layout cells (display_width above), so a CJK
+# artist-and-album pair reaches it at half the characters a Latin one does.
+# Set at the width the second row still renders whole at its 9 px size in the
+# widget's configured BTTTBWidgetWidth, so a pair that fits is never split.
+ALBUM_SECOND_ROW_MAX_CELLS = 50
 
 
 def join_parts(*parts):
@@ -665,16 +674,25 @@ else:
     icon = play_icon(cache_dir, assets_dir) or player_icon(player, cache_dir)
 
 fields = {"title": title, "artist": artist, "album": album}
-# Album placement is a minimax over the two row layouts -- the layout whose
-# wider row is narrower wins:
+# Album placement picks between the two row layouts:
 #   A: {title} over {artist} ‣ {album}
 #   B: {album} ‣ {title} over {artist}
 # Row widths are estimated in layout cells (display_width above); BTT's
 # fixed 22 px two-row block renders row 1 at 13 px and row 2 at 9 px, and
 # its own BTTTBWidgetWidth bounds each row.
+#
+# Layout A is the one the row is meant to read as -- title first, its
+# credits underneath -- so it is kept outright while {artist} ‣ {album}
+# stays under ALBUM_SECOND_ROW_MAX_CELLS. Only past that does the minimax
+# rule below take over, moving the album up when layout A's second row has
+# grown wider than layout B's widest row. Without the floor a merely long
+# artist-and-album pair was enough to flip the album onto row 1, so the same
+# album kept swapping rows between tracks of one record.
 layout_a = [title, join_parts(artist, album)]
 layout_b = [join_parts(album, title), artist]
-if max(display_width(row) for row in layout_a) <= max(
+if display_width(layout_a[1]) < ALBUM_SECOND_ROW_MAX_CELLS:
+    rows = layout_a
+elif max(display_width(row) for row in layout_a) <= max(
     display_width(row) for row in layout_b
 ):
     rows = layout_a

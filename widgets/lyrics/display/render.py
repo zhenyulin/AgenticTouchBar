@@ -50,7 +50,11 @@ _RECEIPT: dict[str, Any] = {"key": "", "state": "", "index": -1, "next_change_at
 # otherwise strand the previous track's deadline at every cache miss. It
 # writes a receipt with no deadline instead, which reads as "nothing is due
 # to change".
-REPRINT_OUTCOMES = {"no_sample", "locked", "crashed"}
+#
+# Neither is "no_sample": it clears the widget rather than reprinting, so the
+# empty frame is one of its own, and the receipt has to say so -- the next
+# tick reads it back to learn what is on screen.
+REPRINT_OUTCOMES = {"locked", "crashed"}
 
 
 def marker_font_color(track: dict[str, Any]) -> str:
@@ -233,9 +237,15 @@ def render_tick() -> str:
     track = current_track()
 
     if track is None:
-        # Nothing fresh to render: a sampler is already on its way, so
-        # hold the last frame rather than blanking the widget for a tick.
-        emit_last_output()
+        # The sample is gone, not merely a moment old: current_track only
+        # returns None past STATE_MAX_AGE_SECONDS, which is the same age at
+        # which widgets/now-playing.sh stops believing that sample and hides
+        # the row. Reprinting the last frame here is what left a lyric on
+        # screen beside a row that had already disappeared -- and it never
+        # stopped, because a reprint is what the next tick would find too. A
+        # sampler was asked for by current_track; the frame comes back with
+        # the next sample.
+        emit("")
         return "no_sample"
 
     if cleared_while_sample_current(track):

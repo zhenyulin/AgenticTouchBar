@@ -93,10 +93,19 @@ def _visible_track(track: dict[str, Any] | None) -> bool:
     )
 
 
-def _btt_call(script: str) -> None:
-    """One AppleScript line for BetterTouchTool, detached and forgettable."""
+def _btt_call(*statements: str) -> None:
+    """AppleScript for BetterTouchTool, detached and forgettable.
+
+    Several statements go to one osascript rather than one each, because
+    their order is the point: the lyric has to leave the screen before the
+    row beside it is hidden or repainted, and two detached launches a
+    millisecond apart are ordered by nothing. Inside one process they run in
+    the order given. It is also one ~200 ms launch instead of two, on the
+    single script-runner service every widget shares.
+    """
     import subprocess
 
+    script = "\n".join(('tell application "BetterTouchTool"', *statements, "end tell"))
     try:
         subprocess.Popen(
             ["/usr/bin/osascript", "-e", script],
@@ -107,6 +116,34 @@ def _btt_call(script: str) -> None:
         )
     except OSError:
         pass
+
+
+def _clear_lyric_then_row(hide_row: bool) -> None:
+    """Clear the Lyrics widget, then settle the Now Playing row -- in that order.
+
+    The row is hidden when the track is gone for good, otherwise repainted at
+    once. Its text is what sets the pair's width, so leaving it to redraw
+    whenever its next tick happens to fall is what made a transition flicker;
+    and a lyric outliving the row it belongs beside is the wrong order in the
+    more visible direction -- the lyric kept rolling for seconds after the
+    row it annotates had disappeared.
+    """
+    statements = []
+    if config.LYRICS_WIDGET_UUID:
+        statements.append(
+            f'update_touch_bar_widget "{config.LYRICS_WIDGET_UUID}" text ""'
+        )
+    if config.NOW_PLAYING_WIDGET_UUID:
+        # BetterTouchTool drops a script widget whose text is empty, which is
+        # how the row is hidden; a refresh instead makes it redraw now, while
+        # the lyric beside it is already clear.
+        statements.append(
+            f'update_touch_bar_widget "{config.NOW_PLAYING_WIDGET_UUID}" text ""'
+            if hide_row
+            else f'refresh_widget "{config.NOW_PLAYING_WIDGET_UUID}"'
+        )
+    if statements:
+        _btt_call(*statements)
 
 
 def clear_marker() -> None:
@@ -122,17 +159,10 @@ def closing_sequence(previous: dict[str, Any], hide_row: bool) -> None:
 
     Runs in the event watcher (the sampler, or the track-change follow)
     before the state write that ends the on-screen track, so the old lyric
-    never lingers after the row beside it changes or disappears -- the
-    "clear first, then hide" order comes from the two BTT calls being made
-    in that order, in one place.
-
-    The Now Playing row is driven in the same beat rather than left to its
-    own tick: hidden when the track is gone for good, otherwise repainted at
-    once. Its text is what sets the pair's width, so leaving it to redraw
-    whenever its next tick happens to fall is what made a track change
-    flicker -- the row could take its new width up to a second before or
-    after the lyric beside it went. widgets/now-playing.sh runs the same
-    sequence when its own tick is the one that notices first.
+    never lingers after the row beside it changes or disappears -- see
+    _clear_lyric_then_row for where the "clear first, then settle the row"
+    order is enforced. widgets/now-playing.sh runs the same sequence when its
+    own tick is the one that notices first.
 
     The marker records what was cleared: the Lyrics widget holds its frame
     empty while its state sample still matches that identity (render.py
@@ -149,33 +179,25 @@ def closing_sequence(previous: dict[str, Any], hide_row: bool) -> None:
     except OSError:
         pass
 
-    if config.LYRICS_WIDGET_UUID:
-        _btt_call(
-            f'tell application "BetterTouchTool" to update_touch_bar_widget '
-            f'"{config.LYRICS_WIDGET_UUID}" text ""'
-        )
-    if config.NOW_PLAYING_WIDGET_UUID:
-        # BetterTouchTool drops a script widget whose text is empty, which is
-        # how the row is hidden; a refresh instead makes it redraw for the
-        # new track now, while the lyric beside it is already clear.
-        command = (
-            f'update_touch_bar_widget "{config.NOW_PLAYING_WIDGET_UUID}" text ""'
-            if hide_row
-            else f'refresh_widget "{config.NOW_PLAYING_WIDGET_UUID}"'
-        )
-        _btt_call(f'tell application "BetterTouchTool" to {command}')
+    _clear_lyric_then_row(hide_row)
 
 
-def maybe_closing_sequence(
+def maybe_transition_sequence(
     previous: dict[str, Any] | None, new: dict[str, Any]
 ) -> None:
-    """Run the closing sequence when the row is about to change or disappear.
+    """Run whichever sequence this transition calls for, before the state write.
 
     A closing transition is a visible track ending (stopped, or the app
     quit) or the track identity changing. The Now Playing row is hidden
     explicitly only when the app is gone: on a plain stop or pause the row
     keeps showing the track by design (HideWhenPaused: 0), and on a track
     change it shows the new track itself.
+
+    A pause is not a closing transition -- the row keeps its track -- but the
+    lyric still goes, because there is no current line to a track that is not
+    moving. Both widgets would reach that on their own next tick, up to a
+    second apart and in either order, so the pair is driven here too: the
+    lyric out first, then the row repainted in its paused shade.
     """
     state = (new or {}).get("state", "")
     if _visible_track(previous) and state in {"stopped", "not_running"}:
@@ -186,6 +208,13 @@ def maybe_closing_sequence(
         and _track_identity(previous) != _track_identity(new)
     ):
         closing_sequence(previous, hide_row=False)
+    elif (previous or {}).get("state") == "playing" and state == "paused":
+        # No cleared-marker here, unlike closing_sequence: a paused track
+        # keeps its identity, so a marker naming it would still be holding
+        # the widget empty when playback resumes. The widget's own next tick
+        # renders the paused state as an empty frame anyway, which is what
+        # this is only bringing forward.
+        _clear_lyric_then_row(hide_row=False)
     else:
         # The transition is over, or never happened: drop a leftover marker
         # (e.g. a watcher that died mid-sequence) once the sample moves past
@@ -281,10 +310,7 @@ def track_changed_mode(arguments: list[str]) -> int:
         # actually shows the new one, and the lyric has been clear ever
         # since. Without it the row would sit on the old track until its
         # own next tick, up to a second later.
-        _btt_call(
-            f'tell application "BetterTouchTool" to refresh_widget '
-            f'"{config.NOW_PLAYING_WIDGET_UUID}"'
-        )
+        _btt_call(f'refresh_widget "{config.NOW_PLAYING_WIDGET_UUID}"')
 
     request_widget_refresh(uuid)
     trace(
@@ -294,6 +320,37 @@ def track_changed_mode(arguments: list[str]) -> int:
         title=(settled or {}).get("title", "-")[:30],
     )
     return 0
+
+
+def _hold_previous_sample(previous: dict[str, Any] | None, age: float) -> bool:
+    """Whether to keep the previous sample when nothing reports a track.
+
+    MediaRemote goes quiet for a beat while a player keeps playing, and a
+    sample written from that silence blanks the lyric mid-song. That is the
+    only reason this hold exists, so it is all it covers: a MediaRemote
+    sample is held through the silence, for as long as the widget would still
+    render it, and only while the app that published it is still running --
+    a player that has been quit publishes exactly the same silence, and
+    waiting it out is not a hold, it is a delay.
+
+    Nothing else is held. Apple Music is read directly -- pgrep for the
+    process, then AppleScript for its state -- so not_running, stopped and
+    paused are answers rather than silence. Holding them kept the sampler
+    blind to the transition for STATE_MAX_AGE_SECONDS, which is exactly the
+    age at which widgets/now-playing.sh gives up on the same sample and hides
+    the row: quitting Music took the row off screen while the lyric beside it
+    played on for the rest of the hold.
+    """
+    if previous is None or previous.get("state") not in {"playing", "paused"}:
+        return False
+    if age > config.STATE_MAX_AGE_SECONDS:
+        return False
+    if previous.get("source") != "media_remote":
+        return False
+
+    from .sources.media_remote import player_is_running
+
+    return player_is_running(str(previous.get("bundle_id") or ""))
 
 
 def _media_remote_fallback() -> dict[str, Any] | None:
@@ -337,7 +394,7 @@ def sample_mode() -> int:
                 write_state({"state": "denied"})
                 trace("sample", started, "denied")
                 return 1
-            maybe_closing_sequence(previous_track, remote)
+            maybe_transition_sequence(previous_track, remote)
             write_state(remote)
             trace("sample", started, remote.get("state", "?"), source="media_remote")
             return 0
@@ -365,22 +422,23 @@ def sample_mode() -> int:
                 track.get("state") != "paused" or remote.get("state") == "playing"
             ):
                 track, source = remote, "media_remote"
-            elif remote is None:
-                if (
-                    previous_track is not None
-                    and previous_track.get("state") in {"playing", "paused"}
-                    and previous_age <= config.STATE_MAX_AGE_SECONDS
-                ):
-                    trace(
-                        "sample",
-                        started,
-                        "held",
-                        source=source,
-                        reported=track.get("state", "?"),
-                    )
-                    return 0
+            elif remote is None and _hold_previous_sample(
+                previous_track, previous_age
+            ):
+                trace(
+                    "sample",
+                    started,
+                    "held",
+                    source=source,
+                    reported=track.get("state", "?"),
+                )
+                return 0
 
-                maybe_closing_sequence(previous_track, track)
+        # Run for every sample, not only the paths above: a pause or a track
+        # change reported by MediaRemote is the same transition for the pair
+        # of widgets as one Apple Music reported, and a sample that has moved
+        # past a cleared track is what drops a leftover marker.
+        maybe_transition_sequence(previous_track, track)
         write_state(track)
         trace("sample", started, track.get("state", "?"), source=source)
         return 0

@@ -70,7 +70,8 @@ Now Playing widget
 ├── Draw the row
 │   ├── Strip parenthetical suffixes from the title
 │   ├── Keep only the first work of a multi-work album
-│   ├── Place the album by the minimax rule (narrower widest row wins)
+│   ├── Keep the album on the second row while it fits there
+│   ├── Otherwise place it by the minimax rule (narrower widest row wins)
 │   └── Drop the second row when artist and album are both empty
 ├── Draw the icon
 │   ├── Album cover from the payload, cached per track by content hash
@@ -187,14 +188,18 @@ sampler, which is why the helper exists at all.
 2. `album` — `strip_parens`, then only the text before the first `;`.
    Multi-work albums (`Mozart: Piano Concerto No. 23 K. 488; Piano Sonata
    K. 333`) do not fit the Touch Bar, so only the first work is shown.
-3. The two stock rows draw one of two layouts, chosen by a minimax width
-  rule: `{title}` over `{artist} - {album}`, or `{album} - {title}` over
-  `{artist}` — whichever has the narrower widest row. Row widths are
-  estimated in layout cells (narrow glyph 1, CJK/wide 2, the same model as
-  the Lyrics widget); the first row renders at the widget's configured font
-  size (13 px), the second at the remainder of BTT's fixed 22 px two-row
-  block (9 px). The widget's own `BTTTBWidgetWidth` bounds each row, and
-  BTT truncates past it.
+3. The two stock rows draw one of two layouts: `{title}` over
+  `{artist} - {album}`, or `{album} - {title}` over `{artist}`. The first is
+  kept outright while `{artist} - {album}` measures under 50 layout cells
+  (`ALBUM_SECOND_ROW_MAX_CELLS`) — a pair that fits belongs under the title,
+  and without the floor a merely long pair flipped the album onto row 1, so
+  one record's album kept swapping rows between its tracks. Past that width
+  a minimax rule decides: whichever layout has the narrower widest row wins.
+  Row widths are estimated in layout cells (narrow glyph 1, CJK/wide 2, the
+  same model as the Lyrics widget); the first row renders at the widget's
+  configured font size (13 px), the second at the remainder of BTT's fixed
+  22 px two-row block (9 px). The widget's own `BTTTBWidgetWidth` bounds
+  each row, and BTT truncates past it.
 4. Empty parts are dropped from their rows, and a fully empty second row is
   dropped entirely.
 

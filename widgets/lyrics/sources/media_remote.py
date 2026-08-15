@@ -191,6 +191,40 @@ def _read_raw() -> dict[str, Any] | None:
     return mapped or None
 
 
+def player_is_running(bundle_id: str) -> bool:
+    """Whether the app that published a MediaRemote sample is still running.
+
+    MediaRemote goes quiet for a beat while a player keeps playing, and the
+    sampler holds the previous sample through that silence rather than blank
+    the lyric mid-song (cli._hold_previous_sample). A player that has been
+    quit publishes the same silence -- and holding on that is what left the
+    lyric rolling for seconds after the Now Playing row beside it had gone.
+
+    Launch Services tells the two apart in ~10 ms: it prints an ASN line for a
+    running app and nothing for one that is gone, exit code 0 either way. It
+    is what pgrep is to Apple Music (sources/apple_music.py), for a player
+    whose process name nothing here knows.
+
+    True whenever the answer is unavailable -- no bundle id, lsappinfo
+    missing or slow: an unknown state must not tear the pair down mid-song.
+    """
+    if not bundle_id:
+        return True
+    try:
+        result = subprocess.run(
+            ["/usr/bin/lsappinfo", "find", f"bundleID={bundle_id}"],
+            capture_output=True,
+            text=True,
+            timeout=config.MEDIA_REMOTE_TIMEOUT_SECONDS,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return True
+    if result.returncode != 0:
+        return True
+    return bool(result.stdout.strip())
+
+
 def _read_position_state() -> dict[str, Any]:
     try:
         with config.MEDIA_REMOTE_POSITION_PATH.open("r", encoding="utf-8") as handle:
@@ -294,4 +328,8 @@ def read_media_remote() -> dict[str, Any]:
         # it for its allowlist fallback (media_remote samples are rejected
         # there -- they come from the holder the allowlist already refused).
         "source": "media_remote",
+        # Who published it, so a later sampler run can ask whether that app
+        # is still running when MediaRemote goes quiet -- see
+        # player_is_running above.
+        "bundle_id": bundle_id,
     }

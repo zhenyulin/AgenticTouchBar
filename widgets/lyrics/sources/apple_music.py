@@ -26,6 +26,18 @@ from ..runtime.output import log_error
 
 
 def music_is_running() -> bool:
+    """Whether the Music process exists.
+
+    Raises when pgrep could not answer, because "no answer" is not "not
+    running": not_running is the state the sampler closes the row on (see
+    cli.maybe_transition_sequence), so a pgrep that timed out on a busy
+    machine would clear the lyric and hide the Now Playing row mid-song. A
+    raised error leaves the previous sample in place instead -- the same
+    treatment every other unverified failure gets in cli.sample_mode.
+
+    pgrep exits 1 when nothing matched, which is an answer; anything above
+    that is the tool failing.
+    """
     try:
         result = subprocess.run(
             ["/usr/bin/pgrep", "-x", "Music"],
@@ -34,9 +46,11 @@ def music_is_running() -> bool:
             timeout=0.25,
             check=False,
         )
-        return result.returncode == 0
-    except (OSError, subprocess.SubprocessError):
-        return False
+    except (OSError, subprocess.SubprocessError) as exc:
+        raise RuntimeError(f"Could not check whether Music is running: {exc}") from exc
+    if result.returncode > 1:
+        raise RuntimeError(f"pgrep failed with status {result.returncode}")
+    return result.returncode == 0
 
 
 def read_apple_music() -> dict[str, Any]:
