@@ -324,6 +324,8 @@ unaccepted.
 | Track has no synchronized lyrics but is instrumental | Render the instrumental marker, faded with playback progress | Emit widget JSON `{"text": "♬", "font_color": "r,g,b,a"}` with `r=g=b` fading 255→80 gray over the track. |
 | Track is not found | Render the not-found marker, faded with playback progress | Emit widget JSON `{"text": "♩", "font_color": "r,g,b,a"}` with `r=g=b` fading 255→80 gray over the track. |
 | A provider fetch fails | Render the unavailable marker | Emit `♪ Lyrics unavailable`; Apple-cache read failures are logged and degrade to a miss, so the marker never reads as an Apple Music problem. |
+| Any other frame with text | Render it in full white | Emit widget JSON with `font_color` `255,255,255,255`. BTT keeps the last colour a script widget set, so a frame that omits one inherits the shade a faded marker reached — fading must not outlive the track with no lyrics. |
+| The frame is empty | Hide the widget | Emit bare empty text, not JSON: empty text is what BTT hides on, and the frame that brings the widget back states its own colour. |
 
 LRC parsing must preserve timestamp semantics: offsets, enhanced timestamps,
 multiple timestamps on one line, sorting, and same-timestamp deduplication.

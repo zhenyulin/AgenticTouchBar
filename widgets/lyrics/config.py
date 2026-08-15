@@ -80,6 +80,14 @@ NOTE_GAP = " "
 # position rather than wall clock time.
 MARKER_FADE_MAX = int(os.environ.get("BTT_LYRICS_MARKER_FADE_MAX", "255"))
 MARKER_FADE_MIN = int(os.environ.get("BTT_LYRICS_MARKER_FADE_MIN", "80"))
+# The shade every other frame renders in. BetterTouchTool keeps the last
+# font_color a script widget set, so a frame that says nothing about colour
+# inherits whatever the previous one asked for: after a marker faded to gray,
+# the next track's lyrics came up in that same gray and stayed there. Every
+# visible frame therefore carries a colour, and this is the one that means
+# "nothing to fade" -- the full white lib/btt-widget.sh gives every other
+# widget, read from the same environment variable.
+WIDGET_FONT_COLOR = os.environ.get("BTT_WIDGET_COLOR", "255,255,255,255")
 APPLE_MUSIC_TIMEOUT_SECONDS = float(
     os.environ.get("BTT_LYRICS_APPLE_MUSIC_TIMEOUT", "1.5")
 )

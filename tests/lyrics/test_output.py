@@ -42,47 +42,55 @@ class OutputTestCase(unittest.TestCase):
 
 
 class Emit(OutputTestCase):
+    def text_of(self, *args, **kwargs) -> str:
+        """The text of the frame emit printed."""
+        return json.loads(printed(emit, *args, **kwargs))["text"]
+
     def test_prints_a_single_row(self):
-        self.assertEqual(printed(emit, "hello"), "hello")
+        self.assertEqual(self.text_of("hello"), "hello")
 
     def test_collapses_interior_whitespace(self):
-        self.assertEqual(printed(emit, "a    b"), "a b")
+        self.assertEqual(self.text_of("a    b"), "a b")
 
     def test_keeps_a_row_s_leading_indent(self):
         # The wrapped second row of a lyric is indented on purpose
         # (CONTINUATION_INDENT); collapsing that would lose the alignment.
-        self.assertEqual(printed(emit, "first\n   second"), "first\n   second")
+        self.assertEqual(self.text_of("first\n   second"), "first\n   second")
 
     def test_drops_rows_that_are_only_whitespace(self):
-        self.assertEqual(printed(emit, "a\n   \nb"), "a\nb")
+        self.assertEqual(self.text_of("a\n   \nb"), "a\nb")
 
     def test_normalises_carriage_returns(self):
-        self.assertEqual(printed(emit, "a\r\nb\rc"), "a\nb\nc")
+        self.assertEqual(self.text_of("a\r\nb\rc"), "a\nb\nc")
 
     def test_empty_text_stays_empty(self):
         # BetterTouchTool removes a script widget whose text is empty, which is
-        # how Lyrics hides itself. An empty frame must not become a placeholder.
+        # how Lyrics hides itself: bare, not JSON, and not a placeholder.
         self.assertEqual(printed(emit, ""), "")
 
-    def test_a_font_colour_switches_to_the_widget_json(self):
-        payload = json.loads(printed(emit, "hello", "255,255,255,255"))
-        self.assertEqual(payload, {"text": "hello", "font_color": "255,255,255,255"})
+    def test_a_font_colour_reaches_the_widget_json(self):
+        payload = json.loads(printed(emit, "hello", "80,80,80,255"))
+        self.assertEqual(payload, {"text": "hello", "font_color": "80,80,80,255"})
+
+    def test_a_frame_without_a_colour_still_asks_for_white(self):
+        # BTT keeps the last font_color the widget set, so a frame that says
+        # nothing inherits it -- which left a track's lyrics in the gray the
+        # marker before them had faded to. Every visible frame states a shade.
+        payload = json.loads(printed(emit, "hello"))
+        self.assertEqual(payload["font_color"], config.WIDGET_FONT_COLOR)
 
     def test_the_json_frame_keeps_non_ascii_readable(self):
         payload = json.loads(printed(emit, "寶貝", "1,2,3,255"))
         self.assertEqual(payload["text"], "寶貝")
 
-    def test_the_json_frame_is_not_whitespace_collapsed(self):
-        # The coloured path is used for markers and pre-built rows, which are
-        # already laid out; re-flowing them would move the indent.
-        payload = json.loads(printed(emit, "a    b", "1,2,3,255"))
-        self.assertEqual(payload["text"], "a    b")
-
 
 class RememberOutput(OutputTestCase):
     def test_emit_records_what_it_printed(self):
         printed(emit, "hello")
-        self.assertEqual(config.LAST_TEXT_PATH.read_text(encoding="utf-8"), "hello")
+        self.assertEqual(
+            json.loads(config.LAST_TEXT_PATH.read_text(encoding="utf-8"))["text"],
+            "hello",
+        )
 
     def test_records_the_value_in_one_file_only(self):
         # last.txt is the remembered value. A second copy under lyrics.value
@@ -99,7 +107,11 @@ class RememberOutput(OutputTestCase):
         self.assertEqual(printed(emit_last_output), "previous")
 
     def test_falls_back_to_a_note_when_nothing_is_remembered(self):
-        self.assertEqual(printed(emit_last_output), "♪")
+        # Nothing remembered means nothing said the shade either, so the
+        # fallback states white rather than keeping the last one BTT holds.
+        payload = json.loads(printed(emit_last_output))
+        self.assertEqual(payload["text"], "♪")
+        self.assertEqual(payload["font_color"], config.WIDGET_FONT_COLOR)
 
     def test_reprinting_refreshes_the_file_mtime(self):
         # The file's age is what tells "BTT stopped running the widget" from

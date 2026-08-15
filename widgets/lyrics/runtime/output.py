@@ -16,21 +16,17 @@ def emit(text: str, font_color: str | None = None) -> None:
     Each row is whitespace-compacted independently so a wrapped lyric keeps its
     leading indent; every other message is still a single row.
 
-    A font_color turns the frame into the widget JSON BTT's script widgets
+    Every frame with text goes out as the widget JSON BTT's script widgets
     parse -- {"text": ..., "font_color": "r,g,b,a"} -- the same shape the
     shell widgets emit via btt__emit_json (see widgets/lib/btt-widget.sh).
     HTML color tags are not a BTT mechanism, so this JSON is the only way a
-    frame gets a color of its own; without one the widget renders in the
-    font color configured in the preset.
+    frame gets a color at all, and a frame that omits it does not fall back
+    to the preset: BTT keeps the last colour the widget asked for. That is
+    what left a whole track's lyrics in the gray a faded marker had reached
+    on the track before, so the colour is not optional here -- a caller with
+    nothing to say about it gets config.WIDGET_FONT_COLOR, which is the frame
+    saying "full white" rather than saying nothing.
     """
-    if font_color is not None:
-        output = json.dumps(
-            {"text": text, "font_color": font_color}, ensure_ascii=False
-        )
-        print(output)
-        remember_output(output)
-        return
-
     rows: list[str] = []
     for raw_row in str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n"):
         indent = raw_row[: len(raw_row) - len(raw_row.lstrip(" "))]
@@ -40,10 +36,22 @@ def emit(text: str, font_color: str | None = None) -> None:
     # An empty result is meaningful: BetterTouchTool removes a script widget
     # from the Touch Bar when its text is empty. Keep that distinction from a
     # genuinely rendered fallback value so Lyrics follows Now Playing when
-    # Music quits.
+    # Music quits. It stays bare text rather than JSON, because that is the
+    # form BTT hides on -- and a hidden widget has no colour worth setting;
+    # the frame that brings it back sets its own.
     output = "\n".join(rows)
+    if output:
+        output = widget_frame(output, font_color)
     print(output)
     remember_output(output)
+
+
+def widget_frame(text: str, font_color: str | None = None) -> str:
+    """One frame as the widget JSON, in its colour or the default white."""
+    return json.dumps(
+        {"text": text, "font_color": font_color or config.WIDGET_FONT_COLOR},
+        ensure_ascii=False,
+    )
 
 
 def remember_output(text: str) -> None:
@@ -69,7 +77,10 @@ def emit_last_output() -> None:
         previous = config.LAST_TEXT_PATH.read_text(encoding="utf-8").strip()
     except (OSError, ValueError):
         previous = ""
-    output = previous or "♪"
+    # The remembered value is already a full frame, colour included, so a
+    # reprint repeats the shade it was printed in. Only the fallback -- there
+    # was nothing to remember -- has to say white for itself.
+    output = previous or widget_frame("♪")
     print(output)
     remember_output(output)
 
