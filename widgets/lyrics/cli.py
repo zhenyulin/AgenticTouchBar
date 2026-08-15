@@ -353,6 +353,40 @@ def _hold_previous_sample(previous: dict[str, Any] | None, age: float) -> bool:
     return player_is_running(str(previous.get("bundle_id") or ""))
 
 
+def _abandoned_session(
+    remote: dict[str, Any] | None, previous: dict[str, Any] | None
+) -> bool:
+    """Whether MediaRemote is describing a session whose player has quit.
+
+    MediaRemote does not drop a session the moment its app goes: it keeps
+    publishing the last track with isPlaying false for a second or two, which
+    is indistinguishable from a pause. Measured at 1.7 s on a QQ Music quit
+    (trace, 2026-08-16) -- and for that whole time the pair came apart in the
+    one way each widget was individually right about: the lyric went, because
+    a paused track has no current line, while the row stayed showing its
+    track, because a paused row is meant to.
+
+    Apple Music never had this problem: pgrep answers whether Music is
+    running before its state is ever consulted (sources/apple_music.py), so a
+    quit reads as gone in one step. This asks MediaRemote's sessions the same
+    question, and only where the answer changes anything: the moment a
+    playing track turns paused. A player that really is paused answers "still
+    running" and keeps its row.
+
+    A quit while already paused is not covered, deliberately -- there is no
+    transition to hang the question on, nothing is on screen to come apart,
+    and MediaRemote drops the session on its own within about two seconds.
+    """
+    if remote is None or remote.get("state") != "paused":
+        return False
+    if (previous or {}).get("state") != "playing":
+        return False
+
+    from .sources.media_remote import player_is_running
+
+    return not player_is_running(str(remote.get("bundle_id") or ""))
+
+
 def _media_remote_fallback() -> dict[str, Any] | None:
     """A system-wide Now Playing track, if one is actually playing or paused.
 
@@ -413,6 +447,12 @@ def sample_mode() -> int:
         source = "apple_music"
         if track.get("state") in {"not_running", "stopped", "paused"}:
             remote = _media_remote_fallback()
+            if _abandoned_session(remote, previous_track):
+                # A session nobody is running is not a session. Dropping it
+                # here puts a MediaRemote player's quit on the same path as
+                # Apple Music's: nothing left to hold, so the closing
+                # sequence runs now and takes the lyric and the row together.
+                remote = None
             # A paused Music track must not blank the lyric while another
             # player (QQ Music, a browser) is actually playing: follow
             # MediaRemote whenever it reports playback. When it is paused

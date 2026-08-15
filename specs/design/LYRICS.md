@@ -165,7 +165,7 @@ flowchart TD
     A[BTT invokes python3 -m lyrics] --> B[Acquire widget lock]
     B -->|lock unavailable| C["Emit last output; trace locked"]
     B -->|lock acquired| D[Read persisted track sample]
-    D -->|no usable sample| E["Start sampler if stale; emit last output; trace no_sample"]
+    D -->|no usable sample| E["Start sampler if stale; emit empty text; trace no_sample"]
     D -->|sample available| F{Track state}
     F -->|denied| G["Emit #quot;⚠ Allow BTT → Music#quot;"]
     F -->|paused| H["Emit empty text; trace paused"]
@@ -208,17 +208,51 @@ synchronisation never requires a live position query.
 | --- | --- | --- |
 | Persisted sample is younger than the refresh threshold | Project playback using sample age | The position advances without an AppleScript call in the widget tick. |
 | Sample is old but still within the maximum usable age | Start a detached sampler and use the old sample | The current frame remains usable while fresh state is acquired. |
-| Sample is older than the usable-age limit or absent | Start a sampler and return no usable track | The last rendered frame is reprinted; no blank intermediate frame is introduced. |
+| Sample is older than the usable-age limit or absent | Start a sampler and return no usable track | The widget clears. That age is the same one `widgets/now-playing.sh` treats as gone, so reprinting the last frame here left a lyric on screen beside a row that had already disappeared — and never stopped, because the next tick reprinted it again. |
 | Apple Music responds with permission denied | Try `nowplaying-cli` | A usable alternate sample may continue playback; otherwise the denied state is rendered. |
 | Music is stopped or not running | Try MediaRemote | A player on the shared allowlist (QQ Music by default) may supply the track; otherwise the widget becomes idle. |
 | MediaRemote's holder is not on the allowlist (a browser, most often) | Report not_running | A YouTube tab cannot hijack the lyric; the gate mirrors `widgets/now-playing.sh` and shares `BTT_NOW_PLAYING_ALLOWED`. |
 | AppleScript fails for a reason other than permission denial | Keep the previous sample | The widget avoids replacing valid state with an unverified failure. |
+| `pgrep` cannot answer whether Music is running (timeout, tool failure) | Raise, and keep the previous sample | "No answer" is not "not running", and not_running is what closes the row: a slow `pgrep` on a busy machine must not tear the pair down mid-song. |
+| MediaRemote reports nothing while its last sample is still usable | Hold that sample, but only while the app that published it is still running (Launch Services, ~10 ms) | MediaRemote goes quiet for a beat while a player plays on, and a sample written from that silence blanks the lyric mid-song; a player that has been quit publishes the same silence, and waiting it out is a delay, not a hold. |
+| MediaRemote turns a playing track paused, and the app that published it is gone | Treat the session as ended, not paused | MediaRemote keeps publishing the last track with `isPlaying` false for a second or two after its app quits — measured at 1.7 s on a QQ Music quit (2026-08-16 trace) — and a pause is the one state that makes the pair come apart while each widget is individually right: the lyric goes, because a paused track has no current line, and the row stays, because a paused row is meant to. `pgrep` spares Apple Music the same trap; this is the same question asked of MediaRemote's holder, and only at the moment playback turns paused. |
+| Apple Music itself reports not_running, stopped, or paused | Never hold — persist it and run the transition sequence | Music is read directly (`pgrep`, then AppleScript), so these are answers rather than silence. Holding them kept the sampler blind for `STATE_MAX_AGE_SECONDS` — exactly the age at which `widgets/now-playing.sh` hides the row — so quitting Music took the row off screen while the lyric played on for the rest of the hold. |
 | MediaRemote changes title or artist | Reset its locally tracked position | Subsequent playback position starts from the new track's sample. |
 | MediaRemote reports a new raw elapsed time | Re-anchor the projected position to it | QQ Music refreshes this field on seek/pause/resume/restart, so in-player seeks are followed on the next sample. |
 | MediaRemote playback rate lies while paused | Use the framework's own isPlaying state (nowplaying-state helper) | QQ Music pushes playbackRate 1 even while paused, so the rate alone cannot distinguish pause from play; the helper reads the same source Control Center's Now Playing tile does, and the lyric holds instead of scrolling through a paused track. |
 
 Playback state is persisted atomically as a current snapshot. It is not a
 history of tracks; lyric history belongs in per-track cache records.
+
+### Transition Sequences
+
+The Lyrics widget and the Now Playing row are one visual pair, and the sampler
+drives both at a transition rather than leaving each to notice on its own tick
+— a second apart, in either order. Every sequence runs *before* the state
+write that ends the on-screen track, and always in the same order: **the lyric
+leaves the screen first, then the row is settled.** A lyric annotates the row
+beside it, so it must never outlive it.
+
+Both statements go to one `osascript` process (`cli._btt_call`), because two
+detached launches a millisecond apart are ordered by nothing.
+
+| Transition | Row | Marker | Why |
+| --- | --- | --- | --- |
+| Player quit (`not_running`) | Hidden (empty text) | Written | The track is gone for good; BTT drops a script widget whose text is empty. Both statements are in one `osascript`, so the pair leaves together — which is all "the lyric goes first" can mean once the two are that close. A MediaRemote player reaches this row only because its lingering paused session is recognised as a quit (see the sampling table); without that it took the `paused` row below instead, and the row outlived the lyric by the 1.7 s MediaRemote took to let go. |
+| Stopped | Repainted | Written | The row keeps showing its track by design (`HideWhenPaused: 0`). |
+| Track identity changed | Repainted | Written | This widget's text sets the pair's width; repainting in the same beat collapses two visible jumps into one. |
+| Playing → paused | Repainted (dimmed) | **Not** written | There is no current line to a track that is not moving, so the lyric goes; but a paused track keeps its identity, and a marker naming it would still be holding the widget empty when playback resumes. |
+
+The marker (`cache/lyrics-cleared`) holds the widget empty while its own state
+sample still names the cleared track, so the half-second sampler cannot repaint
+the old lyric a moment later; the next sample that moves past that identity
+drops it. `widgets/now-playing.sh` runs the same sequence from the other side
+of the transition, since either side may notice first — it reads MediaRemote
+on BTT's tick, this sampler reads Music on its own, and on a closing it is
+usually the faster of the two. See
+[NOW-PLAYING.md](NOW-PLAYING.md#track-handover) for the handover and
+[Row Closing](NOW-PLAYING.md#row-closing) for the one clear that is waited
+for, because the row disappears the moment that widget exits.
 
 ### Track-Change Flow
 
@@ -454,6 +488,7 @@ are not, and remain observational.
 | Layout | [`tests/lyrics/test_layout.py`](../../tests/lyrics/test_layout.py) — punctuation/space wrapping, two-row limits, continuation indentation, marquee delay and rate. |
 | Concurrency and locking | [`tests/lyrics/test_concurrency.py`](../../tests/lyrics/test_concurrency.py), [`tests/lyrics/test_locking.py`](../../tests/lyrics/test_locking.py) — bounded provider racing; held and stale locks. |
 | Output shaping | [`tests/lyrics/test_output.py`](../../tests/lyrics/test_output.py) — last-frame preservation and widget JSON. |
+| Transition sequences | [`tests/lyrics/test_transitions.py`](../../tests/lyrics/test_transitions.py) — which sample survives MediaRemote's silence and which does not; a lingering paused session told from a real pause by whether its app is still running; that quit, stop, track-change and pause each clear the lyric before settling the row, and which of them writes a marker. |
 | State gate | Not covered. Feed denied, paused, idle, placeholder, and playing snapshots to the render decision and compare exact output/status strings. |
 | Provider fallback | Not covered end to end. Make local, Apple cache, QQ Music, NetEase, LrcAPI, and LRCLIB paths succeed/fail in order; verify the first acceptable result wins. |
 | Track changes | Not covered. Run `actions/track-changed.sh` with a synthetic UUID; verify detached execution, `settled`/`timeout`, pre-warm behaviour, and repaint request. |

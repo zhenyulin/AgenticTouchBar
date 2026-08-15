@@ -47,7 +47,7 @@ configured natively in BTT.
 | Widget | Shows | Script | Refresh | Tap action |
 | --- | --- | --- | --- | --- |
 | Lyrics | Synchronised lyrics + now playing | `widgets/now-playing-lyrics.sh` | 1 s | Repaint after a short delay |
-| Now Playing | Title/album/artist + album-cover icon (the player's app icon when the track carries no cover; the play icon returns while paused, with slightly dimmed text) — only while an allowed player holds Now Playing (browsers ignored) | `widgets/now-playing.sh` | 1 s | Play or Pause + weather/lyrics refresh |
+| Now Playing | Title/album/artist + album-cover icon (the player's app icon when the track carries no cover; the play icon returns while paused, with slightly dimmed text) — only while an allowed player holds Now Playing (browsers ignored) | `widgets/now-playing.sh` | 1 s | `actions/now-playing-toggle.sh` + lyrics refresh |
 | Codex | Codex quota | `widgets/codex-quota.sh` | 300 s | `actions/tap-refresh.sh` |
 | Claude | Claude 5 h / 7 d quota | `widgets/claude-quota.sh` | 600 s | `actions/tap-refresh.sh` |
 | OpenCode | OpenCode Go weekly quota | `widgets/opencode-quota.sh` | 300 s | `actions/tap-refresh.sh` |
@@ -82,7 +82,18 @@ play icon belongs — the same finding
 preset ships it in place of the native widget (same UUID,
 so `BTT_WIDGET_NOW_PLAYING_UUID` keeps working): 1 s refresh, tap toggles
 play/pause and refreshes the Lyrics widget, long-press toggles the `Music`
-Touch Bar group. The toggle is a named trigger (`Toggle Music Group`)
+Touch Bar group.
+
+The tap runs `actions/now-playing-toggle.sh` rather than BTT's own `Play or
+Pause` action, for the reason the widget itself exists: that action sends the
+media key, and macOS routes the media key to whichever app holds the Now
+Playing session — so a tap paused the browser video that had taken the session
+over and left the row's own track playing. The script resolves the player the
+way the row does (`now-playing-app.sh`) and addresses it directly: Apple Music
+over AppleScript, any other allowed player — which can only be the session
+holder — with the media key through BTT.
+
+The group toggle is a named trigger (`Toggle Music Group`)
 running AppleScript, because BTT has no toggle action: it asks
 `get_active_touch_bar_group` and then triggers either `Open Touch Bar Group
 With Name` (205) or `Close currently open Touch Bar group` (191). Now
@@ -116,6 +127,7 @@ detached process and then refreshes the Lyrics (and Star) widgets.
 | `actions/tap-refresh.sh` | Force one or more widgets to refresh now, even with a fresh cache |
 | `actions/track-changed.sh` | Track-change hook: detached lyrics pre-warm + widget refresh |
 | `actions/now-playing-app.sh` | Prints the current Now Playing holder's bundle id (MediaRemote) — gates the Star widget |
+| `actions/now-playing-toggle.sh` | Now Playing tap: play/pause the player the row is showing, not whoever holds the session |
 | `actions/set-widget-variables.sh` | Sets the BTT persistent variables mapping widget names to UUIDs |
 | `actions/tap-restart.sh` | Date/Time widget tap: marks the traces before BTT's own restart action |
 | `actions/btt-quit.sh` | Quit BTT for real — survives a wedged BTT and BTTRelaunch (below) |

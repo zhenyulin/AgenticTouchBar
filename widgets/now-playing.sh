@@ -421,6 +421,12 @@ def play_icon(cache_dir, assets_dir):
 # Mirrors STATE_MAX_AGE_SECONDS in widgets/lyrics/config.py, which is what the
 # Lyrics widget itself allows before it treats a sample as gone.
 SAMPLE_MAX_AGE_SECONDS = 8.0
+# How long the row waits for the Lyrics widget's clear to land before it
+# disappears (see leave_row). Measured at 0.5-0.7 s for the round trip, so
+# this is headroom rather than a budget. Bounded like every other subprocess
+# here: a BTT that cannot answer must not hold the shared script runner, and
+# a lyric left behind for one tick beats a Touch Bar that stops redrawing.
+CLEAR_WAIT_SECONDS = 1.0
 
 
 def read_json(path):
@@ -446,6 +452,13 @@ def sampled_track(state_path, allowed):
     rule this widget is built around -- no AppleScript on the widget path,
     where every widget shares one script-runner service.
 
+    The same fallback is what gives this row the grace the lyric beside it
+    has. MediaRemote goes silent the instant a player quits -- and for a beat
+    while one keeps playing -- so a row that followed only MediaRemote
+    disappeared before the Lyrics widget's sampler had even run, leaving a
+    lyric on screen with nothing to annotate. Both now live exactly as long
+    as the same sample does.
+
     Returns the sampled track, or None when the sample is missing, too old,
     or from a player this widget does not draw.
     """
@@ -464,13 +477,22 @@ def sampled_track(state_path, allowed):
         return None
     if track.get("state") not in {"playing", "paused"}:
         return None
-    # The sampler names a source rather than a bundle id, and only
-    # "apple_music" means a player it read for itself. Its "media_remote"
-    # samples come from the very holder the caller just rejected, so
-    # accepting them here would undo the allowlist.
-    if track.get("source") != "apple_music":
+    # Every sample still has to pass this widget's own allowlist, and each
+    # source names its holder differently: "apple_music" means the sampler
+    # read Music itself over AppleScript, while a "media_remote" sample
+    # records the bundle id of the holder it came from (see
+    # sources/media_remote.py). Matching on that recorded id is what lets a
+    # QQ Music sample through without the allowlist losing its meaning --
+    # rejecting the whole source, as this did while the samples were
+    # anonymous, left QQ Music the only player whose row had no grace at all.
+    source = track.get("source")
+    if source == "apple_music":
+        holder = "com.apple.Music"
+    elif source == "media_remote":
+        holder = str(track.get("bundle_id") or "")
+    else:
         return None
-    if "com.apple.music" not in allowed_ids(allowed):
+    if holder.lower() not in allowed_ids(allowed):
         return None
     return track
 
@@ -535,7 +557,7 @@ def write_json(path, payload):
             pass
 
 
-def clear_lyrics_for_change(identity, cache_dir, lyrics_uuid):
+def clear_lyrics_for_change(identity, cache_dir, lyrics_uuid, wait=False):
     """Clear the Lyrics widget when this tick is about to change the row.
 
     This widget's text is what sets the pair's width, so a track change here
@@ -557,7 +579,9 @@ def clear_lyrics_for_change(identity, cache_dir, lyrics_uuid):
     the clear is idempotent, so whichever gets there first simply wins.
 
     Fire-and-forget: an osascript launch costs ~200 ms, and every widget
-    shares the single script-runner service this runs on.
+    shares the single script-runner service this runs on. The one caller that
+    waits is leave_row, because there the clear has to have landed before
+    this process exits -- see its own note.
     """
     path = Path(cache_dir) / "now-playing.identity"
     previous = read_json(path)
@@ -573,25 +597,59 @@ def clear_lyrics_for_change(identity, cache_dir, lyrics_uuid):
         marker = dict(previous)
         marker["at"] = time.time()
         write_json(Path(cache_dir) / "lyrics-cleared", marker)
+        command = [
+            "/usr/bin/osascript",
+            "-e",
+            'tell application "BetterTouchTool" to '
+            f'update_touch_bar_widget "{lyrics_uuid}" text ""',
+        ]
         try:
-            subprocess.Popen(
-                [
-                    "/usr/bin/osascript",
-                    "-e",
-                    'tell application "BetterTouchTool" to '
-                    f'update_touch_bar_widget "{lyrics_uuid}" text ""',
-                ],
-                stdin=subprocess.DEVNULL,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-                start_new_session=True,
-            )
-        except OSError:
+            if wait:
+                subprocess.run(
+                    command,
+                    stdin=subprocess.DEVNULL,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    timeout=CLEAR_WAIT_SECONDS,
+                    check=False,
+                )
+            else:
+                subprocess.Popen(
+                    command,
+                    stdin=subprocess.DEVNULL,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    start_new_session=True,
+                )
+        except (OSError, subprocess.SubprocessError):
             pass
 
     # Written last: a tick that died before the clear went out should try
     # again rather than record a change it never made.
     write_json(path, identity)
+
+
+def leave_row(cache_dir, widget_uuid, lyrics_uuid):
+    """Take the lyric with the row on the way out, then print nothing.
+
+    Printing nothing is how the row is hidden -- BetterTouchTool drops a
+    script widget whose text is empty -- and the lyric beside it has to be
+    gone by then, or it is left annotating a row that no longer exists. This
+    tick is the one that noticed, so it is the one that clears: the sampler
+    runs the same sequence from its side (cli.closing_sequence), but it is
+    started by the Lyrics widget's own tick and can be a second behind this
+    one, which reads MediaRemote directly.
+
+    The clear is waited for here, unlike everywhere else in this file: the
+    row disappears the moment this process exits, so a launch left in flight
+    is exactly the race this exists to remove. A round trip to BetterTouchTool
+    measures 0.5-0.7 s (2026-08-16, this machine), and that is paid once per
+    closing rather than per tick -- the same order as the 1.5 s this widget
+    already allows nowplaying-cli on any tick at all.
+    """
+    if widget_uuid:
+        clear_lyrics_for_change({}, cache_dir, lyrics_uuid, wait=True)
+    sys.exit(0)
 
 
 (
@@ -642,23 +700,29 @@ else:
     # still knows whether one of ours is playing behind it.
     track = sampled_track(state_path, allowed)
     if track is None:
-        sys.exit(0)
+        leave_row(cache_dir, widget_uuid, lyrics_uuid)
     identity = {
         field: str(track.get(field) or "").strip()
         for field in ("title", "artist", "album")
     }
     playing = track.get("state") == "playing"
     # The artwork in the dictionary belongs to whoever holds the session, so
-    # it is not this track's cover, and nothing else carries one without an
-    # AppleScript call. The player's own icon stands in below.
-    cover = None
-    player = "com.apple.Music"
+    # it is not this track's cover -- but the cover this row drew for the
+    # same track a tick ago still is, and it is the one thing on the row the
+    # reader places the track by. Without it the icon dropped to the player's
+    # logo the instant MediaRemote handed over or fell silent, which read as
+    # the row breaking rather than the session moving.
+    cover = held_cover(cache_dir, identity)
+    # Which player to draw the logo of, when there is no cover to draw: an
+    # apple_music sample says so by its source, a media_remote one records
+    # the holder it came from.
+    player = str(track.get("bundle_id") or "com.apple.Music")
 
 title = strip_parens(identity["title"])
 artist = identity["artist"]
 album = display_album(identity["album"])
 if not title:
-    sys.exit(0)
+    leave_row(cache_dir, widget_uuid, lyrics_uuid)
 
 # A terminal run prints a row and touches nothing else.
 if widget_uuid:

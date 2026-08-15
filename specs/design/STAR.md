@@ -21,7 +21,7 @@ contract; the preset is the source of truth.
 | --- | --- | --- |
 | Star widget script | BTT AppleScript widget, 10 s interval | Returns `★`, `☆`, or `""`. Empty text makes BTT hide the widget. |
 | Star widget tap | User | Toggles `favorited` on Apple Music's current track and repaints the widget immediately. |
-| `actions/now-playing-app.sh` | The two scripts above and the Open Player trigger | Prints one bundle id, or nothing. |
+| `actions/now-playing-app.sh` | The two scripts above and the Open Player trigger | Prints one bundle id, or nothing. With `--with-holder`, a second line carries the raw session holder — `actions/now-playing-toggle.sh` needs both, see [NOW-PLAYING.md](NOW-PLAYING.md#entry-points). |
 | `Open Player` named trigger | Long press on the Lyrics widget | Activates the app that bundle id names. |
 | `actions/track-changed.sh` | Media next/previous, two-finger swipes | Refreshes the Star widget along with Lyrics. |
 
@@ -58,6 +58,12 @@ Star widget
 | MediaRemote's `kMRMediaRemoteNowPlayingInfoClientBundleIdentifier` is `com.apple.Music` | `com.apple.Music` |
 | Otherwise, `cache/lyrics/state.json` is younger than 8 s, its `source` is `apple_music`, and its `state` is `playing` or `paused` | `com.apple.Music` |
 | Otherwise | whatever holder MediaRemote reported — possibly nothing |
+
+`--with-holder` appends that raw MediaRemote holder as a second line, whatever
+the rows above decided. The two lines differ exactly when the player is not
+the app a media key would reach; nothing else about the output changes,
+because the Star and Open Player AppleScripts read it through `do shell
+script`, which returns every line.
 
 The fallback exists because holding the session is not the same as being the
 player: a browser that starts a video takes Now Playing over while Apple Music

@@ -35,6 +35,8 @@ from ..runtime.cache import atomic_write_json
 from ..runtime.output import log_error
 
 _CLI_PATH: str | None = ""  # "" means not resolved yet; None means missing.
+# Which players were found running, per process -- one sampler run.
+_RUNNING_PLAYERS: dict[str, bool] = {}
 _STATE_BIN_PATH: str | None = ""  # "" means not resolved yet; None means missing.
 
 
@@ -207,9 +209,15 @@ def player_is_running(bundle_id: str) -> bool:
 
     True whenever the answer is unavailable -- no bundle id, lsappinfo
     missing or slow: an unknown state must not tear the pair down mid-song.
+
+    Memoized for the life of the process, which is one sampler run: the
+    question is asked from two places in the same transition and the answer
+    cannot change between them.
     """
     if not bundle_id:
         return True
+    if bundle_id in _RUNNING_PLAYERS:
+        return _RUNNING_PLAYERS[bundle_id]
     try:
         result = subprocess.run(
             ["/usr/bin/lsappinfo", "find", f"bundleID={bundle_id}"],
@@ -222,7 +230,8 @@ def player_is_running(bundle_id: str) -> bool:
         return True
     if result.returncode != 0:
         return True
-    return bool(result.stdout.strip())
+    _RUNNING_PLAYERS[bundle_id] = bool(result.stdout.strip())
+    return _RUNNING_PLAYERS[bundle_id]
 
 
 def _read_position_state() -> dict[str, Any]:

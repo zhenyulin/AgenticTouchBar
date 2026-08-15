@@ -36,7 +36,7 @@ offers no per-app filter for it. The replacement ships under the same UUID, so
 | --- | --- | --- |
 | `widgets/now-playing.sh <widget-uuid>` | BTT shell script widget, 1 s interval | Prints one widget JSON object, or nothing; may clear the Lyrics widget as a side effect. |
 | `widgets/now-playing.sh` | Terminal, operator | Prints the same two rows as plain text and touches no state — no identity file, no clear, no icon path. |
-| BTT tap (`Play or Pause`, then async AppleScript) | User | BTT toggles playback and refreshes the Lyrics widget (or clears its text when paused). |
+| BTT tap (`actions/now-playing-toggle.sh`, then async AppleScript) | User | Toggles playback **of the player the row names**, then refreshes the Lyrics widget (or clears its text when Apple Music owns the row and is paused). |
 | BTT long press (`Toggle Music Group` named trigger) | User | Opens or closes the `Music` Touch Bar group; Now Playing is merged into groups, so the same press closes the group from inside it. |
 
 The widget is configured in
@@ -78,11 +78,15 @@ Now Playing widget
 │   ├── Hold the previous cover through a payload that omits artwork
 │   ├── The player app's own icon when the track carries no cover
 │   └── A play triangle while paused
-└── Hand the row over on a track change
-    ├── Compare the track identity with the previous tick's
-    ├── Clear the Lyrics widget before the row reflows
-    ├── Leave a marker the Lyrics tick honours
-    └── Record the new identity last
+├── Hand the row over on a track change
+│   ├── Compare the track identity with the previous tick's
+│   ├── Clear the Lyrics widget before the row reflows
+│   ├── Leave a marker the Lyrics tick honours
+│   └── Record the new identity last
+└── Take the lyric with it on the way out
+    ├── Clear the Lyrics widget when the row is about to disappear
+    ├── Wait for that clear, because exiting is what hides the row
+    └── Record the empty identity, so it happens once
 ```
 
 ## Decision Trees
@@ -101,8 +105,8 @@ flowchart TD
     D2 --> E
     E -->|yes| F["Identity, rate, artwork from the payload"]
     E -->|no| G{"Sampler state usable?"}
-    G -->|no| H["Print nothing; exit 0"]
-    G -->|yes| I["Identity from the sample; player = com.apple.Music"]
+    G -->|no| H["Clear the Lyrics widget and wait; print nothing; exit 0"]
+    G -->|yes| I["Identity from the sample; held cover; player = the sample's holder"]
     F --> J{"Title empty?"}
     I --> J
     J -->|yes| H
@@ -127,9 +131,9 @@ showing.
 | Condition | Selected path | Observable result |
 | --- | --- | --- |
 | Holder's bundle id is in the allowlist (case-folded) | MediaRemote payload | Title, artist, album, artwork, and playback rate all come from one dictionary. |
-| Holder is anything else, sampler sample is fresh (≤ 8 s), `state` is `playing` or `paused`, and `source` is `apple_music` | Lyrics sampler `state.json` | The row keeps naming Apple Music; `player` becomes `com.apple.Music` and there is no cover, so the app icon stands in. |
-| Sampler `source` is `media_remote` | Rejected | Those samples come from the very holder just rejected; accepting them would undo the allowlist. |
-| `com.apple.music` is not in the allowlist | Rejected | The fallback cannot smuggle in a player the operator excluded. |
+| Holder is anything else, sampler sample is fresh (≤ 8 s), and `state` is `playing` or `paused` | Lyrics sampler `state.json` | The row keeps naming the real player. The cover held for that same track still stands (see [Icon Selection](#icon-selection)), and `player` falls back to the app icon of whichever player the sample names. |
+| Sample's holder: `source: apple_music` means `com.apple.Music`, `source: media_remote` carries the holder's `bundle_id` | Checked against the same allowlist | The allowlist keeps its meaning without costing QQ Music its fallback — rejecting the whole `media_remote` source, as this did while those samples were anonymous, left QQ Music the only player whose row had no grace at all: it vanished the instant MediaRemote fell silent, a full sampler cycle before the lyric beside it. |
+| Holder named by the sample is not in the allowlist | Rejected | The fallback cannot smuggle in a player the operator excluded. |
 | Sample missing, malformed, or older than 8 s | Rejected | Nothing prints; BTT hides a script widget whose text is empty. |
 | `nowplaying-cli` is absent | The helper payload, or the last shared dictionary | Since the 2026-08-13 rebuild the helper decodes the holder's bundle id out of `ClientPropertiesData`; when the session's holder publishes neither that nor artwork, and no recent dictionary is on disk, the gate fails closed — degraded, never a wrong player. |
 
@@ -171,7 +175,11 @@ sampler, which is why the helper exists at all.
   while playing (measured: one tick in a few dozen). When
   `cache/now-playing.identity` still names the track on screen, the artwork
   file on disk is reused rather than dropping to the player logo for one tick
-  and back, which reads as a flicker.
+  and back, which reads as a flicker. The sampler fallback holds it for the
+  same reason: the payload's artwork belongs to whoever took the session, but
+  the cover this row drew for this track a tick ago still belongs to it, and
+  losing it was the "cover turns into the player logo" step that made a
+  session handover read as the row breaking.
 - **Player app icon.** See the journey contract below.
 - **Play triangle.** The checked-in SVG is preferred because BTT renders SVG
   `icon_path` files; if it is missing, a 32×32 white triangle on transparency
@@ -202,6 +210,44 @@ sampler, which is why the helper exists at all.
   each row, and BTT truncates past it.
 4. Empty parts are dropped from their rows, and a fully empty second row is
   dropped entirely.
+
+### Tap Routing
+
+The row is not the session, so the tap cannot be the media key. BTT's own
+`Play or Pause` action sends one, macOS delivers it to whichever app holds the
+Now Playing session, and a browser video holds it while Apple Music plays
+behind — so the tap paused the video and left the row's own track running,
+the same hijack the widget's allowlist exists to undo.
+
+[`actions/now-playing-toggle.sh`](../../actions/now-playing-toggle.sh) asks
+`now-playing-app.sh --with-holder` for the player **and** the raw holder, then:
+
+| Player (resolved) | Holder (raw) | Action |
+| --- | --- | --- |
+| `com.apple.Music` | anything | `tell application "Music" to playpause`, guarded on Music running — reaches Music whether or not it holds the session. |
+| Another allowed player | the same id | BTT `trigger_action` 23, the media key, which lands on that player because it holds the session. |
+| Another allowed player | anything else | Nothing, and the media key is **not** sent. QQ Music ships no scripting dictionary to address instead, so a key here would land on the holder — the browser — which is the bug being fixed. |
+| Not on the allowlist, or empty | anything | Nothing. The row is not ours, so neither is the tap. |
+
+Row three cannot arise today: `now-playing-app.sh` falls back to the sampler
+only for `source: apple_music`, so a row that the widget keeps alive on a
+`media_remote` sample resolves here to the browser holding the session and is
+rejected by row four instead. The guard is written anyway, because aligning
+the resolver's fallback with the widget's ([Source
+Selection](#source-selection)) would make row three reachable — and a media
+key sent on that path is silently wrong rather than visibly broken.
+
+The player is resolved synchronously — bounded, and nearly free while the
+shared dictionary is current — but the toggle itself is dispatched through
+`btt_spawn_detached`: taps run in the one shell script runner service every
+widget shares, and an AppleScript call into an unresponsive Music has frozen
+that runner for minutes before.
+
+The async AppleScript that follows the toggle waits 0.5 s before reading the
+player state, because the detached toggle lands a few hundred milliseconds in
+where BTT's own media key was instantaneous. It clears the Lyrics widget only
+when Apple Music owns the row and is not playing; any other allowed player
+gets a plain `refresh_widget`, whose own tick decides what to draw.
 
 ## Journey Contracts
 
@@ -280,16 +326,47 @@ its own new width) into one.
   place, because the Lyrics widget reads the marker on a tick of its own and a
   torn read would drop the hold it exists to keep.
 - The `osascript` clear is fire-and-forget (`Popen`, `start_new_session`): a
-  launch costs ~200 ms, and every widget shares one script-runner service.
+  launch costs ~200 ms, and every widget shares one script-runner service. The
+  one exception is the closing clear below, which is waited for.
 - Idempotent and symmetric. The Lyrics watchers run the same sequence from the
   other side of the transition (`cli.closing_sequence`), because either side
   may notice first — this widget reads MediaRemote on BTT's tick, the sampler
   reads Music over AppleScript on its own. Whichever gets there first wins.
+  That side also settles this row in the same `osascript`, immediately after
+  the clear, so the lyric can never outlive the row it annotates — see
+  [LYRICS.md](LYRICS.md#transition-sequences).
 - The identity file is written **last**, so a tick that dies before the clear
   goes out retries rather than recording a change it never made.
 - Nothing is cleared when the previous identity has no title: coming back from
   an empty row has no stale lyric to clear, and a marker naming no track would
   match no sample anyway.
+
+### Row Closing
+
+**Input:** a tick that has nothing to draw — no allowed holder in MediaRemote
+and no usable sampler sample — plus `cache/now-playing.identity`.
+
+**Transformation:** clear the Lyrics widget → **wait for that clear** → record
+an empty identity → exit printing nothing.
+
+**Why:** printing nothing is how the row is hidden, and BTT acts on it the
+moment this process exits. A fire-and-forget clear launched a step earlier is
+therefore still in flight when the row disappears, which is the race that left
+a lyric annotating a row that was no longer there. Waiting is the only thing
+that orders two separate processes.
+
+**Properties:**
+
+- Bounded at `CLEAR_WAIT_SECONDS` (1.0 s) against a round trip measured at
+  0.5–0.7 s. A BTT that cannot answer must not hold the shared script runner:
+  one leftover lyric beats a Touch Bar that stops redrawing.
+- Paid once per closing, not per tick — the identity file is emptied by the
+  same call, so later ticks find nothing to clear and return immediately.
+- Symmetric with the Lyrics sampler, which runs its own closing sequence
+  (`cli.closing_sequence`) in one `osascript`: lyric first, then this row.
+  Whichever side notices first wins, and both orders agree.
+- Every "nothing to draw" exit goes through it, including a sampled track that
+  turns out to have no title.
 
 ### Player Icon Extraction
 
@@ -329,7 +406,7 @@ its own new width) into one.
 | --- | --- | --- |
 | Reusable durable | `cache/now-playing-artwork-<hash>.<ext>` | One file at a time; superseded covers are unlinked on write. |
 | Reusable durable | `cache/now-playing-player-<bundle-id>.png`, `cache/now-playing-play.png` | Written once, reused indefinitely. |
-| Coordination | `cache/now-playing.identity` | The track on screen; drives both the handover and the held cover. |
+| Coordination | `cache/now-playing.identity` | The track on screen; drives the handover, the held cover, and the closing clear. Emptied (`{}`) when the row leaves, so the closing clear runs once. |
 | Coordination | `cache/lyrics-cleared` | Read by `render.cleared_while_sample_current` so the Lyrics sampler cannot repaint the old lyric a moment later. |
 | Negative cache | `cache/now-playing-player-<bundle-id>.miss` | Empty file; only its mtime matters. |
 
@@ -343,6 +420,7 @@ its own new width) into one.
 | Sampler fallback producer | [`widgets/lyrics/cli.py`](../../widgets/lyrics/cli.py), [`widgets/lyrics/sources/apple_music.py`](../../widgets/lyrics/sources/apple_music.py) |
 | Clear marker consumer | [`widgets/lyrics/display/render.py`](../../widgets/lyrics/display/render.py) |
 | Same holder fallback, for the Star widget | [`actions/now-playing-app.sh`](../../actions/now-playing-app.sh) |
+| Tap playback control | [`actions/now-playing-toggle.sh`](../../actions/now-playing-toggle.sh) |
 | Tap and long-press wiring | [`bttpreset/Default.bttpreset`](../../bttpreset/Default.bttpreset) |
 
 Unlike every other shell widget, this one does **not** source
@@ -356,18 +434,29 @@ lifecycle offers the widgets that do.
 No automated tests cover this widget. The checks below are what a rebuild
 should prove, and how to prove each one by hand today.
 
+Most of them need no player at all. `BTT_NOW_PLAYING_CLI` and
+`BTT_NOW_PLAYING_STATE_BIN` point the two MediaRemote sources at any
+executable, so a stub printing `{}` is a session nobody holds; pair it with a
+hand-written `state.json` under `BTT_LYRICS_CACHE_DIR` and a scratch
+`BTT_WIDGET_CACHE_DIR`, and every source-selection row above can be driven
+directly. Leave `BTT_LYRICS_WIDGET_UUID` empty to keep the run off BTT.
+
 | Behaviour to verify | Focused evidence |
 | --- | --- |
 | Allowlist gate | Play a YouTube tab with Apple Music stopped; the widget prints nothing. `BTT_NOW_PLAYING_ALLOWED=com.apple.Music widgets/now-playing.sh` with QQ Music holding the session prints nothing. |
 | Case folding | Confirm QQ Music (`com.tencent.QQMusicMac`) draws while the allowlist entry is spelled in any case. |
-| Sampler fallback | With Apple Music playing and a browser holding the session, the row keeps the Music track and the icon falls back to the Music app icon. |
-| Fallback cannot bypass the gate | Hand-write `cache/lyrics/state.json` with `"source": "media_remote"`; the widget must print nothing. |
+| Sampler fallback | With Apple Music playing and a browser holding the session, the row keeps the Music track and the cover it already drew for it. |
+| Fallback grace is symmetric | A `"source": "media_remote"` sample naming an allowed `bundle_id` must keep drawing while MediaRemote reports nothing — that grace is what keeps the row from vanishing a sampler cycle before the lyric. |
+| Fallback cannot bypass the gate | The same sample with a `bundle_id` outside the allowlist — or none at all — must print nothing. |
 | Sample ageing | Backdate `sampled_at` past 8 s; the fallback must stop. |
+| Closing order | From a drawn row, make the sample unusable; the tick must clear the Lyrics widget and wait for it before printing nothing, leave `cache/lyrics-cleared` naming the departing track, empty `cache/now-playing.identity`, and do none of it again on the next tick. |
 | Pause detection | Pause QQ Music and confirm the icon becomes the play triangle within a tick, not the album cover. |
 | Artwork churn | Change tracks and confirm exactly one `now-playing-artwork-*` file remains, named after the new bytes. |
 | Held cover | Delete nothing and force a payload without artwork mid-track; the cover must persist. |
 | Handover | Change tracks and confirm `cache/lyrics-cleared` names the *previous* track and `cache/now-playing.identity` the new one. |
 | Terminal purity | Run without a UUID and confirm no cache file changes mtime. |
+| Tap ignores the session holder | With Apple Music playing and a browser video holding the session, run `actions/now-playing-toggle.sh`: Music must pause and the video must keep playing. Run it again to resume. |
+| Tap declines what it cannot address | With the resolved player outside the allowlist (`BTT_NOW_PLAYING_ALLOWED=` empty), the script must exit without touching any player. |
 
 ## Known Gaps
 

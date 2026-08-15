@@ -13,6 +13,7 @@ words:
   - korea
   - lrcapi
   - lrclib
+  - lsappinfo
   - mandopop
   - netease
   - mihomo
@@ -20,6 +21,8 @@ words:
   - noproxy
   - opencode
   - osascript
+  - pgrep
+  - playpause
   - popups
   - qqmusic
   - referer

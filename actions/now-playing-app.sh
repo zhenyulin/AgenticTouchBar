@@ -24,13 +24,23 @@
 # every second (widgets/lib/media-remote.sh), so the Star widget's own gate
 # costs a file read rather than another ~0.22 s nowplaying-cli call.
 #
-# Usage: now-playing-app.sh
+# Usage: now-playing-app.sh [--with-holder]
 # Prints: com.apple.Music | com.microsoft.edgemac | ... | (nothing)
+#
+# With --with-holder, a second line follows: the raw session holder, before
+# the fallback above rewrote it (empty when nobody holds the session). The two
+# differ exactly when the player is not the app the media keys would reach,
+# which is what actions/now-playing-toggle.sh has to know before it sends one.
+# The default output is unchanged, because the Star widget and the Open Player
+# trigger read it with `do shell script`, which returns every line.
 #
 
 set -u
 
 PATH="/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+
+WITH_HOLDER=0
+[[ "${1:-}" == "--with-holder" ]] && WITH_HOLDER=1
 
 REPO_DIR="${BTT_REPO_DIR:-${0:A:h:h}}"
 source "$REPO_DIR/widgets/lib/btt-widget.sh"
@@ -47,7 +57,7 @@ import json
 import sys
 import time
 
-raw_path, state_path, max_age = sys.argv[1:4]
+raw_path, state_path, max_age, with_holder = sys.argv[1:5]
 
 try:
     with open(raw_path, encoding="utf-8") as handle:
@@ -58,8 +68,16 @@ if not isinstance(info, dict):
     info = {}
 
 holder = info.get("kMRMediaRemoteNowPlayingInfoClientBundleIdentifier", "")
+
+
+def emit(player):
+    print(player)
+    if with_holder == "1":
+        print(holder)
+
+
 if holder == "com.apple.Music":
-    print(holder)
+    emit(holder)
     sys.exit(0)
 
 # Apple Music playing behind whoever holds the session is still the player
@@ -78,8 +96,8 @@ if (
     and track.get("source") == "apple_music"
     and track.get("state") in {"playing", "paused"}
 ):
-    print("com.apple.Music")
+    emit("com.apple.Music")
     sys.exit(0)
 
-print(holder)
-' "$RAW_PATH" "$SAMPLER_STATE" "$MEDIA_REMOTE_SAMPLE_MAX_AGE"
+emit(holder)
+' "$RAW_PATH" "$SAMPLER_STATE" "$MEDIA_REMOTE_SAMPLE_MAX_AGE" "$WITH_HOLDER"

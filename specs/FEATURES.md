@@ -35,7 +35,7 @@ by another script, and exits.
 
 | Widget | Shows | Script | Interval | Tap | Long press |
 | --- | --- | --- | --- | --- | --- |
-| Now Playing | Title over artist - album, album side by minimax width, with cover/app/play icon (slight dim while paused) | `widgets/now-playing.sh` | 1 s | Play or Pause, then refresh Lyrics | Toggle the `Music` group |
+| Now Playing | Title over artist - album, album side by minimax width, with cover/app/play icon (slight dim while paused) | `widgets/now-playing.sh` | 1 s | Play or pause the row's own player, then refresh Lyrics | Toggle the `Music` group |
 | Lyrics | The synchronised lyric line | `widgets/now-playing-lyrics.sh` | 1 s | Repaint itself after 1.8 s | Open Player |
 | Star | `★` / `☆` for Apple Music | preset AppleScript + `actions/now-playing-app.sh` | 10 s | Toggle favourite | — |
 | Claude | 5 h and 7 d quota | `widgets/claude-quota.sh` | 600 s | Refresh itself | — |
@@ -57,7 +57,8 @@ an ordinary command-line program without it.
 | Trigger | Runs | Purpose |
 | --- | --- | --- |
 | Any widget tap | `actions/tap-refresh.sh [--delay-ms N] <uuid>...` | Force one or more widgets to refresh now. |
-| Two-finger swipe left / right | `Previous` / `Next`, then `actions/track-changed.sh` | Media control plus the lyric pre-warm and repaint. |
+| Now Playing tap | `actions/now-playing-toggle.sh` | Play or pause the player the row names, never the session holder. |
+| Two-finger swipe left / right | `Previous` / `Next`, then `actions/track-changed.sh` | Media control plus the lyric pre-warm and repaint. The media key still follows the session holder — a browser video takes these. |
 | Single-finger swipe left / right | Volume down / up | — |
 | Middle mouse button | Mission Control | — |
 | After the Mac wakes | AppleScript `refresh_widget` ×4 | Refreshes VPN, Codex, Claude, and OpenCode at once. |
