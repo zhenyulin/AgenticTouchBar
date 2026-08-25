@@ -39,8 +39,8 @@ by another script, and exits.
 | Lyrics | The synchronised lyric line | `widgets/now-playing-lyrics.sh` | 1 s | Repaint itself after 1.8 s | Open Player |
 | Star | `★` / `☆` for Apple Music, emptied with the row when the track ends | preset AppleScript + `actions/now-playing-app.sh` | 10 s | Toggle favourite | — |
 | Claude | 5 h and 7 d quota | `widgets/claude-quota.sh` | 600 s | Refresh itself | — |
-| Codex | Quota and time to reset | `widgets/codex-quota.sh` | 300 s | Refresh itself | — |
-| OpenCode | Weekly quota | `widgets/opencode-quota.sh` | 300 s | Refresh itself | — |
+| Codex | 5 h and 7 d quota | `widgets/codex-quota.sh` | 300 s | Refresh itself | — |
+| OpenCode | 5 h and 7 d quota | `widgets/opencode-quota.sh` | 300 s | Refresh itself | — |
 | 🌐 | Selected Clash node's flag | `widgets/clash-region.sh` | 300 s | Refresh region and latency | — |
 | VPN | Selected Clash node's latency and label | `widgets/clash-latency.sh` | 300 s | Refresh region and latency | — |
 | Weather | Temperature over humidity | `widgets/weather.sh --text` | 600 s | Refresh both weather widgets | — |

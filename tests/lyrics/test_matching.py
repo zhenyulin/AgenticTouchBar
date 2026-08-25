@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import unittest
 
-from tests.lyrics.support import candidate, track  # noqa: F401  (pins config paths)
-
 from lyrics.text.matching import candidate_score, choose_candidate
+
+from tests.lyrics.support import candidate, track  # noqa: F401  (pins config paths)
 
 SYNCED = "[00:01.00]line"
 
@@ -26,9 +26,7 @@ class CandidateScore(unittest.TestCase):
             REJECTED,
         )
 
-    def test_an_unrelated_artist_is_rejected_when_nothing_vouches_for_it(self):
-        # The artist guard is deliberately loose (romanisations vary wildly),
-        # so it only fires on essentially no character overlap at all.
+    def test_an_unrelated_artist_is_rejected(self):
         self.assertEqual(
             candidate_score(
                 track(duration=269.0),
@@ -37,28 +35,61 @@ class CandidateScore(unittest.TestCase):
             REJECTED,
         )
 
-    def test_a_merely_different_latin_artist_is_not_rejected(self):
-        # KNOWN RISK: "Radiohead" scores 0.235 against "Coldplay", above the
-        # 0.18 artist floor, so a same-titled song by a different Latin-named
-        # band survives scoring on the strength of its title alone. Only the
-        # 0.60 floor in choose_candidate stands between it and the screen --
-        # and an exact title clears that. Pinned so any tightening is
-        # deliberate; see test_a_same_title_by_another_band_is_accepted.
-        scored = candidate_score(
-            track(duration=269.0),
-            candidate(artistName="Radiohead", duration=180.0),
+    def test_a_different_latin_artist_is_rejected(self):
+        # Strict artist match: a same-titled song by another band is another
+        # song's lyrics, no matter how strong the title looks.
+        self.assertEqual(
+            candidate_score(
+                track(duration=269.0),
+                candidate(artistName="Radiohead", duration=180.0),
+            ),
+            REJECTED,
         )
-        self.assertGreater(scored, 0.60)
 
-    def test_an_exact_title_and_duration_vouch_for_an_unrecognised_artist(self):
-        # Romanisations and credited-as names the alias file has never heard of
-        # are common; when the title matches outright and the length agrees to
-        # within ten seconds, that pair is trusted over the artist string.
-        scored = candidate_score(
-            track(duration=269.0),
-            candidate(artistName="Nobody At All", duration=269.0),
+    def test_an_unrecognised_artist_is_rejected_despite_title_and_duration(self):
+        # Romanisations and credited-as names the alias file has never heard
+        # of no longer get a free pass from the title and length agreeing.
+        self.assertEqual(
+            candidate_score(
+                track(duration=269.0),
+                candidate(artistName="Nobody At All", duration=269.0),
+            ),
+            REJECTED,
         )
-        self.assertGreater(scored, 0.0)
+
+    def test_an_instrumental_annotation_on_either_side_does_not_block_a_match(self):
+        # The reported case: a pure-instrumental edition of a song must still
+        # match the song's own lyrics, with the annotation trimmed on either
+        # side of the comparison.
+        self.assertAlmostEqual(
+            candidate_score(track(title="Yellow (Instrumental)"), candidate()),
+            1.0,
+        )
+        self.assertAlmostEqual(
+            candidate_score(track(), candidate(trackName="Yellow (Instrumental)")),
+            1.0,
+        )
+
+    def test_a_candidate_subtitle_is_trimmed_for_matching(self):
+        # Community catalogs annotate subtitles ("Yellow (电影主题曲)"); the
+        # trimmed candidate must still match the plain sampled title.
+        scored = candidate_score(track(), candidate(trackName="Yellow (电影主题曲)"))
+        self.assertGreater(scored, 0.6)
+
+    def test_an_extended_title_is_rejected(self):
+        # "Yellow Submarine" is not "Yellow", even by the same artist.
+        self.assertEqual(
+            candidate_score(track(), candidate(trackName="Yellow Submarine")),
+            REJECTED,
+        )
+
+    def test_a_leading_article_on_the_artist_is_forgiven(self):
+        # The artist keeps containment: "The Beatles" is the same act as
+        # "Beatles", and the title matches exactly.
+        scored = candidate_score(
+            track(artist="The Beatles"), candidate(artistName="Beatles")
+        )
+        self.assertGreater(scored, 0.6)
 
     def test_an_alias_artist_still_matches(self):
         # The alias file makes these the same act, so the candidate must not
@@ -139,15 +170,13 @@ class ChooseCandidate(unittest.TestCase):
         instrumental = candidate(id="instrumental", instrumental=True)
         self.assertIs(choose_candidate(track(), [instrumental]), instrumental)
 
-    def test_a_same_title_by_another_band_is_accepted(self):
-        # KNOWN RISK, pinned deliberately: this is the wrong song's lyrics, but
-        # the exact title carries it past both the artist floor and the 0.60
-        # acceptance threshold. Tightening the artist rule should flip this
-        # assertion to assertIsNone.
+    def test_a_same_title_by_another_band_is_rejected(self):
+        # This is the wrong song's lyrics; the exact title no longer carries
+        # it past the strict artist gate.
         wrong_band = candidate(
             artistName="Radiohead", duration=180.0, syncedLyrics=SYNCED
         )
-        self.assertIsNotNone(choose_candidate(track(duration=269.0), [wrong_band]))
+        self.assertIsNone(choose_candidate(track(duration=269.0), [wrong_band]))
 
     def test_a_poor_match_is_refused_even_with_timed_lyrics(self):
         # Showing the wrong song's lyrics in time is worse than showing none.

@@ -289,7 +289,11 @@ RETRY_NOT_FOUND_SECONDS = 6 * 60 * 60
 # are stale.
 # 6: the catalog lookup now returns the CN artist name too (search_artist),
 # so records fetched while romanized artists searched untranslated are stale.
-CACHE_KEY_VERSION = 6
+# 7: candidate acceptance now requires a strict artist+title identity match
+# with annotations trimmed on both sides (no more similarity floors that let
+# a strong title vouch for a mismatched artist) -- records fetched while a
+# lookalike song could be accepted are stale.
+CACHE_KEY_VERSION = 7
 
 # Community/catalog aliases for artist and title metadata, as a JSON file of
 # alias groups shipped inside this package — there are no built-in groups, so

@@ -19,8 +19,10 @@ VERSION_MARKERS = (
     "version",
     "edit",
     "mix",
+    "remix",
     "live",
     "acoustic",
+    "unplugged",
     "demo",
     "mono",
     "stereo",
@@ -28,6 +30,28 @@ VERSION_MARKERS = (
     "bonus",
     "radio",
     "single",
+    "instrumental",
+    "inst",
+    "inst.",
+    "karaoke",
+    "ktv",
+    "ktv版",
+    "off vocal",
+    "backing track",
+    "acapella",
+    "a cappella",
+    "piano",
+    "cover",
+    "orchestral",
+    "伴奏",
+    "伴唱",
+    "纯音乐",
+    "钢琴",
+    "无人声",
+    "器乐",
+    "卡拉ok",
+    "翻唱",
+    "原唱",
     "現場",
     "现场",
     "演唱會",
@@ -47,6 +71,21 @@ VERSION_MARKERS = (
 # Trailing parenthetical subtitles, e.g. "人生马拉松 (渣打香港马拉松
 # 二十周年主题曲)" or "因为爱情 (电影《将爱情进行到底》主题曲)".
 _SUBTITLE_RE = re.compile(r"\s*[\(（][^\(\)（）]+[\)）]\s*$")
+# Trailing "Title - Artist"-style credit tails. Kept in search variants
+# (catalogs index them), trimmed from the comparison key used for matching.
+_TRAILING_DASH_RE = re.compile(r"\s*[-—–]\s+.*$")
+
+
+def _marker_in_body(body: str, marker: str) -> bool:
+    """Whether an annotation marker appears inside a bracketed clause.
+
+    ASCII markers match on word boundaries so "cover" does not fire inside
+    "Discover" and "inst" does not fire inside "Instructor"; CJK markers
+    match as plain substrings so "伴奏" still fires inside "伴奏版".
+    """
+    if marker.isascii() and marker[0].isalnum():
+        return re.search(rf"(?<!\w){re.escape(marker)}(?!\w)", body) is not None
+    return marker in body
 
 
 def strip_version_annotations(value: str) -> str:
@@ -54,14 +93,72 @@ def strip_version_annotations(value: str) -> str:
 
     def keep_or_remove(match: re.Match[str]) -> str:
         body = match.group(1).casefold()
-        return (
-            "" if any(marker in body for marker in VERSION_MARKERS) else match.group(0)
-        )
+        if any(_marker_in_body(body, marker) for marker in VERSION_MARKERS):
+            return ""
+        return match.group(0)
 
+    # Feat clauses run first and swallow their opening bracket -- without
+    # this, "Song (feat. X)" would lose only the tail and leave "Song (".
+    value = re.sub(
+        r"\s*\(?\s*\b(?:feat|featuring|ft)\.?\s+[^()]*\)?.*$",
+        "",
+        value,
+        flags=re.IGNORECASE,
+    )
     value = re.sub(r"\(([^)]*)\)", keep_or_remove, value)
     value = re.sub(r"\[([^]]*)\]", keep_or_remove, value)
-    value = re.sub(r"\b(?:feat|featuring|ft)\.?\s+.*$", "", value, flags=re.IGNORECASE)
+    value = re.sub(r"\s*[-—–]\s*([^()\[\]]*)$", keep_or_remove, value)
+    value = re.sub(r"\s*[-—–]\s*$", "", value)
     return " ".join(value.split())
+
+
+def comparison_key(value: str) -> str:
+    """The form two names must agree on to count as the same identity.
+
+    Everything whose job is describing the recording rather than naming it
+    goes: version and instrumental/karaoke annotations (parenthesised,
+    bracketed or dash-suffixed), trailing subtitles, feat clauses, and
+    "Title - Artist"-style credit tails.
+    """
+    value = strip_version_annotations(value)
+    value = _SUBTITLE_RE.sub("", value)
+    value = _TRAILING_DASH_RE.sub("", value)
+    return normalized(value)
+
+
+def strict_identity_match(
+    left: str, right: str, *, allow_containment: bool = False
+) -> bool:
+    """Whether two names are the same identity under strict matching.
+
+    Alias groups and converted scripts count as exact; otherwise the
+    annotation-trimmed comparison keys must be equal. With allow_containment
+    one key may also appear as a whole whitespace-delimited run inside the
+    other -- the "The Beatles" vs "Beatles" case. Containment is deliberately
+    not offered for titles: a track titled "Yellow" must never accept
+    "Yellow Submarine".
+    """
+    if not left.strip() or not right.strip():
+        return False
+    if aliases_equivalent(left, right):
+        return True
+    left_key = comparison_key(left)
+    right_key = comparison_key(right)
+    if not left_key or not right_key:
+        return False
+    if left_key == right_key:
+        return True
+    if not allow_containment:
+        return False
+    shorter, longer = (
+        (left_key, right_key)
+        if len(left_key) <= len(right_key)
+        else (right_key, left_key)
+    )
+    return (
+        len(shorter) >= 2
+        and re.search(rf"(?:^|\s){re.escape(shorter)}(?:\s|$)", longer) is not None
+    )
 
 
 def normalized(value: str) -> str:

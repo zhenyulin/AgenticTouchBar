@@ -342,9 +342,16 @@ For every provider candidate:
 
 1. Normalize title, artist, album, and relevant aliases.
 2. Require synchronized lyrics or an explicit instrumental result.
-3. Score title, artist, album, and duration similarity.
-4. Accept only a score of at least `0.60`.
-5. Continue to the next candidate/provider when the candidate is rejected.
+3. Require a strict identity match on the artist AND the title, with
+  annotations trimmed on both sides — editions, instrumental/karaoke
+  markers, feat clauses, subtitles, and "Title - Artist" credit tails all
+  go before comparing, and alias groups and converted scripts count as
+  exact. The artist may also match by containment ("The Beatles" vs
+  "Beatles"); the title may not ("Yellow" never accepts "Yellow
+  Submarine"). Neither field can vouch for the other anymore.
+4. Score title, artist, album, and duration similarity.
+5. Accept only a score of at least `0.60`.
+6. Continue to the next candidate/provider when the candidate is rejected.
 
 An accepted result is a track association, not merely valid LRC syntax. A
 provider response that parses but belongs to another recording must remain
@@ -486,7 +493,7 @@ are not, and remain observational.
 | Behaviour to verify | Focused evidence |
 | --- | --- |
 | Cache safety | [`tests/lyrics/test_cache.py`](../../tests/lyrics/test_cache.py) — valid, malformed, `not_found`, and `cache_error` records; atomic replacement, cleanup, retry deadlines. |
-| Matching | [`tests/lyrics/test_matching.py`](../../tests/lyrics/test_matching.py), [`tests/lyrics/test_metadata.py`](../../tests/lyrics/test_metadata.py) — aliases, CJK normalization, duration differences, instrumental candidates, the `0.60` threshold. |
+| Matching | [`tests/lyrics/test_matching.py`](../../tests/lyrics/test_matching.py), [`tests/lyrics/test_metadata.py`](../../tests/lyrics/test_metadata.py) — aliases, CJK normalization, annotation trimming on both sides, strict artist+title identity, duration differences, instrumental candidates, the `0.60` threshold. |
 | LRC timing | [`tests/lyrics/test_lrc.py`](../../tests/lyrics/test_lrc.py) — offsets, enhanced timestamps, duplicate timestamps, empty intervals. |
 | Layout | [`tests/lyrics/test_layout.py`](../../tests/lyrics/test_layout.py) — punctuation/space wrapping, two-row limits, continuation indentation, marquee delay and rate. |
 | Concurrency and locking | [`tests/lyrics/test_concurrency.py`](../../tests/lyrics/test_concurrency.py), [`tests/lyrics/test_locking.py`](../../tests/lyrics/test_locking.py) — bounded provider racing; held and stale locks. |

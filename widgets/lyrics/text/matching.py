@@ -4,7 +4,12 @@ from __future__ import annotations
 
 from typing import Any
 
-from .metadata import best_similarity, track_artist_variants, track_title_variants
+from .metadata import (
+    best_similarity,
+    strict_identity_match,
+    track_artist_variants,
+    track_title_variants,
+)
 
 
 def candidate_score(track: dict[str, Any], candidate: dict[str, Any]) -> float:
@@ -35,14 +40,24 @@ def candidate_score(track: dict[str, Any], candidate: dict[str, Any]) -> float:
         max(0.0, 1.0 - duration_error / 30.0) if duration_error is not None else 0.45
     )
 
-    if title_score < 0.45:
+    # Strict identity gate: the candidate must be the same song by the same
+    # act once annotations are trimmed on both sides. A strong title no
+    # longer vouches for a mismatched artist, and a strong artist no longer
+    # vouches for a mismatched title; alias groups and converted scripts
+    # still count as exact. The artist keeps containment ("The Beatles" vs
+    # "Beatles"), the title never does ("Yellow" must not accept "Yellow
+    # Submarine").
+    if not any(
+        strict_identity_match(variant, candidate.get("trackName", ""))
+        for variant in track_title_variants(track)
+    ):
         return -1.0
-    duration_close = duration_error is not None and duration_error <= 10.0
-    artist_alias_safe = artist_score >= 0.75 and duration_close
-    title_alias_safe = title_score >= 0.88 and duration_close
-    if title_score < 0.55 and not artist_alias_safe:
-        return -1.0
-    if artist_score < 0.18 and not title_alias_safe:
+    if not any(
+        strict_identity_match(
+            variant, candidate.get("artistName", ""), allow_containment=True
+        )
+        for variant in track_artist_variants(track)
+    ):
         return -1.0
 
     return (
