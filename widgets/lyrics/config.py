@@ -293,7 +293,14 @@ RETRY_NOT_FOUND_SECONDS = 6 * 60 * 60
 # with annotations trimmed on both sides (no more similarity floors that let
 # a strong title vouch for a mismatched artist) -- records fetched while a
 # lookalike song could be accepted are stale.
-CACHE_KEY_VERSION = 7
+# 8: the strict gate gained a Chinese-song exception (a close duration
+# vouches for an artist whose two spellings cannot be compared, e.g. Apple's
+# "Soundtoy" against the catalogues' 声音玩具) -- records cached while
+# romanised-artist Chinese tracks always came back not_found are stale.
+# 9: Chinese songs are back on the pre-tightening similarity floors (the
+# strict identity gate only guards non-Chinese tracks now) -- records cached
+# while same-titled Chinese candidates were rejected are stale.
+CACHE_KEY_VERSION = 9
 
 # Community/catalog aliases for artist and title metadata, as a JSON file of
 # alias groups shipped inside this package — there are no built-in groups, so

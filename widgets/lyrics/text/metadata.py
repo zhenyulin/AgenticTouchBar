@@ -167,6 +167,11 @@ def normalized(value: str) -> str:
     return " ".join(value.split())
 
 
+def contains_han(value: str) -> bool:
+    """Whether the string carries Han characters -- the Chinese-song signal."""
+    return any("\u3400" <= character <= "\u9fff" for character in value)
+
+
 @cache
 def opencc_converters() -> tuple[Any, ...]:
     try:

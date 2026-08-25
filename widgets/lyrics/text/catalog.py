@@ -76,7 +76,7 @@ def catalog_chinese_identity(track: dict[str, Any]) -> tuple[str, str] | None:
         return None
     if genre:
         folded = genre.casefold()
-        if "manda" not in folded and "canto" not in folded:
+        if not any(token in folded for token in ("manda", "mando", "mandar", "canto")):
             return None
     elif not ((needs_title and artist_han) or (needs_artist and title_han)):
         # Without a genre, a Han character in either field is the Chinese

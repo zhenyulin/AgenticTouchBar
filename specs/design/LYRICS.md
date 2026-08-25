@@ -342,13 +342,20 @@ For every provider candidate:
 
 1. Normalize title, artist, album, and relevant aliases.
 2. Require synchronized lyrics or an explicit instrumental result.
-3. Require a strict identity match on the artist AND the title, with
-  annotations trimmed on both sides — editions, instrumental/karaoke
-  markers, feat clauses, subtitles, and "Title - Artist" credit tails all
-  go before comparing, and alias groups and converted scripts count as
-  exact. The artist may also match by containment ("The Beatles" vs
-  "Beatles"); the title may not ("Yellow" never accepts "Yellow
-  Submarine"). Neither field can vouch for the other anymore.
+3. Match by one of two policies, chosen by whether the track is Chinese
+  (Han characters anywhere in the track metadata, or a Manda/Canto genre
+  with a Han-spelled candidate). Non-Chinese tracks require a strict
+  identity match on the artist AND the title, with annotations trimmed on
+  both sides — editions, instrumental/karaoke markers, feat clauses,
+  subtitles, and "Title - Artist" credit tails all go before comparing,
+  and alias groups and converted scripts count as exact. The artist may
+  also match by containment ("The Beatles" vs "Beatles"); the title may
+  not ("Yellow" never accepts "Yellow Submarine"). Neither field can vouch
+  for the other. Chinese songs go back to the pre-tightening similarity
+  floors — romanised artist strings are unreliable (Apple's "Soundtoy" is
+  the catalogues' 声音玩具), so an exact, close-duration title can vouch
+  for an unmatched artist, and a same-titled rendering (cover or
+  otherwise) scores like it did before the strict gate.
 4. Score title, artist, album, and duration similarity.
 5. Accept only a score of at least `0.60`.
 6. Continue to the next candidate/provider when the candidate is rejected.

@@ -91,6 +91,80 @@ class CandidateScore(unittest.TestCase):
         )
         self.assertGreater(scored, 0.6)
 
+    def test_a_chinese_song_matches_when_the_artist_cannot_be_compared(self):
+        # Apple Music reports a romanized artist ("Lin Hai") where the
+        # catalogues credit 林海: the two artist strings share nothing, so a
+        # close duration vouches for the act. The Han title alone marks the
+        # song as Chinese.
+        scored = candidate_score(
+            track(title="琵琶语", artist="Lin Hai", genre=""),
+            candidate(trackName="琵琶语", artistName="林海"),
+        )
+        self.assertGreater(scored, 0.6)
+
+    def test_a_romanized_chinese_title_is_flagged_by_genre(self):
+        # "1989" by "Lin Hai": no Han anywhere on the track, but the
+        # Mandopop genre and the candidate's Han spelling mark it Chinese.
+        scored = candidate_score(
+            track(title="1989", artist="Lin Hai", genre="Mandopop"),
+            candidate(trackName="1989", artistName="林海"),
+        )
+        self.assertGreater(scored, 0.6)
+
+    def test_the_reported_soundtoy_track_matches_its_han_spelling(self):
+        # The reported case: Apple Music reports "Soundtoy" where the
+        # catalogues credit 声音玩具. The alias group makes the pair exact,
+        # so no duration voucher is even needed.
+        scored = candidate_score(
+            track(title="爱是昂贵的", artist="Soundtoy"),
+            candidate(trackName="爱是昂贵的", artistName="声音玩具"),
+        )
+        self.assertAlmostEqual(scored, 1.0)
+
+    def test_an_english_track_is_not_loosened_by_a_han_candidate(self):
+        # "Yellow" by "Coldplay" stays strict even against a candidate whose
+        # artist is spelled in Han: no Chinese evidence on the track side.
+        self.assertEqual(
+            candidate_score(track(), candidate(artistName="声音玩具", duration=269.0)),
+            REJECTED,
+        )
+
+    def test_a_chinese_song_uses_the_scoring_floors_again(self):
+        # Deliberate looseness restored for Chinese songs: romanised artist
+        # strings are unreliable, so the same-titled Han cover below scores
+        # high (artist similarity 0.33 clears the 0.18 floor) instead of
+        # being rejected by the strict gate -- exactly the pre-tightening
+        # behavior the user wants back. Non-Chinese tracks stay strict.
+        scored = candidate_score(
+            track(title="光辉岁月", artist="黄家驹"),
+            candidate(trackName="光辉岁月", artistName="黄贯中"),
+        )
+        self.assertGreater(scored, 0.6)
+
+    def test_a_chinese_song_lets_the_title_vouch_for_the_artist(self):
+        # The old title-alias safety: an exact title with a close duration
+        # carries a zero-similarity artist string again.
+        scored = candidate_score(
+            track(title="琵琶语", artist="Lin Hai"),
+            candidate(trackName="琵琶语", artistName="Shadow Toys"),
+        )
+        self.assertGreater(scored, 0.6)
+
+    def test_a_chinese_song_with_distant_duration_needs_an_artist(self):
+        # The floors never dropped the duration discipline: a zero-similarity
+        # artist still needs the title to be exact AND close in length.
+        self.assertEqual(
+            candidate_score(
+                track(title="琵琶语", artist="Lin Hai", duration=269.0),
+                candidate(
+                    trackName="琵琶语",
+                    artistName="林海",
+                    duration=400.0,
+                ),
+            ),
+            REJECTED,
+        )
+
     def test_an_alias_artist_still_matches(self):
         # The alias file makes these the same act, so the candidate must not
         # be thrown out for using the other spelling.

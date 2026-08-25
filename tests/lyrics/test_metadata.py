@@ -167,6 +167,10 @@ class Aliases(unittest.TestCase):
         self.assertTrue(aliases_equivalent("張懸", "Deserts Chang"))
         self.assertTrue(aliases_equivalent("安溥", "张悬"))
 
+    def test_a_romanised_chinese_act_matches_its_han_spelling(self):
+        self.assertTrue(aliases_equivalent("Soundtoy", "声音玩具"))
+        self.assertTrue(aliases_equivalent("Sound Toys", "聲音玩具"))
+
     def test_members_of_different_groups_are_not(self):
         self.assertFalse(aliases_equivalent("張懸", "Galaxy Express"))
 
