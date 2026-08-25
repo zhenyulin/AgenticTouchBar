@@ -20,8 +20,8 @@ fields read below are an external boundary.
 | Entry point | Trigger | Contract |
 | --- | --- | --- |
 | `widgets/claude-quota.sh <uuid>` | BTT widget, 600 s interval | Two rows: Claude's 5-hour and 7-day windows. |
-| `widgets/codex-quota.sh <uuid>` | BTT widget, 300 s interval | Two rows: Codex's used percentage and time to reset. |
-| `widgets/opencode-quota.sh <uuid>` | BTT widget, 300 s interval | Two rows: OpenCode Go's weekly window. |
+| `widgets/codex-quota.sh <uuid>` | BTT widget, 300 s interval | Two rows: Codex's 5-hour and 7-day windows. |
+| `widgets/opencode-quota.sh <uuid>` | BTT widget, 300 s interval | Two rows: OpenCode Go's 5-hour and 7-day windows. |
 | `<widget>.sh --refresh <uuid>` | The detached refresh | Runs `codexbar`, stores the value and the reset epoch. Never invoked by BTT directly. |
 | Tap → `actions/tap-refresh.sh <own-uuid>` | User | Refreshes that widget alone. |
 | After Mac wakes from sleep | BTT trigger 606 | Refreshes all three quota widgets and the Clash latency widget in one AppleScript. |
@@ -49,7 +49,7 @@ Quota widgets
 │   └── Claude: lead with whichever window is exhausted
 ├── Persist the exact reset moment
 │   ├── <name>.quota-reset for the primary window
-│   └── <name>-secondary.quota-reset for Claude's weekly window
+│   └── <name>-secondary.quota-reset for the secondary window
 ├── Colour the label by how much is left
 │   ├── Below 100%: brighter the more quota remains
 │   └── At 100%: brighter the closer the reset is
@@ -64,21 +64,24 @@ Quota widgets
 
 | Widget | Windows read | Row 1 | Row 2 |
 | --- | --- | --- | --- |
-| Claude | `usage.primary` (5 h), `usage.secondary` (7 d) | The non-exhausted ordering is primary first | the other window |
+| Claude | `usage.primary` (5 h), `usage.secondary` (7 d) | primary (5 h) | secondary (7 d) |
 | Claude, `secondary.usedPercent >= 100` | same | secondary (7 d) | primary (5 h) |
-| Codex | first non-null of `usage.primary`, `usage.secondary`, `usage.tertiary` | `<used>%` | `<time to reset>` |
-| OpenCode | `usage.secondary` (7 d) only | `<used>%` | `<time to reset>` |
+| Codex | first non-null of `usage.primary`, `usage.secondary`, `usage.tertiary`, then `usage.secondary` (7 d) | primary window | secondary (7 d) |
+| OpenCode | `usage.primary` (5 h), `usage.secondary` (7 d); primary falls back to secondary | primary (5 h) | secondary (7 d) |
 
-Claude packs both figure and time into each row; Codex and OpenCode split
-them across the two rows. Real cached values:
+Every row packs the used percentage and the time to reset. Real cached
+values:
 
 ```console
 $ cat cache/claude-quota.value
 15% 3h
 27% 4d
+$ cat cache/codex-quota.value
+0% 4h
+0% 6d
 $ cat cache/opencode-quota.value
-0%
-6d
+3% 4h
+10% 5d
 ```
 
 `usedPercent` is rounded to a whole number, or rendered `—` when the field is
@@ -122,13 +125,12 @@ approaches.
 | Widget | `BTT_WIDGET_QUOTA_RESET_CYCLE_MINUTES` | Secondary cycle |
 | --- | --- | --- |
 | Claude | `300` (5 h) | `10080` (7 d) |
-| Codex | `10080` | — |
-| OpenCode | `10080` | — |
+| Codex | `300` (5 h) | `10080` (7 d) |
+| OpenCode | `300` (5 h) | `10080` (7 d) |
 
-Claude's second window takes over the colour when it is the exhausted one:
-with a secondary cycle configured and a second row reading `>= 100%`, the
-colour is computed from that row, that cycle, and the
-`claude-quota-secondary.quota-reset` file.
+Any exhausted secondary window takes over the colour: with a secondary
+cycle configured and a second row reading `>= 100%`, the colour is computed
+from that row, that cycle, and the `<name>-secondary.quota-reset` file.
 
 Minutes to reset come from the stored epoch when
 `cache/<name>.quota-reset` holds an integer; otherwise they are parsed back
@@ -165,9 +167,9 @@ does not leave a stale deadline behind.
 
 | Contract | Stable owner |
 | --- | --- |
-| Claude rows, both windows, both reset files | [`widgets/claude-quota.sh`](../../widgets/claude-quota.sh) |
-| Codex rows | [`widgets/codex-quota.sh`](../../widgets/codex-quota.sh) |
-| OpenCode weekly rows | [`widgets/opencode-quota.sh`](../../widgets/opencode-quota.sh) |
+| Claude rows, both windows, exhausted-window ordering | [`widgets/claude-quota.sh`](../../widgets/claude-quota.sh) |
+| Codex rows, both windows, primary-window fallback chain | [`widgets/codex-quota.sh`](../../widgets/codex-quota.sh) |
+| OpenCode rows, both windows, weekly repeat when the primary is absent | [`widgets/opencode-quota.sh`](../../widgets/opencode-quota.sh) |
 | Cache, lock, trace, publish, quota colour | [`widgets/lib/btt-widget.sh`](../../widgets/lib/btt-widget.sh) |
 | Intervals, tap actions, wake trigger | [`bttpreset/Default.bttpreset`](../../bttpreset/Default.bttpreset) |
 
@@ -177,7 +179,7 @@ No automated tests; `codexbar` is the only source of truth for the JSON shape.
 
 | Behaviour to verify | Focused evidence |
 | --- | --- |
-| Row shape | Run `widgets/codex-quota.sh --refresh` and confirm `cache/codex-quota.value` is two rows, percentage then duration. |
+| Row shape | Run `widgets/codex-quota.sh --refresh` and confirm `cache/codex-quota.value` holds two rows, the 5-hour window over the 7-day one. |
 | Claude ordering | Feed `jq` a record with `secondary.usedPercent = 100` and confirm the weekly row leads. |
 | Missing figures | Feed `usedPercent: null` and confirm the row reads `—`. |
 | Duration bands | Feed `resetsAt` at +90000 s, +5000 s, +100 s, +10 s and confirm `1d`, `1h`, `1m`, `<1m`. |
@@ -195,7 +197,8 @@ No automated tests; `codexbar` is the only source of truth for the JSON shape.
   --provider …`. Whether the bare form is an alias or a different code path in
   `codexbar` is unverified.
 - Codex falls back through primary, secondary, and tertiary without saying
-  which window it ended up showing, so a record missing its primary window
-  draws a different quota under the same label.
+  which window it ended up showing, and OpenCode repeats the weekly window
+  in the first row when its five-hour one is absent: both draw a different
+  quota under the same label without saying which.
 - The colour interpolation is linear in remaining time, which reads as
   "nearly reset" long before it is; no measurement backs the choice of curve.
