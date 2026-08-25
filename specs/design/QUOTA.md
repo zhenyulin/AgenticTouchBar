@@ -46,7 +46,7 @@ Quota widgets
 ├── Reduce one usage record to two rows
 │   ├── Round usedPercent, or "—" when absent
 │   ├── Express time to reset as d / h / m / <1m
-│   └── Claude: lead with whichever window is exhausted
+│   └── The 5-hour window first, the 7-day window second, in every widget
 ├── Persist the exact reset moment
 │   ├── <name>.quota-reset for the primary window
 │   └── <name>-secondary.quota-reset for the secondary window
@@ -65,7 +65,6 @@ Quota widgets
 | Widget | Windows read | Row 1 | Row 2 |
 | --- | --- | --- | --- |
 | Claude | `usage.primary` (5 h), `usage.secondary` (7 d) | primary (5 h) | secondary (7 d) |
-| Claude, `secondary.usedPercent >= 100` | same | secondary (7 d) | primary (5 h) |
 | Codex | first non-null of `usage.primary`, `usage.secondary`, `usage.tertiary`, then `usage.secondary` (7 d) | primary window | secondary (7 d) |
 | OpenCode | `usage.primary` (5 h), `usage.secondary` (7 d); primary falls back to secondary | primary (5 h) | secondary (7 d) |
 
@@ -167,7 +166,7 @@ does not leave a stale deadline behind.
 
 | Contract | Stable owner |
 | --- | --- |
-| Claude rows, both windows, exhausted-window ordering | [`widgets/claude-quota.sh`](../../widgets/claude-quota.sh) |
+| Claude rows, both windows | [`widgets/claude-quota.sh`](../../widgets/claude-quota.sh) |
 | Codex rows, both windows, primary-window fallback chain | [`widgets/codex-quota.sh`](../../widgets/codex-quota.sh) |
 | OpenCode rows, both windows, weekly repeat when the primary is absent | [`widgets/opencode-quota.sh`](../../widgets/opencode-quota.sh) |
 | Cache, lock, trace, publish, quota colour | [`widgets/lib/btt-widget.sh`](../../widgets/lib/btt-widget.sh) |
@@ -180,7 +179,7 @@ No automated tests; `codexbar` is the only source of truth for the JSON shape.
 | Behaviour to verify | Focused evidence |
 | --- | --- |
 | Row shape | Run `widgets/codex-quota.sh --refresh` and confirm `cache/codex-quota.value` holds two rows, the 5-hour window over the 7-day one. |
-| Claude ordering | Feed `jq` a record with `secondary.usedPercent = 100` and confirm the weekly row leads. |
+| Colour at a full secondary | Feed `jq` a record with `secondary.usedPercent = 100` and confirm the colour is computed from the secondary reset and the 10080-minute cycle. |
 | Missing figures | Feed `usedPercent: null` and confirm the row reads `—`. |
 | Duration bands | Feed `resetsAt` at +90000 s, +5000 s, +100 s, +10 s and confirm `1d`, `1h`, `1m`, `<1m`. |
 | Dependency failures | Run with `PATH` stripped of `codexbar` and of `jq`; confirm `NO CODEXBAR` and `NO JQ` reach the row. |

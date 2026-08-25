@@ -21,16 +21,11 @@ VALUE_MAX_AGE="${CLAUDE_QUOTA_MAX_AGE:-300}"
 QUOTA_PROVIDER="claude"
 QUOTA_WINDOW='.usage.primary'
 QUOTA_SECONDARY_WINDOW='.usage.secondary'
-# Both windows, one per row. An exhausted weekly quota is the one that decides
-# when work can resume, so it takes the first row when it hits 100%.
+# Five-hour quota on the first row, weekly on the second. The colour at an
+# exhausted weekly quota is computed from the 7-day reset, not the 5-hour one.
 QUOTA_ROWS='
-    if ($secondary.usedPercent // 0) >= 100 then
-        used($secondary.usedPercent) + " " + until_reset($secondary.resetsAt)
-        + "\n" + used($window.usedPercent) + " " + until_reset($window.resetsAt)
-    else
-        used($window.usedPercent) + " " + until_reset($window.resetsAt)
-        + "\n" + used($secondary.usedPercent) + " " + until_reset($secondary.resetsAt)
-    end
+    used($window.usedPercent) + " " + until_reset($window.resetsAt)
+    + "\n" + used($secondary.usedPercent) + " " + until_reset($secondary.resetsAt)
 '
 
 source "${SELF:h}/lib/quota-widget.sh"
