@@ -69,7 +69,8 @@ Now Playing widget
 │   ├── Require the helper to describe the same title as the row
 │   └── Fall back to the published playback rate
 ├── Draw the row
-│   ├── Strip parenthetical suffixes from the title
+│   ├── Drop a `(feat. ...)` / `[feat. ...]` credit from the title,
+│   │   artist or album once its content exceeds 20 characters
 │   ├── Keep only the first work of a multi-work album
 │   ├── Keep the album on the second row while it fits there
 │   ├── Otherwise place it by the minimax rule (narrower widest row wins)
@@ -192,9 +193,14 @@ sampler, which is why the helper exists at all.
 
 ### Row Layout
 
-1. `title` — parenthetical groups removed, whitespace collapsed:
-  `Song (feat. X)` → `Song`.
-2. `album` — `strip_parens`, then only the text before the first `;`.
+1. `title`, `artist`, `album` — a `(feat. ...)` or `[feat. ...]` credit is
+  dropped only while its content (the `feat.` prefix included) is longer
+  than `FEAT_MAX_CHARS` (20): a short credit (`Song (feat. Jay-Z)`) names
+  who is on the track and stays, a long one is mostly names a 22 px row
+  cannot render anyway. All other parentheticals are left alone, and
+  whitespace collapses.
+2. `album` — the feat treatment above, then only the text before the first
+  `;`.
    Multi-work albums (`Mozart: Piano Concerto No. 23 K. 488; Piano Sonata
    K. 333`) do not fit the Touch Bar, so only the first work is shown.
 3. The two stock rows draw one of two layouts: `{title}` over

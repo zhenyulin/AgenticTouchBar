@@ -168,16 +168,40 @@ def write_play_icon(path):
     path.write_bytes(png)
 
 
-def strip_parens(text):
-    # "Song (feat. X)" -> "Song"; leftover double spaces collapse.
-    return re.sub(r"\s+", " ", re.sub(r"\([^)]*\)", "", text)).strip()
+# The longest a feat credit may be -- the content between its parentheses or
+# brackets, the "feat." prefix included -- before the row drops it. A short
+# credit ("(feat. Jay-Z)") names who is on the track and fits the row, so it
+# stays; a long one is mostly a list of names a 22 px row cannot render
+# anyway, and at that length it is the credit that blows the row out.
+FEAT_MAX_CHARS = 20
+# A "(feat. ...)" or "[feat. ...]" credit, both as streamed metadata spells
+# it. Only the feat-style opener is matched, so an unrelated parenthetical
+# is left alone. Group 1 is the credit's content, which is what the cap
+# above measures. The closing parenthesis or bracket may be missing: the
+# publisher truncates long fields at ~250 characters, so a long credit
+# (and only a long one, in practice) can arrive cut off mid-name, and it
+# is still the same credit the row is trying to fit.
+FEAT_GROUP = re.compile(r"[(\[](\s*feat[.\s][^)\]]*)(?:[)\]]|$)", re.IGNORECASE)
+
+
+def strip_long_feat(text):
+    # "(feat. Jay-Z)" stays, "(feat. John Legend, Alicia Keys & Jeff
+    # Bhasker)" is dropped -- the cap above decides. Leftover double
+    # spaces collapse.
+    return re.sub(
+        r"\s+", " ",
+        FEAT_GROUP.sub(
+            lambda m: "" if len(m.group(1)) > FEAT_MAX_CHARS else m.group(0),
+            text,
+        ),
+    ).strip()
 
 
 def display_album(text):
     # Multi-work albums carry the second work after a semicolon, e.g.
     # "Mozart: Piano Concerto No. 23 K. 488; Piano Sonata K. 333" -- the
     # Touch Bar is too short for both, so only the first work is shown.
-    return strip_parens(text).split(";")[0].strip()
+    return strip_long_feat(text).split(";")[0].strip()
 
 
 def display_width(text):
@@ -738,8 +762,8 @@ else:
     # the holder it came from.
     player = str(track.get("bundle_id") or "com.apple.Music")
 
-title = strip_parens(identity["title"])
-artist = identity["artist"]
+title = strip_long_feat(identity["title"])
+artist = strip_long_feat(identity["artist"])
 album = display_album(identity["album"])
 if not title:
     leave_row(cache_dir, widget_uuid, lyrics_uuid, star_uuid)
