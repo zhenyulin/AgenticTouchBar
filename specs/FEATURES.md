@@ -114,7 +114,7 @@ These hold for every widget and are not repeated in the designs.
 | [`design/WIDGET-RUNTIME.md`](design/WIDGET-RUNTIME.md) | Cache, refresh lock, force flag, colour, publish, and the shared trace. |
 | [`design/QUOTA.md`](design/QUOTA.md) | The three `codexbar` widgets and the reset-progress colouring. |
 | [`design/CLASH.md`](design/CLASH.md) | Node resolution, region glyphs, latency measurement and history. |
-| [`design/WEATHER.md`](design/WEATHER.md) | Two widgets over one observation, Open-Meteo first, and the disabled hide-while-playing rule. |
+| [`design/WEATHER.md`](design/WEATHER.md) | Two widgets over one observation, Apple Weather Shortcut first, and the disabled hide-while-playing rule. |
 | [`design/BTT-CONTROL.md`](design/BTT-CONTROL.md) | Widget variables, the recorded restart, and the quit that sticks. |
 
 ## State Index

@@ -57,12 +57,14 @@ configured natively in BTT.
 | Weather | Temperature/humidity | `widgets/weather.sh --text` | 600 s | `actions/tap-refresh.sh` (text + icon) |
 | Weath Icon | Conditions icon | `widgets/weather.sh --icon` | 600 s | `actions/tap-refresh.sh` (text + icon) |
 
-Their refresh asks QWeather (和风天气) first: a domestic API that Clash
-routes DIRECT, so it keeps answering when the VPN node has timed out —
-Open-Meteo (no key) and BTT's `get_weather` (Apple WeatherKit), which die
-with the node, are fallbacks in that order. QWeather needs a free API key
-and API host from console.qweather.com (50k requests/month free; see
-Configuration; provider facts in
+Their refresh asks Apple Weather through the no-prompt `BTT Weather` Shortcut
+first, then QWeather (和风天气), a domestic API that Clash routes DIRECT, so it
+keeps answering when the VPN node has timed out. Open-Meteo (no key) and BTT's
+`get_weather` (Apple WeatherKit) remain later fallbacks. The Shortcut must end
+with `{"temperature":19.9,"humidity":54,"icon":"clear-day"}` or an Apple
+condition label such as `Mostly Sunny`; the widget normalises the icon. QWeather
+needs a free API key and API host from console.qweather.com (50k requests/month
+free; see Configuration; provider facts in
 [specs/reference/PROVIDERS.md](specs/reference/PROVIDERS.md)). Tapping either
 one forces a shared detached refresh (they cache one `weather.data` value):
 the tapped widget greys out while the refresh runs and the redraw that ends
@@ -157,6 +159,7 @@ BTT's shell actions can see them (BTT environment variables, `~/.zshenv`, or
 | `BTT_NOW_PLAYING_STATE_BIN`, `BTT_NOW_PLAYING_CLI` | the compiled helper in BTT's support directory, `nowplaying-cli` on `PATH` | The two MediaRemote sources (`widgets/lib/media-remote.sh`); overriding either is how a fixture drives these scripts, since they set their own `PATH` |
 | `BTT_NOW_PLAYING_RAW_PATH`, `BTT_NOW_PLAYING_RAW_MAX_AGE` | `$BTT_REPO_DIR/cache/now-playing.raw.json`, `5` | The raw Now Playing dictionary the Now Playing widget writes each tick, and how old the Lyrics sampler and the Star widget's gate may find it before asking for their own |
 | `BTT_WEATHER_QW_HOST`, `BTT_WEATHER_QW_KEY` | — | Weather widgets: QWeather API host and key (console.qweather.com); unset either to skip QWeather and use the foreign sources only |
+| `BTT_WEATHER_SHORTCUT` | `BTT Weather` | Weather widgets: no-prompt Apple Weather Shortcut name; its final output must be the documented JSON object |
 | `BTT_WEATHER_UNIT`, `BTT_WEATHER_TTL` | `celsius`, `300` | Weather widgets: unit (celsius/fahrenheit) and weather cache TTL (seconds) |
 
 ## The Lyrics feature

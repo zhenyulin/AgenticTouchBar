@@ -2,12 +2,10 @@
 #
 # BetterTouchTool weather widgets.
 #
-# The BTT-native weather widgets fetch from a provider this network cannot
-# reach (Clash drops it), so these widgets fetch conditions themselves. The
-# refresh asks QWeather (和风天气) first: its API host is domestic, so
-# Clash's DIRECT rule carries it even when the VPN node has timed out.
-# Open-Meteo and BTT's own get_weather AppleScript command (Apple
-# WeatherKit) both die with the node, so they are fallbacks only.
+# The refresh asks a no-prompt Shortcut backed by Apple Weather first. QWeather
+# (和风天气) is the reliable domestic fallback when Clash's VPN node has timed
+# out. Open-Meteo and BTT's own get_weather AppleScript command (Apple
+# WeatherKit) remain later fallbacks.
 #
 # Two instances, chosen by the mode flag:
 #   --text   "77°F" over "41%"      (the Weather widget)
@@ -72,12 +70,14 @@ BTT_WIDGET_REFRESH_DETAIL=describe_conditions
 
 # How long a fetched result is reused before the sources are asked again.
 WEATHER_TTL="${BTT_WEATHER_TTL:-300}"
-# Both sources return Celsius, so the render converts when needed.
+# All sources return Celsius, so the render converts when needed.
 UNIT="${BTT_WEATHER_UNIT:-celsius}"
 # Where to ask for conditions; the coordinates BTT's get_weather payload
 # carries (cache/weather.data.value .currently.metadata).
 WEATHER_LAT="${BTT_WEATHER_LAT:-38.5}"
 WEATHER_LON="${BTT_WEATHER_LON:-106.31}"
+# Shortcut name used for the Apple Weather bridge.
+WEATHER_SHORTCUT="${BTT_WEATHER_SHORTCUT:-BTT Weather}"
 # QWeather: domestic endpoints survive a timed-out VPN node. Both the key
 # and the project's API host come from console.qweather.com (50k req/month
 # free); unset either to skip QWeather and fall back to the foreign sources.
@@ -125,6 +125,71 @@ qweather_icon() {
         901)             printf 'snow' ;;
         *)               printf 'cloudy' ;;
     esac
+}
+
+shortcut_icon() {
+    local condition="${1:l}"
+    case "$condition" in
+        clear-day|clear-night|partly-cloudy-day|partly-cloudy-night|cloudy|fog|rain|sleet|snow|wind|thunderstorm|hail)
+            printf '%s' "$condition"
+            ;;
+        *mostly*sun*|*partly*cloud*) printf 'partly-cloudy-day' ;;
+        *sunny*|*clear*) printf 'clear-day' ;;
+        *thunder*|*storm*) printf 'thunderstorm' ;;
+        *hail*) printf 'hail' ;;
+        *freezing*rain*|*freezing*drizzle*|*sleet*) printf 'sleet' ;;
+        *snow*|*flurr*) printf 'snow' ;;
+        *rain*|*shower*|*drizzle*) printf 'rain' ;;
+        *fog*|*mist*|*haze*) printf 'fog' ;;
+        *wind*) printf 'wind' ;;
+        *cloud*|*overcast*) printf 'cloudy' ;;
+        *) printf 'cloudy' ;;
+    esac
+}
+
+# Apple Weather via a no-prompt Shortcut that outputs the documented JSON
+# contract. A Shortcut can wait for user input, so keep it off the widget path
+# and bound the detached provider call like the BTT AppleScript call.
+fetch_shortcut_weather() {
+    local tmp pid i
+    tmp="$(mktemp)" || return 1
+    (
+        /usr/bin/shortcuts run "$WEATHER_SHORTCUT" --output-type public.json >"$tmp" 2>/dev/null &
+        pid=$!
+        for i in {1..24}; do
+            kill -0 "$pid" 2>/dev/null || break
+            /bin/sleep 0.5
+        done
+        kill "$pid" 2>/dev/null
+        wait "$pid" 2>/dev/null
+    )
+    local raw_icon normalized_icon
+    raw_icon="$(jq -e -r '
+        select((.icon | type) == "string" and (.icon | length) > 0) | .icon
+    ' <"$tmp" 2>/dev/null)" || {
+        rm -f "$tmp"
+        return 1
+    }
+    normalized_icon="$(shortcut_icon "$raw_icon")"
+
+    jq -c --arg icon "$normalized_icon" '
+        select(
+            (.temperature | type) == "number"
+            and (.humidity | type) == "number"
+            and (.humidity >= 0 and .humidity <= 100)
+        )
+        | {
+            currently: {
+                temperature: .temperature,
+                humidity: (.humidity / 100),
+                icon: $icon
+            },
+            source: "shortcuts"
+        }
+    ' <"$tmp" 2>/dev/null
+    local result=$?
+    rm -f "$tmp"
+    return "$result"
 }
 
 # Open-Meteo current conditions. Returns the same {"currently":
@@ -210,9 +275,10 @@ fetch_btt_weather() {
 
 compute_value() {
     local json
-    # Domestic first: QWeather rides Clash's DIRECT rule, so it survives a
-    # timed-out VPN node; the foreign sources below both die with it.
-    json="$(fetch_qweather)"
+    # Apple Weather first: the Shortcut is the supported bridge. The domestic
+    # QWeather source below remains the reliable network fallback.
+    json="$(fetch_shortcut_weather)"
+    [[ -n "$json" ]] || json="$(fetch_qweather)"
     [[ -n "$json" ]] || json="$(fetch_open_meteo)"
     [[ -n "$json" ]] || json="$(fetch_btt_weather)"
     # Only a payload the render path can read is worth caching; anything else

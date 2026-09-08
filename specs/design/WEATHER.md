@@ -10,8 +10,8 @@ This document preserves what the two weather widgets show: one script in two
 modes over one shared cached observation, which provider is asked first and
 why, and how conditions become an emoji.
 
-Open-Meteo's and Apple WeatherKit's response schemas beyond the fields read
-below are external boundaries.
+The Shortcut, QWeather, Open-Meteo, and Apple WeatherKit response schemas
+beyond the fields read below are external boundaries.
 
 ## Entry Points
 
@@ -19,7 +19,7 @@ below are external boundaries.
 | --- | --- | --- |
 | `widgets/weather.sh <uuid> --text` | BTT widget "Weather", 600 s interval | Two rows: temperature over relative humidity. |
 | `widgets/weather.sh <uuid> --icon` | BTT widget "Weath Icon", 600 s interval | One emoji for the current conditions. |
-| `widgets/weather.sh <uuid> --refresh` | The detached refresh | Fetches conditions and stores one JSON observation. Exits 1 when both sources fail. |
+| `widgets/weather.sh <uuid> --refresh` | The detached refresh | Fetches conditions and stores one JSON observation. Exits 1 when all sources fail. |
 | Tap on either → `actions/tap-refresh.sh <weather-uuid> <icon-uuid>` | User | Both refresh together; they share one cached observation. |
 
 Flags may appear in any order, and the widget UUID is an ordinary positional
@@ -27,8 +27,9 @@ argument. An unrecognised `--flag` exits 2.
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
-| `BTT_WEATHER_UNIT` | `celsius` | `fahrenheit` converts on render; both sources report Celsius. |
+| `BTT_WEATHER_UNIT` | `celsius` | `fahrenheit` converts on render; all sources report Celsius. |
 | `BTT_WEATHER_TTL` | `300` | How old the stored observation may be before a refresh starts. |
+| `BTT_WEATHER_SHORTCUT` | `BTT Weather` | No-prompt Shortcut that returns the Apple Weather JSON contract below. |
 | `BTT_WEATHER_LAT`, `BTT_WEATHER_LON` | `38.5`, `106.31` | Open-Meteo query point; taken from the coordinates BTT's own payload carried. |
 
 ## Feature Tree
@@ -40,10 +41,11 @@ Weather widgets
 │   ├── Render text or icon from the same JSON
 │   └── Refresh both from either tap
 ├── Fetch, off the widget path
-│   ├── Ask Open-Meteo first — no key, ~1 s, reachable here
-│   ├── Fall back to BTT's get_weather (Apple WeatherKit)
-│   ├── Normalise both into one shape
-│   └── Never block the widget on the network or AppleScript
+│   ├── Ask the no-prompt Shortcut first — Apple Weather
+│   ├── Fall back to QWeather — domestic/direct route
+│   ├── Fall back to Open-Meteo, then BTT's get_weather
+│   ├── Normalise every source into one shape
+│   └── Never block the widget on a provider call
 ├── Render
 │   ├── Temperature rounded, unit applied
 │   ├── Humidity as a whole percentage
@@ -57,23 +59,37 @@ Weather widgets
 
 | Condition | Path | Trace |
 | --- | --- | --- |
-| Open-Meteo answers with a numeric temperature, humidity, and weather code | Use it | `refresh ok source=open-meteo t=… h=…` |
-| Open-Meteo fails, times out, or returns a field that fails validation | BTT `get_weather` | `refresh ok source=btt t=… h=…` |
-| Both fail, or the result is not valid JSON | Nothing stored | `refresh error bad-json`, exit 1 |
+| Shortcut returns valid Apple Weather JSON | Use it | `refresh ok source=shortcuts t=… h=…` |
+| Shortcut is absent, times out, or returns invalid JSON | QWeather | `refresh ok source=qweather t=… h=…` |
+| QWeather fails or is not configured | Open-Meteo | `refresh ok source=open-meteo t=… h=…` |
+| Open-Meteo fails or returns invalid fields | BTT `get_weather` | `refresh ok source=btt t=… h=…` |
+| All providers fail, or the result is not valid JSON | Nothing stored | `refresh error bad-json`, exit 1 |
 
-The BTT-native weather widget fetches from a provider this network cannot
-reach — Clash drops it — which is why these widgets fetch for themselves.
-`get_weather` remains as the fallback because it reaches Apple WeatherKit
-through BTT itself.
+The Shortcut is a supported bridge to Apple Weather rather than a read of the
+Weather widget's private storage. It must not show alerts or request input,
+because it runs from a detached shell refresh.
 
-Both fetches are bounded: Open-Meteo at `--connect-timeout 2 --max-time 5`,
-`get_weather` at 24 × 0.5 s, and the AppleScript is skipped entirely unless
-`pgrep -x BetterTouchTool` succeeds — `osascript` would otherwise auto-launch
-a BTT the user had just quit.
+The Shortcut and `get_weather` calls are bounded at 24 × 0.5 s. Open-Meteo and
+QWeather use `--connect-timeout 2 --max-time 5`, and the AppleScript is skipped
+unless `pgrep -x BetterTouchTool` succeeds — `osascript` would otherwise
+auto-launch a BTT the user had just quit.
+
+### Shortcut Contract
+
+The named Shortcut must end with a JSON dictionary in this shape:
+
+```json
+{"temperature":19.9,"humidity":54,"icon":"clear-day"}
+```
+
+`temperature` is Celsius, `humidity` is relative humidity as a percentage, and
+`icon` is a canonical icon name or an Apple condition label such as `Mostly
+Sunny`; the refresh normalises labels before caching. A missing, empty, or
+malformed Shortcut result is a provider failure and never reaches the cache.
 
 ### Stored Shape
 
-Both providers are normalised into the shape BTT's own payload had, so the
+All providers are normalised into the shape BTT's own payload had, so the
 render path never learns which one answered:
 
 ```json
@@ -146,7 +162,7 @@ $ widgets/weather.sh --text
 
 | Contract | Stable owner |
 | --- | --- |
-| Both widgets, both modes, both providers | [`widgets/weather.sh`](../../widgets/weather.sh) |
+| Both widgets, both modes, all providers | [`widgets/weather.sh`](../../widgets/weather.sh) |
 | Cache, force flag, trace, publish | [`widgets/lib/btt-widget.sh`](../../widgets/lib/btt-widget.sh) |
 | Intervals, shared tap action, the Now Playing tap script | [`bttpreset/Default.bttpreset`](../../bttpreset/Default.bttpreset) |
 
@@ -157,9 +173,9 @@ No automated tests.
 | Behaviour to verify | Focused evidence |
 | --- | --- |
 | Shared cache | Refresh from the text widget and confirm the icon widget redraws from the same `weather.data.value` without fetching. |
-| Provider order | Block `api.open-meteo.com` and confirm the trace records `source=btt`. |
-| Both down | Block both and confirm `refresh error bad-json`, exit 1, and that the previous value keeps printing. |
-| Validation | Feed Open-Meteo JSON with a null temperature and confirm the fallback runs rather than a `null` reaching the row. |
+| Provider order | Run a valid `BTT Weather` Shortcut and confirm the trace records `source=shortcuts`; remove it and confirm QWeather answers. |
+| Both down | Make the Shortcut invalid and block the network providers; confirm `refresh error bad-json`, exit 1, and that the previous value keeps printing. |
+| Validation | Make the Shortcut return a null temperature and confirm QWeather answers rather than a `null` reaching the row. |
 | Unit conversion | Set `BTT_WEATHER_UNIT=fahrenheit` and confirm the row switches to `°F` with the converted number. |
 | Empty cache | Remove `cache/weather.data.value`; the text widget must print `--` and the icon widget nothing at all. |
 | Icon mapping | Feed each WMO band and confirm the emoji, including the day/night split for codes 0–2. |
