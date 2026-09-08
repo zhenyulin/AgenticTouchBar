@@ -21,7 +21,6 @@ config: ~/Desktop/code/aurora/pymap
 
 copy:
   - .coveragerc
-  - .gitattributes
   - .python-version
   - pyrightconfig.json
   - pytest.ini
