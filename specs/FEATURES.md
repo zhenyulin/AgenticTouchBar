@@ -44,7 +44,7 @@ by another script, and exits.
 | 🌐 | Selected Clash node's flag | `widgets/clash-region.sh` | 300 s | Refresh region and latency | — |
 | VPN | Selected Clash node's latency and label | `widgets/clash-latency.sh` | 300 s | Refresh region and latency | — |
 | Weather | Temperature over humidity | `widgets/weather.sh --text` | 600 s | Refresh both weather widgets | — |
-| Weath Icon | Conditions emoji | `widgets/weather.sh --icon` | 600 s | Refresh both weather widgets | — |
+| Weather Icon | Conditions emoji | `widgets/weather.sh --icon` | 600 s | Refresh both weather widgets | — |
 | Date / Time | The clock (BTT-native) | — | — | `actions/tap-restart.sh` + BTT restart | Quit BTT for real |
 
 Intervals are as exported in
@@ -96,7 +96,7 @@ These hold for every widget and are not repeated in the designs.
 | Contract | Consequence |
 | --- | --- |
 | **One script runner.** BTT runs every shell widget through a single `BetterTouchToolShellScriptRunner` XPC service. | A widget that blocks for *n* seconds stops every other widget for *n* seconds. Nothing slow may run on a widget's own path. |
-| **Empty text hides.** BTT removes a script widget whose output is empty. | Hiding is not a mode; it is what printing nothing means. Now Playing, Lyrics, Star, Weath Icon, and OpenCode all use it. |
+| **Empty text hides.** BTT removes a script widget whose output is empty. | Hiding is not a mode; it is what printing nothing means. Now Playing, Lyrics, Star, Weather Icon, and OpenCode all use it. |
 | **Detach into a session.** Background work uses `btt_spawn_detached`, never a bare `nohup … &`. | A stuck child cannot wedge future runs of its own widget. |
 | **Atomic writes.** Every file another process reads is written aside and renamed. | No reader ever sees a half-written value, marker, or state file. |
 | **Failures are values.** A missing dependency prints a short label (`NO CODEXBAR`, `No curl`, `Controller`, `--`, `🌐`). | The bar always shows something, and the trace records the outcome. |

@@ -1,1 +1,117 @@
-../../Desktop/code/aurora/pymap/cspell.config.yaml
+version: "0.2"
+language: en-GB, en-US
+# A lowercase entry still covers Backtest and BACKTEST; a capitalised entry does
+# not cover the lowercase form. Prefer lowercase entries unless the casing is
+# itself the thing being asserted (tickers, MICs, env-var names).
+caseSensitive: true
+# Enabled for every file type, not only *.py: these terms appear in prose and
+# notebooks too, and a filetype-triggered dictionary would not cover *.md.
+dictionaries:
+  - python
+files:
+  - "**/*.py"
+  - "**/*.md"
+  - "**/*.ipynb"
+  - "**/*.jsonc"
+ignorePaths:
+  - specs/graph/svg/**
+# ANSI color escapes appear in test assertions as `\x1b[37mword`; without this,
+# cspell merges the trailing `m` with the following word into a bogus token.
+ignoreRegExpList:
+  - '\\x1b\[[0-9;]*m'
+words:
+  - acapella
+  - adam
+  - albumname
+  - anpu
+  - asian
+  - aykroyd
+  - belafonte
+  - bhasker
+  - bttpreset
+  - btttb
+  - cantopop
+  - casefolds
+  - celsius
+  - cfurl
+  - checkpointed
+  - chinese
+  - cityinfo
+  - claude
+  - codepoint
+  - codepoints
+  - codexbar
+  - coldplay
+  - creat
+  - devapi
+  - eason
+  - epochrealtime
+  - fahrenheit
+  - fcgi
+  - favorited
+  - fghijklmno
+  - geldof
+  - getpid
+  - inspectable
+  - itimer
+  - itunes
+  - jarreau
+  - lrcapi
+  - lrclib
+  - lsappinfo
+  - manda
+  - mandar
+  - mando
+  - mandopop
+  - mdfind
+  - meteo
+  - mihomo
+  - midler
+  - millis
+  - netease
+  - nobase
+  - nohup
+  - nokey
+  - noproxy
+  - nowplaying
+  - nsurl
+  - opencc
+  - opencode
+  - opencodego
+  - osascript
+  - parentheticals
+  - pgrep
+  - playpause
+  - pyrojewel
+  - qqmusic
+  - qrstuvwxyz
+  - qweather
+  - qweatherapi
+  - radiohead
+  - referer
+  - relauncher
+  - resurrector
+  - retcode
+  - seniverse
+  - sess
+  - setitimer
+  - setsid
+  - sigalrm
+  - songmid
+  - songname
+  - soso
+  - soundtoy
+  - stdlib
+  - subpackages
+  - sysmond
+  - tencent
+  - ttml
+  - tunables
+  - uncheckpointed
+  - uninterpolated
+  - unroutable
+  - uuids
+  - wronly
+  - wttr
+  - xxms
+  - yello

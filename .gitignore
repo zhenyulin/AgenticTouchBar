@@ -100,3 +100,10 @@ _*
 # > trailing / matches directories only, so symlinks stay untracked
 !/.agents/
 !/.vscode/
+
+#
+#   Repo-specific Entries
+#
+
+# use local cspell dictionary
+!/cspell.config.yaml

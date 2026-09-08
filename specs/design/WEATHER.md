@@ -18,7 +18,7 @@ beyond the fields read below are external boundaries.
 | Entry point | Trigger | Contract |
 | --- | --- | --- |
 | `widgets/weather.sh <uuid> --text` | BTT widget "Weather", 600 s interval | Two rows: temperature over relative humidity. |
-| `widgets/weather.sh <uuid> --icon` | BTT widget "Weath Icon", 600 s interval | One emoji for the current conditions. |
+| `widgets/weather.sh <uuid> --icon` | BTT widget "Weather Icon", 600 s interval | One emoji for the current conditions. |
 | `widgets/weather.sh <uuid> --refresh` | The detached refresh | Fetches conditions and stores one JSON observation. Exits 1 when all sources fail. |
 | Tap on either → `actions/tap-refresh.sh <weather-uuid> <icon-uuid>` | User | Both refresh together; they share one cached observation. |
 

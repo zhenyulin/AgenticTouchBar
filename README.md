@@ -55,7 +55,7 @@ configured natively in BTT.
 | Latency | Selected Clash node's latency | `widgets/clash-latency.sh` | 300 s | `actions/tap-refresh.sh` (region + latency) |
 | Star | Favourite (★/☆) — only while Apple Music holds Now Playing; hidden with the row when the track ends | AppleScript in the preset + `actions/now-playing-app.sh` | 10 s | Toggle favourite |
 | Weather | Temperature/humidity | `widgets/weather.sh --text` | 600 s | `actions/tap-refresh.sh` (text + icon) |
-| Weath Icon | Conditions icon | `widgets/weather.sh --icon` | 600 s | `actions/tap-refresh.sh` (text + icon) |
+| Weather Icon | Conditions icon | `widgets/weather.sh --icon` | 600 s | `actions/tap-refresh.sh` (text + icon) |
 
 Their refresh asks Apple Weather through the no-prompt `BTT Weather` Shortcut
 first, then QWeather (和风天气), a domestic API that Clash routes DIRECT, so it

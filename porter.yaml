@@ -1,4 +1,5 @@
-# yaml-language-server: $schema=../../Desktop/code/aurora/porter/schemas/manifest.json#agents-location
+# yaml-language-server: $schema=../../Desktop/code/aurora/porter/schemas/manifest.json
+---
 #
 # component metadata
 #
@@ -21,7 +22,6 @@ config: ~/Desktop/code/aurora/pymap
 copy:
   - .coveragerc
   - .gitattributes
-  - .gitignore
   - .python-version
   - pyrightconfig.json
   - pytest.ini
@@ -32,8 +32,11 @@ symlink:
   - .markdownlint.yaml
   - .pre-commit-config.yaml
   - .vscode
-  - cspell.config.yaml
 
 agents: ~/Desktop/code/aurora/.agents
 
 # repo local customization
+
+.gitignore: |-
+  # use local cspell dictionary
+  !/cspell.config.yaml
