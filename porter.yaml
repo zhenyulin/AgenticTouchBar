@@ -1,0 +1,39 @@
+# yaml-language-server: $schema=../../Desktop/code/aurora/porter/schemas/manifest.json#agents-location
+#
+# component metadata
+#
+private: true
+
+component:
+  name: BTT
+  type: cli
+
+language: shell
+
+#
+# component repo config
+#
+
+config: ~/Desktop/code/aurora/pymap
+
+# config file declaration
+
+copy:
+  - .coveragerc
+  - .gitattributes
+  - .gitignore
+  - .python-version
+  - pyrightconfig.json
+  - pytest.ini
+  - ruff.toml
+
+symlink:
+  - .editorconfig
+  - .markdownlint.yaml
+  - .pre-commit-config.yaml
+  - .vscode
+  - cspell.config.yaml
+
+agents: ~/Desktop/code/aurora/.agents
+
+# repo local customization

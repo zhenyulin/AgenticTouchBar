@@ -1,19 +1,102 @@
-*.pyc
-__pycache__/
-.pytest_cache/
-/logs
-/.venv
-/.env
-/.env.*
-/cache
-/tmp
+# .gitignore syntax
+#
+# # comment
+#   Comments begin with #; escape it as \# when matching a literal #.
+#
+# example.py
+#   Without /, the pattern matches at any directory level.
+#
+# /example.py
+#   A leading / anchors the pattern to this repository root.
+#
+# example/
+#   A trailing / matches directories only.
+#   Note - When a symlink point to a directory:
+#   - <symlink>/ would match the directory content
+#   - <symlink> would only match the symlink itself
+#
+# *.pyc
+#   * matches any characters except /. This matches *.pyc at any level.
+#
+# a/**/b
+#   ** matches zero or more directories, so this matches a/b and a/x/y/b.
+#
+# /**.pyc
+#   This is root-anchored and is not equivalent to *.pyc.
+#
+# ?.tmp and [abc].tmp
+#   ? matches one character; [abc] matches one listed character.
+#
+# !example.py
+#   ! re-includes a path. Rules are applied top to bottom, so order matters.
+#
+# output/*
+#   Ignore a directory's contents while keeping the directory itself.
+#   A negation cannot re-include a file inside an ignored parent directory.
 
-# consumer-only config and agent symlinks
-/.claude
-/.codex
-/.github
-/.pi
-/.mcp.json
+
+#
+#   Blacklist
+#
+
+# Global Conventions
+.*
+_*
+
+# credentials
+*.crt
+
+# runtime output
+# > ignore any root cache directories
+# > keep the output directory but not its content
+# > ignore the storage symlink
+/*cache*
+/output/*
+/storage
+
+# tooling output files
+*.egg-info
+*.log
+*nbqa*.py
+
+# root local config files
+/cspell.config.yaml
+/justfile
+
+# root folders for tooling
+/*log*
+/build/
+/dist/
+/Formula/
+/report/
+/temp/
+/tmp/
+
+# .agents symlinks
 /AGENTS.md
-/tmp/codebase-memory
-/tmp/serena
+
+
+#
+#   Whitelist
+#
+
+# allow __ module files (e.g. __init__.py); __ dirs like __pycache__ stay ignored
+!__*.*
+
+# allow common Git metadata files
+# > explicit names only: !.git* would also re-include .git and the .github symlink
+!.gitattributes
+!.gitignore
+!.gitkeep
+
+# allow ci required root configs
+!/.ci/
+!/.coveragerc
+!/.env-*template*
+!/.infra/
+!/.python-version
+
+# allowed symlinked content for agent discovery
+# > trailing / matches directories only, so symlinks stay untracked
+!/.agents/
+!/.vscode/

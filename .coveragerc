@@ -1,0 +1,8 @@
+[run]
+omit =
+    *__init__.py
+    src/__main__.py
+    src/types.py
+
+[report]
+skip_empty = True

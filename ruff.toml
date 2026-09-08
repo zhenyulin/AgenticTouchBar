@@ -1,0 +1,106 @@
+# Ruff default config: https://docs.astral.sh/ruff/configuration/
+# Ruff rules: https://docs.astral.sh/ruff/rules/#pydocstyle-d
+#
+# Ruff itself is a `quality` group dependency; its version is constrained in
+# pyproject.toml and pinned exactly by each repository's uv.lock.  There is no
+# required-version here — the dependency declaration is the single place the
+# version lives.
+
+extend-include = ["*.ipynb"]
+
+target-version = "py312"
+
+line-length = 110 # a good balance of reading ergonomics and code density
+indent-width = 4
+
+[lint]
+select = [
+    "A",   # flake8-builtins
+    "B",   # flake8-Bugbear
+    "C",   # flake8-Comprehensions (C4) + mccabe Complexity (C90)
+    "DTZ", # flake8-datetimez
+    "E",   # pycodestyle - Errors, a subset [E4, E7, E9] is enabled by default
+    "EM",  # flake8-errmsg
+    "F",   # pyFlakes (enabled by default)
+    "FA",  # flake8-future-annotations
+    "G",   # flake8-logging-format
+    "I",   # Isort
+    "LOG", # flake8-logging
+    "N",   # pep8-Naming
+    "PIE", # flake8-pie
+    "S",   # flake8-bandit
+    "T10", # flake8-debugger
+    "UP",  # pyUPgrade
+    "W",   # pycodestyle - Warnings
+    "YTT", # flake8-2020
+    "T20", # flake8-print
+    "ARG",  # flake8-unused-arguments
+    "ERA",  # eradicate
+    "INT",  # flake8-gettext
+    "NPY",  # NumPy-specific rules
+    "PD",   # pandas-vet
+    "PERF", # Perflint
+    "PL",   # Pylint
+    "PT",   # flake8-pytest-style
+    "Q",    # flake8-Quotes
+    "RET",  # flake8-return
+    "RSE",  # flake8-raise
+    "RUF",  # Ruff-specific rules
+    "SIM",  # flake8-simplify
+    "TD",   # flake8-todo
+    "TID",  # flake8-tidy-imports
+    "TRY",  # tryceratops
+]
+
+ignore = [
+    # "D" disables the whole of pydocstyle, so the individual D100/D101/D107
+    # entries that used to sit here were dead. Narrow this to those three codes
+    # when the legacy modules are ready to document their public API.
+    "D",     # pydocstyle: migrated legacy modules do not consistently use public API docstrings yet
+    "G004",  # Logging statement uses f-string
+    "PD003", # pandas-use-of-dot-is-null [false alarm on xarray]
+    "PD011", # pandas-use-of-dot-values [false alarm on xarray]
+    "PLR0913", # legacy pipeline APIs intentionally expose several knobs
+    "PLR2004", # legacy factor thresholds are already named where useful
+    "PT019", # pytest-fixture-param-without-value
+    "S607",  # start-process-with-partial-path
+    "TD002", # missing-todo-author
+    "TD003", # missing-todo-link
+]
+
+[lint.per-file-ignores]
+# T201 is waived everywhere, so it is not repeated below. "D" is in the global
+# ignore list, so it is not repeated either. notebook keeps the wider "T20"
+# because that also covers T203 (pprint), which the global T201 waiver does not.
+"*" = ["T201"]
+"**/tests/**/*" = [
+    "A",
+    "ARG",
+    "E721",
+    "EM",
+    "N802",
+    "N806",
+    "PD008",
+    "PD010",
+    "PL",
+    "RET",
+    "RUF059",
+    "S",
+    "TRY",
+]
+"notebook/**/*" = [
+    "T20", # flake8-print — T201 and T203
+]
+
+[lint.pylint]
+max-statements = 30  # PLR0915 — was 50
+max-branches = 8     # PLR0912 — was 12
+
+[lint.mccabe] # Rule C90
+max-complexity = 10 # max cyclomatic complexity threshold
+
+[lint.pydocstyle]
+convention = "google" # Accepts: "google", "numpy", or "pep257".
+
+[format]
+docstring-code-format = true

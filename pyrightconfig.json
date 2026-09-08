@@ -1,0 +1,52 @@
+{
+  // "$schema": "https://raw.githubusercontent.com/microsoft/pyright/main/packages/vscode-pyright/schemas/pyrightconfig.schema.json",
+
+  "typeCheckingMode": "standard",
+  "exclude": [
+    // default excludes
+    "**/__*cache__",
+    "**/__pycache__",
+    "**/.*",
+    "**/node_modules",
+    // tooling
+    ".venv",
+    "**/.benchmarks",
+    "**/.codebase-memory",
+    "**/.coverage",
+    "**/.serena",
+    "**/*_log*",
+    "**/*.egg-info",
+    "**/*.log*",
+    "**/*nbqa*.py",
+    "**/report",
+    "**/temp",
+    "**/tmp",
+    // runtime output
+    "**/output",
+    "**/storage",
+    // build
+    "build",
+    "dist",
+    // selected folders
+    "notebook",
+    "tests"
+  ],
+
+  // Deliberately an error, not "none". Pyright resolves third-party types from
+  // the environment's site-packages; when it cannot find that environment it
+  // reports nothing at all rather than failing, so a broken or unsynced venv
+  // would look like a clean type check. Untyped-library noise is suppressed by
+  // reportMissingTypeStubs below, which is a separate concern.
+  "reportMissingImports": "error",
+  "reportMissingTypeStubs": "none",
+
+  "reportUnnecessaryCast": "warning",
+  "reportUnnecessaryTypeIgnoreComment": "warning",
+  "reportUnreachable": "warning"
+
+  // "reportUnknownParameterType": "warning",
+  // "reportUnknownArgumentType": "warning",
+  // "reportUnknownVariableType": "warning",
+  // "reportUnknownMemberType": "warning",
+  // "reportUnknownLambdaType": "warning"
+}
