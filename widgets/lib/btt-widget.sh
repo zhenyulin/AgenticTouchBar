@@ -381,6 +381,10 @@ btt_refresh_detached() {
 #                             widget's own name. The two weather widgets share
 #                             one weather.data entry, so a refresh started by
 #                             either serves both.
+#   BTT_WIDGET_REFRESH_BACKOFF_FILE
+#                             an optional failure marker. When it is fresh,
+#                             stale automatic ticks do not start another
+#                             refresh; explicit force refreshes still do.
 #   BTT_WIDGET_REDRAW_UUIDS   space-separated sibling widget UUIDs to redraw
 #                             once the refresh finishes, so every instance
 #                             sharing this refresh is repainted white.
@@ -399,6 +403,7 @@ btt_cached_widget_main() {
     local value_max_age="${3:-300}"
     local compute_value="${4-}"
     local value_name="${BTT_WIDGET_VALUE_NAME:-$BTT_WIDGET_NAME}"
+    local refresh_backoff_file="${BTT_WIDGET_REFRESH_BACKOFF_FILE:-}"
     local started
     started="$(btt_now)"
 
@@ -444,9 +449,17 @@ btt_cached_widget_main() {
     fi
 
     if (( fresh != 0 || force )); then
-        btt_refresh_detached \
-            "$BTT_WIDGET_NAME" "$BTT_WIDGET_REFRESH_MAX_RUN" \
-            "$self" --refresh "$BTT_WIDGET_UUID"
+        local backoff_active=0
+        if (( ! force )) && [[ -n "$refresh_backoff_file" && -f "$refresh_backoff_file" ]] &&
+            btt__is_fresh "$refresh_backoff_file" "$value_max_age"; then
+            backoff_active=1
+        fi
+
+        if (( ! backoff_active )); then
+            btt_refresh_detached \
+                "$BTT_WIDGET_NAME" "$BTT_WIDGET_REFRESH_MAX_RUN" \
+                "$self" --refresh "$BTT_WIDGET_UUID"
+        fi
     fi
 
     outcome=cached

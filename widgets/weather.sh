@@ -7,11 +7,18 @@
 # out. Open-Meteo and BTT's own get_weather AppleScript command (Apple
 # WeatherKit) remain later fallbacks.
 #
+# Those three later sources are all asked for a point, and the point is
+# wherever the Mac is: BTT reports the machine's location, nothing here is
+# configured or guessed. A Mac that has not granted BTT a location answers
+# without one, and then those sources are skipped rather than asked about a
+# city nobody chose.
+#
 # Two instances, chosen by the mode flag:
 #   --text   "77°F" over "41%"      (the Weather widget)
-#   --icon   an emoji for the current conditions (the Weath Icon widget)
+#   --icon   an emoji for the current conditions (the Weather Icon widget)
 #   --refresh   fetch conditions and refresh the cache; runs detached,
 #               never in the widget path
+#   --location  print the query point the refresh would use, or exit 1
 #
 # Both instances share one weather.data cache entry and one refresh lock
 # (BTT_WIDGET_VALUE_NAME below), so a refresh started by either serves both
@@ -28,11 +35,13 @@ PATH="/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin"
 # UUID the preset passes as a positional (like the Clash widgets). Parsed
 # here rather than by btt_parse_widget_args, which knows only the first two.
 REFRESH_MODE=0
+LOCATION_MODE=0
 MODE="text"
 UUID_CANDIDATES=()
 for arg in "$@"; do
     case "$arg" in
         --refresh)   REFRESH_MODE=1 ;;
+        --location)  LOCATION_MODE=1 ;;
         --text|text) MODE="text" ;;
         --icon|icon) MODE="icon" ;;
         --*)         exit 2 ;;
@@ -57,8 +66,10 @@ source "${SELF:h}/lib/btt-widget.sh"
 BTT_WIDGET_NAME="weather"
 # One entry, drawn two ways.
 BTT_WIDGET_VALUE_NAME="weather.data"
-# A refresh is one fetch; a lock older than this is dead.
-BTT_WIDGET_REFRESH_MAX_RUN=60
+# A refresh is one fetch; a lock older than this is dead. The sources bound
+# themselves at 12 s + 12 s + 5 s + 5 s + 12 s (Shortcut, location, QWeather,
+# Open-Meteo, BTT weather), so the lock has to outlast 50 s to stay honest.
+BTT_WIDGET_REFRESH_MAX_RUN=90
 BTT_WIDGET_RENDER=render_conditions
 BTT_WIDGET_REFRESH_DETAIL=describe_conditions
 
@@ -72,17 +83,16 @@ BTT_WIDGET_REFRESH_DETAIL=describe_conditions
 WEATHER_TTL="${BTT_WEATHER_TTL:-300}"
 # All sources return Celsius, so the render converts when needed.
 UNIT="${BTT_WEATHER_UNIT:-celsius}"
-# Where to ask for conditions; the coordinates BTT's get_weather payload
-# carries (cache/weather.data.value .currently.metadata).
-WEATHER_LAT="${BTT_WEATHER_LAT:-38.5}"
-WEATHER_LON="${BTT_WEATHER_LON:-106.31}"
-# Shortcut name used for the Apple Weather bridge.
+# Shortcut name used for the Apple Weather bridge. It resolves the current
+# location itself, so it needs no query point.
 WEATHER_SHORTCUT="${BTT_WEATHER_SHORTCUT:-BTT Weather}"
 # QWeather: domestic endpoints survive a timed-out VPN node. Both the key
 # and the project's API host come from console.qweather.com (50k req/month
 # free); unset either to skip QWeather and fall back to the foreign sources.
 QW_KEY="${BTT_WEATHER_QW_KEY:-}"
 QW_HOST="${BTT_WEATHER_QW_HOST:-}"
+WEATHER_REFRESH_FAILURE_FILE="$BTT_WIDGET_CACHE_DIR/weather.refresh-failed"
+BTT_WIDGET_REFRESH_BACKOFF_FILE="$WEATHER_REFRESH_FAILURE_FILE"
 
 # WMO weather code -> the icon names the render path below already maps to
 # emoji. is_day picks the night variant of clear/partly-cloudy.
@@ -150,6 +160,11 @@ shortcut_icon() {
 # Apple Weather via a no-prompt Shortcut that outputs the documented JSON
 # contract. A Shortcut can wait for user input, so keep it off the widget path
 # and bound the detached provider call like the BTT AppleScript call.
+weather_mark_refresh_failed() {
+    mkdir -p "$BTT_WIDGET_CACHE_DIR" 2>/dev/null &&
+        : >"$WEATHER_REFRESH_FAILURE_FILE"
+}
+
 fetch_shortcut_weather() {
     local tmp pid i
     tmp="$(mktemp)" || return 1
@@ -172,7 +187,7 @@ fetch_shortcut_weather() {
     }
     normalized_icon="$(shortcut_icon "$raw_icon")"
 
-    jq -c --arg icon "$normalized_icon" '
+    jq -e -c --arg icon "$normalized_icon" '
         select(
             (.temperature | type) == "number"
             and (.humidity | type) == "number"
@@ -192,14 +207,80 @@ fetch_shortcut_weather() {
     return "$result"
 }
 
-# Open-Meteo current conditions. Returns the same {"currently":
-# {temperature, humidity, icon}} shape BTT's payload had (humidity as a
-# 0-1 fraction), so the render path stays unchanged. One jq run rather than
-# five: it validates the fields and builds the record in the same pass.
+# The query point, as "lat,lon" -- the shape get_weather takes -- or
+# nothing. Every point-based source below is asked about the Mac the widgets
+# run on; none of them is asked about a place this repo picked.
+#
+# BTT is the one to ask: it hosts these widgets and is the only thing here
+# that can hold a location permission. It answers a location it cannot place
+# with prose ("no location available"), so the first two numbers it names are
+# taken only when they are a valid pair -- a location is never read out of a
+# sentence that happens to contain digits.
+#
+system_coordinates() {
+    local raw
+    raw="$(btt_osascript 'get_location')" || return 1
+
+    printf '%s' "${raw//,/ }" | /usr/bin/awk '
+        { for (i = 1; i <= NF; i++) if ($i ~ /^-?[0-9]+(\.[0-9]+)?$/) value[++count] = $i + 0 }
+        END {
+            if (count < 2) exit 1
+            if (value[1] < -90 || value[1] > 90) exit 1
+            if (value[2] < -180 || value[2] > 180) exit 1
+            printf "%s,%s", value[1], value[2]
+        }'
+}
+
+# One AppleScript answer from BTT. osascript auto-launches a BTT the user has
+# quit, and a wedged BTT can make the call hang for minutes, so every call
+# goes through here: skipped unless BTT is already running, abandoned after
+# 12 s. Prints the answer, or nothing when there is none to print.
+btt_osascript() {
+    /usr/bin/pgrep -x BetterTouchTool >/dev/null 2>&1 || return 1
+
+    local tmp pid i
+    tmp="$(mktemp)" || return 1
+    (
+        /usr/bin/osascript -e "$1" >"$tmp" 2>/dev/null &
+        pid=$!
+        for i in {1..24}; do
+            kill -0 "$pid" 2>/dev/null || break
+            /bin/sleep 0.5
+        done
+        kill "$pid" 2>/dev/null
+        wait "$pid" 2>/dev/null
+    )
+
+    local out
+    out="$(<"$tmp")"
+    rm -f "$tmp"
+    [[ -n "$out" ]] || return 1
+    printf '%s' "$out"
+}
+
+# The point-based providers, asked in order against one query point.
+fetch_location_weather() {
+    local coords
+    coords="$(system_coordinates)" || return 1
+
+    local json
+    json="$(fetch_qweather "$coords")"
+    [[ -n "$json" ]] || json="$(fetch_open_meteo "$coords")"
+    [[ -n "$json" ]] || json="$(fetch_btt_weather "$coords")"
+    [[ -n "$json" ]] && printf '%s' "$json"
+}
+
+# Open-Meteo current conditions at "lat,lon". Returns the same
+# {"currently": {temperature, humidity, icon}} shape BTT's payload had
+# (humidity as a 0-1 fraction), so the render path stays unchanged. One jq
+# run rather than five: it validates the fields and builds the record in the
+# same pass.
 fetch_open_meteo() {
+    local coords="${1-}"
+    local lat="${coords%,*}" lon="${coords#*,}"
     local payload
     payload="$(curl -fsS --connect-timeout 2 --max-time 5 \
-        "https://api.open-meteo.com/v1/forecast?latitude=$WEATHER_LAT&longitude=$WEATHER_LON&current=temperature_2m,relative_humidity_2m,weather_code,is_day" 2>/dev/null)" || return 1
+        "https://api.open-meteo.com/v1/forecast?latitude=$lat&longitude=$lon&current=temperature_2m,relative_humidity_2m,weather_code,is_day" 2>/dev/null)" || return 1
 
     local fields
     fields="$(jq -r '
@@ -221,16 +302,19 @@ fetch_open_meteo() {
         '{currently: {temperature: $t, humidity: ($h / 100), icon: $icon}, source: "open-meteo"}'
 }
 
-# QWeather current conditions. Same shape as the other fetchers, one jq
-# pass: humidity arrives as a 0-100 string, temperature as a string, and
-# only a payload whose fields validate is worth handing on.
+# QWeather current conditions at "lat,lon". Same shape as the other
+# fetchers, one jq pass: humidity arrives as a 0-100 string, temperature as a
+# string, and only a payload whose fields validate is worth handing on.
 fetch_qweather() {
     [[ -n "$QW_KEY" && -n "$QW_HOST" ]] || return 1
+    local coords="${1-}"
+    # QWeather names the pair in its own order: longitude first.
+    local lat="${coords%,*}" lon="${coords#*,}"
     local payload
     # --compressed: the API gzips every response, so plain curl gets bytes
     # that jq cannot read.
     payload="$(curl --compressed -fsS --connect-timeout 2 --max-time 5 \
-        "https://${QW_HOST}/v7/weather/now?location=${WEATHER_LON},${WEATHER_LAT}&key=${QW_KEY}" 2>/dev/null)" || return 1
+        "https://${QW_HOST}/v7/weather/now?location=${lon},${lat}&key=${QW_KEY}" 2>/dev/null)" || return 1
 
     local fields
     fields="$(jq -r '
@@ -252,38 +336,37 @@ fetch_qweather() {
         '{currently: {temperature: $t, humidity: ($h / 100), icon: $icon}, source: "qweather"}'
 }
 
-# Fallback: BTT's get_weather (Apple WeatherKit). Bounded, because a wedged
-# BTT can make the call hang for minutes; osascript auto-launches a dead
-# BTT, so only query it while it is running.
+# Fallback: BTT's get_weather (Apple WeatherKit) at "lat,lon". BTT answers a
+# request it cannot serve with an empty document, and an empty one would reach
+# the cache as a reading of 0°C, so a payload is accepted only when it carries
+# the fields the render path draws.
 fetch_btt_weather() {
-    /usr/bin/pgrep -x BetterTouchTool >/dev/null 2>&1 || return 1
-    local tmp pid i
-    tmp="$(mktemp)" || return 1
-    (
-        /usr/bin/osascript -e 'tell application "BetterTouchTool" to get_weather' >"$tmp" 2>/dev/null &
-        pid=$!
-        for i in {1..24}; do
-            kill -0 "$pid" 2>/dev/null || break
-            /bin/sleep 0.5
-        done
-        kill "$pid" 2>/dev/null
-        wait "$pid" 2>/dev/null
-    )
-    jq -c '. + {source: "btt"}' <"$tmp" 2>/dev/null
-    rm -f "$tmp"
+    local coords="${1-}"
+    btt_osascript "tell application \"BetterTouchTool\" to get_weather \"$coords\"" |
+        jq -c '
+            select(
+                (.currently.temperature | type) == "number"
+                and (.currently.humidity | type) == "number"
+            )
+            | . + {source: "btt"}
+        ' 2>/dev/null
 }
 
 compute_value() {
     local json
-    # Apple Weather first: the Shortcut is the supported bridge. The domestic
-    # QWeather source below remains the reliable network fallback.
+    # Apple Weather first: the Shortcut is the supported bridge and resolves
+    # the current location on its own. The domestic QWeather source below
+    # remains the reliable network fallback for the point-based sources.
     json="$(fetch_shortcut_weather)"
-    [[ -n "$json" ]] || json="$(fetch_qweather)"
-    [[ -n "$json" ]] || json="$(fetch_open_meteo)"
-    [[ -n "$json" ]] || json="$(fetch_btt_weather)"
+    [[ -n "$json" ]] || json="$(fetch_location_weather)"
     # Only a payload the render path can read is worth caching; anything else
     # leaves the previous conditions in place for the next tick to draw.
-    [[ -n "$json" ]] && jq -e . >/dev/null 2>&1 <<<"$json" && printf '%s' "$json"
+    if [[ -n "$json" ]] && jq -e . >/dev/null 2>&1 <<<"$json"; then
+        rm -f "$WEATHER_REFRESH_FAILURE_FILE"
+        printf '%s' "$json"
+    else
+        weather_mark_refresh_failed
+    fi
 }
 
 # What the refresh writes into the trace, in place of the whole document.
@@ -334,5 +417,17 @@ render_conditions() {
         | "\($t | round)°\($suffix)\n\(((.currently.humidity // 0) * 100) | round)%"
     ' <<<"$value" 2>/dev/null
 }
+
+# The query point for a human: the weather row's "which city is this?" is
+# answered here, and actions/doctor.sh asks the same way rather than growing a
+# second opinion about where the Mac is.
+if (( LOCATION_MODE )); then
+    system_coordinates || {
+        printf 'no query point: BTT reports no location (grant it Location Services)\n' >&2
+        exit 1
+    }
+    printf '\n'
+    exit 0
+fi
 
 btt_cached_widget_main "$REFRESH_MODE" "$SELF" "$WEATHER_TTL" compute_value
