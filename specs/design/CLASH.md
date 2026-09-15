@@ -127,7 +127,10 @@ indicator pair.
 
 `clash_proxy_label` is the inverse for the latency widget's second row: a
 leading regional-indicator pair and the whitespace after it are stripped, so
-the flag is not repeated beside the widget that already shows it.
+the flag is not repeated beside the widget that already shows it. Provider
+plan metadata behind the first pipe goes too — `TW 08 | 家宽-直连× 0.5`
+becomes `TW 08` — because the suffix pushes the row wider than the widget
+without saying anything about which node is selected.
 
 ### Latency Colour
 

@@ -162,5 +162,10 @@ clash_proxy_label() {
           then ($codepoints[2:] | implode | sub("^[[:space:]]+"; ""))
           else $node
           end
+        # Provider metadata after a pipe -- "TW 08 | 家宽-直连× 0.5" -- is
+        # noise beside a widget that already names the node: keep what is
+        # left of the first pipe, drop the rest.
+        | sub("[[:space:]]*[|].*$"; "")
+        | sub("[[:space:]]+$"; "")
     '
 }
