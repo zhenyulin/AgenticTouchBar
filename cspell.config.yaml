@@ -24,6 +24,7 @@ words:
   - adam
   - albumname
   - anpu
+  - argjson
   - asian
   - aykroyd
   - belafonte
@@ -47,11 +48,16 @@ words:
   - eason
   - epochrealtime
   - fahrenheit
-  - fcgi
   - favorited
+  - fcgi
   - fghijklmno
+  - flurr
+  - folivora
   - geldof
   - getpid
+  - idat
+  - iend
+  - ihdr
   - inspectable
   - itimer
   - itunes
@@ -65,8 +71,8 @@ words:
   - mandopop
   - mdfind
   - meteo
-  - mihomo
   - midler
+  - mihomo
   - millis
   - netease
   - nobase
@@ -82,6 +88,8 @@ words:
   - parentheticals
   - pgrep
   - playpause
+  - polyform
+  - pyrightconfig
   - pyrojewel
   - qqmusic
   - qrstuvwxyz
@@ -115,3 +123,6 @@ words:
   - wttr
   - xxms
   - yello
+  - zmodload
+  - zselect
+  - zstat

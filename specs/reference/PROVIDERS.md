@@ -22,6 +22,10 @@ Verified: legacy CMA endpoints are gone (`www.weather.com.cn/data/sk/…` and
 | Seniverse | Yes | key | unverified | Rejected for now |
 | OpenWeatherMap, wttr.in | No | key / none | — | Rejected: same VPN dependency as Open-Meteo |
 
+- The three point-based providers (QWeather, Open-Meteo, WeatherKit via BTT
+  `get_weather`) are all asked about the Mac's own location, which BTT's
+  `get_location` reports; it is not a configured pair, and without Location
+  Services for BTT there is no point to ask about, so they are skipped.
 - QWeather API host is per-project (`*.qweatherapi.com`, shown in
   console.qweather.com); `devapi.qweather.com` serves legacy hosts only.
   Widget reads `BTT_WEATHER_QW_HOST` / `BTT_WEATHER_QW_KEY`.

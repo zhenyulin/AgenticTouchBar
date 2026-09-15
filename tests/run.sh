@@ -24,6 +24,14 @@ export BTT_REPO_DIR="$REPO_DIR"
 export BTT_LYRICS_CACHE_DIR="$SANDBOX/cache"
 export BTT_LOG_DIR="$SANDBOX/logs"
 export BTT_LYRICS_LOCAL_DIR="$SANDBOX/local-lrc"
+# The widget-facing cache and log directories, which the shell widgets derive
+# from BTT_WIDGET_CACHE_DIR and BTT_WIDGET_LOG_DIR. Without these the run
+# reads and writes the checkout's own cache/, so it depends on that directory
+# existing -- which it does on a machine that has run the widgets, and does
+# not in a fresh clone, where two transition tests then fail on a marker they
+# cannot write.
+export BTT_WIDGET_CACHE_DIR="$SANDBOX/cache"
+export BTT_WIDGET_LOG_DIR="$SANDBOX/logs"
 export BTT_LYRICS_TRACE=0
 mkdir -p "$BTT_LYRICS_CACHE_DIR" "$BTT_LOG_DIR" "$BTT_LYRICS_LOCAL_DIR"
 

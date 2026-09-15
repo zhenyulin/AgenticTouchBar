@@ -3,7 +3,6 @@
 
 set -u
 PATH="/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin"
-export HOME="${HOME:-/Users/zhenyulin}"
 
 SELF="${0:A}"
 source "${SELF:h}/lib/btt-widget.sh"

@@ -23,6 +23,12 @@ _SANDBOX = Path(tempfile.mkdtemp(prefix="btt-lyrics-tests-"))
 os.environ.setdefault("BTT_LYRICS_CACHE_DIR", str(_SANDBOX / "cache"))
 os.environ.setdefault("BTT_LOG_DIR", str(_SANDBOX / "logs"))
 os.environ.setdefault("BTT_LYRICS_LOCAL_DIR", str(_SANDBOX / "local-lrc"))
+# The widget-facing directories. They default to the checkout's own cache/ and
+# logs/, and the cleared-lyric marker is written there, so a test that leaves
+# them alone both pollutes the live cache and fails outright when cache/ has
+# never been created -- as it has not, in a fresh clone.
+os.environ.setdefault("BTT_WIDGET_CACHE_DIR", str(_SANDBOX / "cache"))
+os.environ.setdefault("BTT_WIDGET_LOG_DIR", str(_SANDBOX / "logs"))
 # Tracing appends to a file on every call; the tests do not need the evidence.
 os.environ.setdefault("BTT_LYRICS_TRACE", "0")
 

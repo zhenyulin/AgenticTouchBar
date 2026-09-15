@@ -7,8 +7,8 @@ dim-while-refreshing, and tracing belong to
 ## Reconstruction Target
 
 This document preserves what the two weather widgets show: one script in two
-modes over one shared cached observation, which provider is asked first and
-why, and how conditions become an emoji.
+modes over one shared cached observation, where the query point comes from,
+which provider is asked first and why, and how conditions become an emoji.
 
 The Shortcut, QWeather, Open-Meteo, and Apple WeatherKit response schemas
 beyond the fields read below are external boundaries.
@@ -19,7 +19,8 @@ beyond the fields read below are external boundaries.
 | --- | --- | --- |
 | `widgets/weather.sh <uuid> --text` | BTT widget "Weather", 600 s interval | Two rows: temperature over relative humidity. |
 | `widgets/weather.sh <uuid> --icon` | BTT widget "Weather Icon", 600 s interval | One emoji for the current conditions. |
-| `widgets/weather.sh <uuid> --refresh` | The detached refresh | Fetches conditions and stores one JSON observation. Exits 1 when all sources fail. |
+| `widgets/weather.sh <uuid> --refresh` | The detached refresh | Fetches conditions and stores one JSON observation. Stores nothing when every source fails. |
+| `widgets/weather.sh --location` | Human, or `actions/doctor.sh` | Prints the query point (`lat,lon`) the point-based sources would use, or fails with `no query point: BTT reports no location`. |
 | Tap on either → `actions/tap-refresh.sh <weather-uuid> <icon-uuid>` | User | Both refresh together; they share one cached observation. |
 
 Flags may appear in any order, and the widget UUID is an ordinary positional
@@ -30,7 +31,16 @@ argument. An unrecognised `--flag` exits 2.
 | `BTT_WEATHER_UNIT` | `celsius` | `fahrenheit` converts on render; all sources report Celsius. |
 | `BTT_WEATHER_TTL` | `300` | How old the stored observation may be before a refresh starts. |
 | `BTT_WEATHER_SHORTCUT` | `BTT Weather` | No-prompt Shortcut that returns the Apple Weather JSON contract below. |
-| `BTT_WEATHER_LAT`, `BTT_WEATHER_LON` | `38.5`, `106.31` | Open-Meteo query point; taken from the coordinates BTT's own payload carried. |
+
+The query point is **not** a variable: it is the Mac's own location (see
+[Query Point](#query-point)).
+
+An empty refresh writes a short-lived failure marker to stop detached redraws
+from launching the same refresh every second while the cache remains stale.
+The marker gates the refresh launch, not the Shortcut: every scheduled refresh
+after the marker expires starts with the Shortcut and then walks the full
+fallback pipeline. A successful fallback refresh writes a fresh value, so the
+next scheduled refresh is eligible to try the Shortcut again.
 
 ## Feature Tree
 
@@ -41,9 +51,10 @@ Weather widgets
 │   ├── Render text or icon from the same JSON
 │   └── Refresh both from either tap
 ├── Fetch, off the widget path
+│   ├── Query point from the system — BTT's get_location, never a variable
 │   ├── Ask the no-prompt Shortcut first — Apple Weather
 │   ├── Fall back to QWeather — domestic/direct route
-│   ├── Fall back to Open-Meteo, then BTT's get_weather
+│   ├── Fall back to Open-Meteo, then BTT's get_weather — both at that point
 │   ├── Normalise every source into one shape
 │   └── Never block the widget on a provider call
 ├── Render
@@ -60,19 +71,43 @@ Weather widgets
 | Condition | Path | Trace |
 | --- | --- | --- |
 | Shortcut returns valid Apple Weather JSON | Use it | `refresh ok source=shortcuts t=… h=…` |
-| Shortcut is absent, times out, or returns invalid JSON | QWeather | `refresh ok source=qweather t=… h=…` |
-| QWeather fails or is not configured | Open-Meteo | `refresh ok source=open-meteo t=… h=…` |
-| Open-Meteo fails or returns invalid fields | BTT `get_weather` | `refresh ok source=btt t=… h=…` |
-| All providers fail, or the result is not valid JSON | Nothing stored | `refresh error bad-json`, exit 1 |
+| Shortcut is absent, times out, or returns invalid JSON | Resolve the query point, then QWeather | `refresh ok source=qweather t=… h=…` |
+| QWeather fails or is not configured | Open-Meteo at the same point | `refresh ok source=open-meteo t=… h=…` |
+| Open-Meteo fails or returns invalid fields | BTT `get_weather` at the same point | `refresh ok source=btt t=… h=…` |
+| BTT reports no location | No point-based source is asked | `refresh empty` — the last observation keeps printing |
+| All providers fail, or the result is not valid JSON | Nothing stored | `refresh empty`, and the last observation keeps printing |
 
 The Shortcut is a supported bridge to Apple Weather rather than a read of the
 Weather widget's private storage. It must not show alerts or request input,
 because it runs from a detached shell refresh.
 
-The Shortcut and `get_weather` calls are bounded at 24 × 0.5 s. Open-Meteo and
-QWeather use `--connect-timeout 2 --max-time 5`, and the AppleScript is skipped
-unless `pgrep -x BetterTouchTool` succeeds — `osascript` would otherwise
-auto-launch a BTT the user had just quit.
+The Shortcut, `get_location` and `get_weather` calls are bounded at 24 × 0.5 s,
+and every one of them is skipped unless `pgrep -x BetterTouchTool` succeeds —
+`osascript` would otherwise auto-launch a BTT the user had just quit.
+Open-Meteo and QWeather use `--connect-timeout 2 --max-time 5`. One refresh
+can therefore spend at most 50 s in provider calls, which is what the shared
+refresh lock is sized against.
+
+### Query Point
+
+The three point-based sources are all asked about one point, and that point is
+the Mac the widgets run on. BTT's `get_location` reports it — BTT is the app
+that hosts these widgets and the only process here that can hold a location
+permission — and no environment variable can set it, so the row follows the
+machine instead of a place chosen at setup time.
+
+A location BTT cannot place comes back as prose rather than coordinates
+(`no location available`, the answer until macOS is told to give BTT Location
+Services), so the first two numbers in its answer are used only when they form
+a valid pair: latitude within ±90 and longitude within ±180. Anything else
+reads as no fix at all, and the point-based sources are then skipped rather
+than queried about a city nobody chose. The Shortcut needs no point — it
+resolves the location itself — so a machine without a fix still shows weather,
+from Apple Weather alone.
+
+`widgets/weather.sh --location` prints the resolved pair; `actions/doctor.sh`
+shows it beside the other first-run findings, and names the setting to grant
+when there is none.
 
 ### Shortcut Contract
 
@@ -145,6 +180,10 @@ read cached JSON (fresh or stale) -> consume the force flag
 
 - The widget path never fetches. A stale value still prints, so the widgets
   always show the last readings while a detached refresh runs behind them.
+- The refresh asks the system where the Mac is before it asks any point-based
+  provider, and no configuration can override that point. With no fix those
+  providers are skipped, so a stale observation is never refreshed from a
+  place the machine is not.
 - Both instances share the cache name `weather.data` and the refresh lock name
   `weather`, so one refresh serves both and the second instance never starts a
   duplicate.
@@ -174,6 +213,8 @@ No automated tests.
 | --- | --- |
 | Shared cache | Refresh from the text widget and confirm the icon widget redraws from the same `weather.data.value` without fetching. |
 | Provider order | Run a valid `BTT Weather` Shortcut and confirm the trace records `source=shortcuts`; remove it and confirm QWeather answers. |
+| Query point | Compare `widgets/weather.sh --location` with the Mac's actual position; move the machine (or re-grant Location Services) and confirm the next refresh follows it rather than keeping the old city. |
+| No location fix | With Location Services off for BTT, confirm the refresh records `refresh empty`, the row keeps its previous reading, and `widgets/weather.sh --location` reports the no-fix message. |
 | Both down | Make the Shortcut invalid and block the network providers; confirm `refresh error bad-json`, exit 1, and that the previous value keeps printing. |
 | Validation | Make the Shortcut return a null temperature and confirm QWeather answers rather than a `null` reaching the row. |
 | Unit conversion | Set `BTT_WEATHER_UNIT=fahrenheit` and confirm the row switches to `°F` with the converted number. |
@@ -183,5 +224,11 @@ No automated tests.
 ## Known Gaps
 
 - No automated tests, and no recorded fixture of either provider's response.
-- The coordinates default to a fixed point rather than the machine's location;
-  a move needs `BTT_WEATHER_LAT`/`LON` set by hand.
+- The point-based sources depend on BTT holding a location permission. Without
+  it they never run, and nothing on the bar shows that: the Shortcut still
+  answers, so the row looks healthy. `widgets/weather.sh --location` and
+  `actions/doctor.sh` are the two places it is visible.
+- The exact text a successful `get_location` returns is not recorded here. The
+  parse accepts the first two in-range numbers in BTT's answer, which covers
+  the `{LAT},{LON}` its own `get_weather` takes, but no answer from a machine
+  with a fix has been observed to confirm the shape.

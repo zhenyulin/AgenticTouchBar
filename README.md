@@ -5,23 +5,43 @@ Personal BetterTouchTool (BTT) configuration: Touch Bar script widgets
 and the exported preset (`bttpreset/`). Everything is plain shell and
 Python — no plugin, no daemon, no background service.
 
+Released under the [PolyForm Noncommercial 1.0.0 license](LICENSE) — free for
+personal and non-commercial use. Not affiliated with BetterTouchTool or
+Folivora — see [THIRD-PARTY.md](THIRD-PARTY.md).
+
+<!-- TODO: hero screenshot of the Touch Bar row. Save it under docs/ and
+     replace this comment with: ![Touch Bar](docs/touchbar.png) -->
+
 ## Layout
 
 | Path | Contents |
 | --- | --- |
 | `widgets/` | One script per widget, plus `lib/` (shared widget runtime, quota widgets, Clash and MediaRemote helpers) and `lyrics/` (the Lyrics feature package) |
 | `actions/` | Helpers invoked by widget taps, media keys, and setup, plus `lib/` (shared BTT-control support) |
-| `bttpreset/` | Exported BTT preset (`Default.bttpreset`) and `backup.bttpreset` |
+| `bttpreset/` | Exported BTT preset (`Default.bttpreset`) — this is what you import |
+| `specs/` | [What every widget must do](specs/FEATURES.md), [design documents](specs/design/), and measured [constraints](specs/CONSTRAINTS.md) |
+| `tests/` | The Lyrics test suite — stdlib `unittest`, no dependencies |
 | `cache/`, `logs/` | Runtime state and diagnostics, created automatically |
 
 ## Prerequisites
 
-- BetterTouchTool with a Touch Bar (or Control Strip), with Automation
-  permission for BTT to drive the widgets.
-- `zsh`, `curl`, Python 3 (all ship with macOS); `jq` and `nowplaying-cli`
-  (`brew install jq nowplaying-cli`).
-- `codexbar` (`brew install codexbar`) for the Codex, Claude and OpenCode
-  quota widgets.
+- BetterTouchTool with a Touch Bar (or Control Strip). BTT needs **Automation
+  permission to drive itself** — widgets stay blank until it is granted, and
+  macOS only prompts once, so see Troubleshooting if you missed the prompt.
+- `zsh`, `curl`, Python 3.9+ (all ship with macOS, nothing to install).
+- `jq` and `nowplaying-cli`:
+
+  ```sh
+  brew install jq nowplaying-cli
+  ```
+
+- `codexbar` for the Codex, Claude and OpenCode quota widgets — the rest work
+  without it:
+
+  ```sh
+  brew install codexbar
+  ```
+
 - A running Clash/Mihomo controller for the Clash widgets — defaults target
   Clash Verge's Unix socket `/tmp/verge/verge-mihomo.sock` with the API at
   `http://127.0.0.1:9097` (all tunable, see Configuration).
@@ -29,18 +49,80 @@ Python — no plugin, no daemon, no background service.
 
 ## Quick start
 
-1. Clone or copy this repo to `~/Documents/BTT` — every script defaults to
-   that path (`BTT_REPO_DIR` overrides).
-2. Install the prerequisites above.
-3. In BTT, import `bttpreset/Default.bttpreset`. (To configure widgets by
-   hand instead, the table below lists every script and its wiring.)
-4. Set the BTT widget UUID variables so taps and track changes can find the
-   widgets: `./actions/set-widget-variables.sh`.
-5. Verify: tap each widget — it greys out while its refresh runs, then
-   redraws; `widgets/now-playing-lyrics.sh --report` shows the shared trace.
+Clone to `~/Documents/BTT` — worth doing literally, because the exported
+preset invokes every script through `$HOME/Documents/BTT/...`:
+
+```sh
+git clone https://github.com/zhenyulin/BTT.git ~/Documents/BTT
+cd ~/Documents/BTT
+```
+
+Then, in order:
+
+1. **Install the prerequisites** above.
+
+2. **Build the MediaRemote helper.** This is the only compiled piece, and the
+   repo deliberately ships source rather than the binary. It supplies the
+   `isPlaying` flag, which nothing else publishes reliably — skip it and the
+   Now Playing widget keeps the album cover where the play icon belongs while
+   paused:
+
+   ```sh
+   clang -O2 actions/nowplaying-state.m -framework Foundation \
+       -F/System/Library/PrivateFrameworks -framework MediaRemote \
+       -o ~/Library/Application\ Support/BTT/nowplaying-state
+   ```
+
+3. **Configure weather (optional).** The weather widgets work with no key at
+   all. To add QWeather as a fallback that still answers when the VPN node has
+   timed out, copy the template and fill in a free key from
+   [console.qweather.com](https://console.qweather.com):
+
+   ```sh
+   cp .env-template .env
+   ```
+
+4. **Run the preflight** — it checks the toolchain, the helper, BTT
+   permissions and the repo layout, and prints the fix beside anything
+   missing:
+
+   ```sh
+   actions/doctor.sh
+   ```
+
+5. **Back up your current BTT setup**, then import `bttpreset/Default.bttpreset`
+   in BTT. The preset is named `Default` and also carries general BTT settings,
+   so export your existing preset first if you have one worth keeping. (To
+   configure widgets by hand instead, the table below lists every script and
+   its wiring.)
+
+6. **Point the widgets at themselves** — this sets the BTT persistent
+   variables that taps and track changes use to find each widget:
+
+   ```sh
+   actions/set-widget-variables.sh
+   ```
+
+7. **Verify:** tap each widget — it greys out while its refresh runs, then
+   redraws. `actions/doctor.sh` should now be all-green, and
+   `widgets/now-playing-lyrics.sh --report` shows the shared trace.
 
 The Star widget appears in the preset but has no script in this repo — it is
 configured natively in BTT.
+
+### Cloning somewhere else
+
+Every script honours `BTT_REPO_DIR`, so the scripts themselves work from any
+path. The preset is the exception: it hard-codes `$HOME/Documents/BTT` in its
+script paths. Either clone to that path, or rewrite the preset before
+importing:
+
+```sh
+sed -i '' "s|\$HOME/Documents/BTT|$PWD|g" bttpreset/Default.bttpreset
+```
+
+`actions/doctor.sh` reports a warning when your checkout is somewhere the
+preset will not find.
 
 ## Widgets
 
@@ -60,7 +142,10 @@ configured natively in BTT.
 Their refresh asks Apple Weather through the no-prompt `BTT Weather` Shortcut
 first, then QWeather (和风天气), a domestic API that Clash routes DIRECT, so it
 keeps answering when the VPN node has timed out. Open-Meteo (no key) and BTT's
-`get_weather` (Apple WeatherKit) remain later fallbacks. The Shortcut must end
+`get_weather` (Apple WeatherKit) remain later fallbacks. Those three later
+sources all take a point, and the point is the Mac's own location as BTT
+reports it, never a configured coordinate — see
+[Where the weather is](#where-the-weather-is). The Shortcut must end
 with `{"temperature":19.9,"humidity":54,"icon":"clear-day"}` or an Apple
 condition label such as `Mostly Sunny`; the widget normalises the icon. QWeather
 needs a free API key and API host from console.qweather.com (50k requests/month
@@ -132,6 +217,7 @@ AppleScript tick came round.
 
 | Script | Purpose |
 | --- | --- |
+| `actions/doctor.sh` | First-run preflight: dependencies, the compiled helper, BTT permissions, repo layout |
 | `actions/tap-refresh.sh` | Force one or more widgets to refresh now, even with a fresh cache |
 | `actions/track-changed.sh` | Track-change hook: detached lyrics pre-warm + widget refresh |
 | `actions/now-playing-app.sh` | Prints the current Now Playing holder's bundle id (MediaRemote) — gates the Star widget |
@@ -161,6 +247,16 @@ BTT's shell actions can see them (BTT environment variables, `~/.zshenv`, or
 | `BTT_WEATHER_QW_HOST`, `BTT_WEATHER_QW_KEY` | — | Weather widgets: QWeather API host and key (console.qweather.com); unset either to skip QWeather and use the foreign sources only |
 | `BTT_WEATHER_SHORTCUT` | `BTT Weather` | Weather widgets: no-prompt Apple Weather Shortcut name; its final output must be the documented JSON object |
 | `BTT_WEATHER_UNIT`, `BTT_WEATHER_TTL` | `celsius`, `300` | Weather widgets: unit (celsius/fahrenheit) and weather cache TTL (seconds) |
+
+### Where the weather is
+
+The weather widgets ask BTT for the Mac's location instead of reading a
+coordinate pair from the environment, so there is nothing to configure and
+nothing that goes stale when the machine moves: QWeather, Open-Meteo and
+BTT's own WeatherKit lookup all take that point, and `widgets/weather.sh
+--location` prints the one in use. Without Location Services for
+BetterTouchTool those three sources stay off and only the Apple Weather
+Shortcut answers.
 
 ## The Lyrics feature
 
@@ -197,3 +293,83 @@ action → `btt-quit.sh`).
   constraints every widget must respect.
 - [`specs/NOTE.md`](specs/NOTE.md) — promoted repo learnings: empirical
   layout keys, preset rules, and correction patterns.
+
+## Troubleshooting
+
+Start with `actions/doctor.sh` — it covers most of the list below and prints
+the fix beside each failure.
+
+| Symptom | Cause and fix |
+| --- | --- |
+| Every widget is blank or never appears | BTT lacks Automation permission to script itself. Re-enable it under System Settings → Privacy & Security → **Automation** → BetterTouchTool; macOS only prompts once, so the checkbox may need ticking by hand. |
+| A widget shows a short label instead of a value | That label *is* the failure: `NO CODEXBAR`, `No curl`, `Controller`, `--`, `🌐`. Install what it names, or leave it — a missing dependency never breaks the other widgets. |
+| Now Playing shows the album cover while paused | The `nowplaying-state` helper is not built. Run the `clang` line in Quick start step 2 — without it nothing publishes the `isPlaying` flag, because the playback rate QQ Music publishes lies. |
+| Weather shows the wrong city | The row follows the Mac, so this means BTT reported a location from the wrong place (or, after moving, one that is still cached). Check with `widgets/weather.sh --location`, then BTT's own location under System Settings > Privacy & Security > Location Services. |
+| Tapping a widget does nothing | The BTT persistent variables are unset, so the tap cannot address the widget. Re-run `actions/set-widget-variables.sh` — and note this is required after importing a preset you have edited by hand. |
+| The Lyrics widget is empty but music is playing | The player may not be allowed to hold the row; add its bundle id to `BTT_NOW_PLAYING_ALLOWED`. Browsers are excluded on purpose. Then check `widgets/now-playing-lyrics.sh --report`. |
+| A widget stays grey | Grey means a refresh is in flight; it clears when the refresh ends. If it never clears, the refresh process died holding the lock — delete `cache/<widget-name>.refreshing` and `cache/<widget-uuid>.force`. |
+| Quitting BTT does not stick | Known BTT behaviour when it is wedged. Use `actions/btt-quit.sh`, which kills BTTRelaunch first. |
+| Nothing works after moving the checkout | The preset hard-codes `$HOME/Documents/BTT`. See *Cloning somewhere else*. |
+
+Deeper diagnostics for the Lyrics feature:
+
+```sh
+widgets/now-playing-lyrics.sh --report      # render + trace health
+widgets/now-playing-lyrics.sh --watch       # live tick stream
+widgets/now-playing-lyrics.sh --diagnose    # full diagnosis
+```
+
+## Testing
+
+The Lyrics package carries a test suite that needs nothing installed — plain
+stdlib `unittest`, because the widgets themselves run under whatever `python3`
+BTT's `PATH` finds:
+
+```sh
+tests/run.sh                    # everything
+tests/run.sh lyrics.test_lrc    # one module
+```
+
+Every path the package reads is redirected into a temporary directory before
+Python starts, so a run never touches your `cache/` or `logs/`.
+
+## Uninstall
+
+1. In BTT, delete the imported preset (or restore the preset you exported
+   before importing it).
+2. `rm -rf ~/Documents/BTT` — everything else lives inside the checkout. Only
+   `cache/` and `logs/` are written elsewhere, and they are inside it.
+3. Optionally delete `~/Library/Application Support/BTT/nowplaying-state`.
+4. Remove the Homebrew packages you installed for it —
+   `brew uninstall nowplaying-cli jq codexbar` — if nothing else uses them.
+
+## Contributing
+
+Issues and pull requests are welcome. Before opening a PR:
+
+- Run `tests/run.sh` — it must stay green.
+- Run `actions/doctor.sh` if you touched anything BTT-facing.
+- Keep widget behaviour consistent with [`specs/FEATURES.md`](specs/FEATURES.md);
+  if you change intended behaviour, change the spec in the same PR. The spec is
+  the contract, and the widgets are expected to be rebuilt from it.
+- Match the surrounding style: shell in `zsh` with `set -u`, comments that
+  explain *why* rather than *what*, and no new dependencies where a shell
+  builtin or the standard library will do.
+
+## License
+
+[PolyForm Noncommercial 1.0.0](LICENSE). Free for personal, hobby, study, and
+other non-commercial use, including use by non-commercial organizations.
+Commercial use — including resale or paid redistribution of the widgets or the
+preset — is not permitted, and copyright remains with the author.
+
+Third-party trademarks, services and dependencies are covered separately in
+[THIRD-PARTY.md](THIRD-PARTY.md).
+
+## Acknowledgements
+
+The Lyrics widget would be much poorer without the community APIs it falls
+back to — [LRCLIB](https://lrclib.net) and [LrcAPI](https://github.com/AprilForApril/LrcApi) —
+and without [`nowplaying-cli`](https://github.com/kirtan-shah/nowplaying-cli),
+which is the only thing that exposes the Now Playing session holder's bundle id
+and album artwork.

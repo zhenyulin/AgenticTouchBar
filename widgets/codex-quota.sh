@@ -3,7 +3,6 @@
 
 set -u
 PATH="/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin"
-export HOME="${HOME:-/Users/zhenyulin}"
 
 # Absolute path to this script: the detached refresh re-invokes it, and BTT
 # may well have started it by a relative path.

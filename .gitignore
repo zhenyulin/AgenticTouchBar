@@ -74,6 +74,7 @@ _*
 
 # .agents symlinks
 /AGENTS.md
+harnesses/claude/skills/
 
 
 #
@@ -89,11 +90,13 @@ _*
 !.gitignore
 !.gitkeep
 
-# allow ci required root configs
+# allow ci required config folders
 !/.ci/
+!/.infra/
+
+# allow ci required config files
 !/.coveragerc
 !/.env-*template*
-!/.infra/
 !/.python-version
 
 # allowed symlinked content for agent discovery
@@ -101,9 +104,16 @@ _*
 !/.agents/
 !/.vscode/
 
+# allowed agent tooling config
+!/.qmd/index.yml
+!/.serena/project.yml
+
 #
 #   Repo-specific Entries
 #
 
+# private component: keep its manifest out of the published tree
+/porter.yaml
+/bttpreset/backup.bttpreset
 # use local cspell dictionary
 !/cspell.config.yaml

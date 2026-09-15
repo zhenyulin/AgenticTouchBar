@@ -37,5 +37,8 @@ agents: ~/Desktop/code/aurora/.agents
 # repo local customization
 
 .gitignore: |-
+  # private component: keep its manifest out of the published tree
+  /porter.yaml
+  /bttpreset/backup.bttpreset
   # use local cspell dictionary
   !/cspell.config.yaml

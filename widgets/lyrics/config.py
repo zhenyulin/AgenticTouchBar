@@ -33,9 +33,7 @@ LOADED_AT = time.monotonic()
 # with a little headroom -- and the frame never overflows the widget's slot.
 # BTT_LYRICS_WIDTH overrides the width directly in cells.
 PIXELS_PER_CELL = float(os.environ.get("BTT_LYRICS_PX_PER_CELL", "7.0"))
-LYRIC_WIDTH_CELLS = int(
-    os.environ.get("BTT_LYRICS_WIDTH", str(max(round(400 / PIXELS_PER_CELL), 1)))
-)
+LYRIC_WIDTH_CELLS = int(os.environ.get("BTT_LYRICS_WIDTH", str(max(round(400 / PIXELS_PER_CELL), 1))))
 # BTT draws the widget's two rows into one fixed-height 22 px block: the font
 # size configured in bttpreset/Default.bttpreset is the FIRST row's, and the
 # second row renders at the remainder -- rows look equal at 11 px + 11 px.
@@ -94,9 +92,7 @@ MARKER_FADE_MIN = int(os.environ.get("BTT_LYRICS_MARKER_FADE_MIN", "80"))
 # "nothing to fade" -- the full white lib/btt-widget.sh gives every other
 # widget, read from the same environment variable.
 WIDGET_FONT_COLOR = os.environ.get("BTT_WIDGET_COLOR", "255,255,255,255")
-APPLE_MUSIC_TIMEOUT_SECONDS = float(
-    os.environ.get("BTT_LYRICS_APPLE_MUSIC_TIMEOUT", "1.5")
-)
+APPLE_MUSIC_TIMEOUT_SECONDS = float(os.environ.get("BTT_LYRICS_APPLE_MUSIC_TIMEOUT", "1.5"))
 # Falls back to the system-wide Now Playing info (via nowplaying-cli) when
 # Apple Music has nothing playing, which is how QQ Music and other
 # non-scriptable players are picked up. Off disables the fallback entirely.
@@ -105,9 +101,7 @@ ENABLE_MEDIA_REMOTE = os.environ.get("BTT_LYRICS_MEDIA_REMOTE", "1") not in {
     "false",
     "False",
 }
-MEDIA_REMOTE_TIMEOUT_SECONDS = float(
-    os.environ.get("BTT_LYRICS_MEDIA_REMOTE_TIMEOUT", "1.5")
-)
+MEDIA_REMOTE_TIMEOUT_SECONDS = float(os.environ.get("BTT_LYRICS_MEDIA_REMOTE_TIMEOUT", "1.5"))
 # The compiled nowplaying-state helper (actions/nowplaying-state.m) reports
 # the true play/pause state of the system Now Playing app, which the raw
 # MediaRemote dictionary cannot: QQ Music pushes playbackRate 1 even while
@@ -121,9 +115,7 @@ NOWPLAYING_STATE_BIN = os.environ.get(
 # How old the shared MediaRemote dictionary (MEDIA_REMOTE_RAW_PATH, defined
 # with the other paths below) may be before the sampler asks for its own. The
 # widget that writes it ticks every second.
-MEDIA_REMOTE_RAW_MAX_AGE_SECONDS = float(
-    os.environ.get("BTT_NOW_PLAYING_RAW_MAX_AGE", "5.0")
-)
+MEDIA_REMOTE_RAW_MAX_AGE_SECONDS = float(os.environ.get("BTT_NOW_PLAYING_RAW_MAX_AGE", "5.0"))
 NETWORK_TIMEOUT_SECONDS = float(os.environ.get("BTT_LYRICS_NETWORK_TIMEOUT", "4.0"))
 # Which MediaRemote session holders the fallback accepts. An allowlist, not
 # a denylist, mirroring widgets/now-playing.sh: browsers are many and keep
@@ -143,9 +135,13 @@ MEDIA_REMOTE_ALLOWED_BUNDLE_IDS = {
 }
 
 REPO_DIR = Path(os.environ.get("BTT_REPO_DIR", Path(__file__).resolve().parents[2]))
-CACHE_DIR = Path(
-    os.environ.get("BTT_LYRICS_CACHE_DIR", str(REPO_DIR / "cache" / "lyrics"))
-)
+# The cache directory the shell widgets share; widgets/lib/btt-widget.sh and
+# widgets/now-playing.sh derive the same path from BTT_WIDGET_CACHE_DIR. Every
+# file both sides of the widget pair read -- the raw Now Playing dictionary,
+# the cleared-lyric marker -- has to resolve through here, or the two
+# processes quietly stop agreeing the moment either side is pointed elsewhere.
+WIDGET_CACHE_DIR = Path(os.environ.get("BTT_WIDGET_CACHE_DIR", str(REPO_DIR / "cache")))
+CACHE_DIR = Path(os.environ.get("BTT_LYRICS_CACHE_DIR", str(REPO_DIR / "cache" / "lyrics")))
 LOG_DIR = Path(os.environ.get("BTT_LOG_DIR", str(REPO_DIR / "logs")))
 WIDGET_LOCK_PATH = CACHE_DIR / "widget.lock"
 SAMPLER_LOCK_PATH = CACHE_DIR / "sampler.lock"
@@ -166,10 +162,7 @@ LAST_TEXT_PATH = CACHE_DIR / "last.txt"
 MEDIA_REMOTE_RAW_PATH = Path(
     os.environ.get(
         "BTT_NOW_PLAYING_RAW_PATH",
-        str(
-            Path(os.environ.get("BTT_WIDGET_CACHE_DIR", str(REPO_DIR / "cache")))
-            / "now-playing.raw.json"
-        ),
+        str(WIDGET_CACHE_DIR / "now-playing.raw.json"),
     )
 )
 # What the last rendering tick put on screen, and when that frame is due to
@@ -186,9 +179,7 @@ WATCH_PATH = LOG_DIR / "lyrics" / "watch.tsv"
 # Where the shell widgets trace, via lib/btt-widget.sh. --report reads both,
 # because "did every widget stop at once, or just this one?" is the question
 # that separates a BetterTouchTool problem from a script problem.
-SHELL_TRACE_PATH = (
-    Path(os.environ.get("BTT_WIDGET_LOG_DIR", str(LOG_DIR))) / "trace.tsv"
-)
+SHELL_TRACE_PATH = Path(os.environ.get("BTT_WIDGET_LOG_DIR", str(LOG_DIR))) / "trace.tsv"
 # One line per run at a one second interval is roughly 5 MB a day, so the cap
 # holds several hours -- long enough to still cover a stall noticed later.
 TRACE_MAX_BYTES = int(os.environ.get("BTT_LYRICS_TRACE_MAX_BYTES", "4000000"))
@@ -201,12 +192,8 @@ ENABLE_LRCAPI = os.environ.get("BTT_LYRICS_LRCAPI", "1") not in {
     "False",
 }
 LRCAPI_TIMEOUT_SECONDS = float(os.environ.get("BTT_LYRICS_LRCAPI_TIMEOUT", "2.5"))
-CATALOG_LOOKUP_TIMEOUT_SECONDS = float(
-    os.environ.get("BTT_LYRICS_CATALOG_LOOKUP_TIMEOUT", "4.0")
-)
-LRCAPI_PREFERENCE_SECONDS = max(
-    float(os.environ.get("BTT_LYRICS_LRCAPI_PREFERENCE", "1.5")), 0.0
-)
+CATALOG_LOOKUP_TIMEOUT_SECONDS = float(os.environ.get("BTT_LYRICS_CATALOG_LOOKUP_TIMEOUT", "4.0"))
+LRCAPI_PREFERENCE_SECONDS = max(float(os.environ.get("BTT_LYRICS_LRCAPI_PREFERENCE", "1.5")), 0.0)
 LRCAPI_MAX_ADVANCE_QUERIES = int(os.environ.get("BTT_LYRICS_LRCAPI_MAX_ADVANCE", "4"))
 LRCAPI_MAX_SINGLE_QUERIES = int(os.environ.get("BTT_LYRICS_LRCAPI_MAX_SINGLE", "2"))
 LRCLIB_MAX_SEARCH_QUERIES = int(os.environ.get("BTT_LYRICS_LRCLIB_MAX_SEARCH", "7"))
@@ -254,23 +241,23 @@ TRACK_FOLLOW_INTERVAL = float(os.environ.get("BTT_LYRICS_TRACK_FOLLOW_STEP", "0.
 # (the --sample helper and the --track-changed follow in cli.py) can run the
 # closing sequence -- clear the lyric, then hide the row and the star with it.
 # Mirrors actions/set-widget-variables.sh.
-LYRICS_WIDGET_UUID = os.environ.get(
-    "BTT_LYRICS_WIDGET_UUID", "E19BB023-5060-4A56-95C8-6E7402779870"
-)
+LYRICS_WIDGET_UUID = os.environ.get("BTT_LYRICS_WIDGET_UUID", "E19BB023-5060-4A56-95C8-6E7402779870")
 NOW_PLAYING_WIDGET_UUID = os.environ.get(
     "BTT_NOW_PLAYING_WIDGET_UUID", "710F54C5-25B0-4A2C-B960-D9C0FE78B1B7"
 )
 # The Star widget runs on a 10 s AppleScript tick of its own, so it is the one
 # member of the row that would otherwise outlive a player by seconds -- see
 # specs/design/STAR.md.
-STAR_WIDGET_UUID = os.environ.get(
-    "BTT_STAR_WIDGET_UUID", "A05C5D37-7EAA-4F7B-AC00-23183CC8C6A1"
-)
+STAR_WIDGET_UUID = os.environ.get("BTT_STAR_WIDGET_UUID", "A05C5D37-7EAA-4F7B-AC00-23183CC8C6A1")
 # Where the event watcher records the track the closing sequence cleared
 # (cache/lyrics-cleared, beside the other widgets' cache files). The Lyrics
 # widget holds its frame empty while its state sample still matches this
 # identity -- see render.cleared_while_sample_current.
-CLEARED_MARKER_PATH = REPO_DIR / "cache" / "lyrics-cleared"
+#
+# widgets/now-playing.sh writes the same file from the shell side, through the
+# cache directory it shares with this module, which is why both derive it from
+# WIDGET_CACHE_DIR rather than each building the path itself.
+CLEARED_MARKER_PATH = WIDGET_CACHE_DIR / "lyrics-cleared"
 # The age cap on a closing marker. Normal markers are removed by the next
 # watcher run once the state moves past the cleared identity; this bounds a
 # marker left behind by a watcher that died mid-sequence, so a genuinely
@@ -319,9 +306,7 @@ ALIASES_PATH = Path(
 # tree and (as it did until 2026-08-12, via a copy of the ALIASES_PATH idiom
 # above) resolve back to the package directory itself, where no .lrc can ever
 # be found and the provider silently never matches.
-LOCAL_LYRICS_DIR = Path(
-    os.environ.get("BTT_LYRICS_LOCAL_DIR", str(REPO_DIR / "lyrics"))
-)
+LOCAL_LYRICS_DIR = Path(os.environ.get("BTT_LYRICS_LOCAL_DIR", str(REPO_DIR / "lyrics")))
 
 # Apple Music caches the time-synced TTML it fetches for the catalog track it is
 # about to display, as an ordinary NSURLCache entry. It is an LRU cache holding
