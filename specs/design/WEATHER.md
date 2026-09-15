@@ -93,17 +93,16 @@ refresh lock is sized against.
 The three point-based sources are all asked about one point, and that point is
 the Mac the widgets run on. BTT's `get_location` reports it — BTT is the app
 that hosts these widgets and the only process here that can hold a location
-permission — and no environment variable can set it, so the row follows the
-machine instead of a place chosen at setup time.
+permission. No environment variable or public-IP lookup can set it, so the row
+follows the machine rather than a place chosen at setup time.
 
 A location BTT cannot place comes back as prose rather than coordinates
-(`no location available`, the answer until macOS is told to give BTT Location
-Services), so the first two numbers in its answer are used only when they form
-a valid pair: latitude within ±90 and longitude within ±180. Anything else
-reads as no fix at all, and the point-based sources are then skipped rather
-than queried about a city nobody chose. The Shortcut needs no point — it
-resolves the location itself — so a machine without a fix still shows weather,
-from Apple Weather alone.
+(`no location available`), so the first two numbers in its answer are used only
+when they form a valid pair: latitude within ±90 and longitude within ±180. If
+that answer is not usable, the point-based sources are skipped rather than
+queried about a city nobody chose. The Shortcut needs no point — it resolves
+the location itself — so a machine without a fix may still show weather from
+Apple Weather alone.
 
 `widgets/weather.sh --location` prints the resolved pair; `actions/doctor.sh`
 shows it beside the other first-run findings, and names the setting to grant
@@ -225,10 +224,9 @@ No automated tests.
 
 - No automated tests, and no recorded fixture of either provider's response.
 - The point-based sources depend on BTT holding a location permission. Without
-  it they never run, and nothing on the bar shows that: the Shortcut still
-  answers, so the row looks healthy. `widgets/weather.sh --location` and
+  it they never run, and nothing on the bar shows that: the Shortcut may still
+  answer, so the row looks healthy. `widgets/weather.sh --location` and
   `actions/doctor.sh` are the two places it is visible.
 - The exact text a successful `get_location` returns is not recorded here. The
   parse accepts the first two in-range numbers in BTT's answer, which covers
-  the `{LAT},{LON}` its own `get_weather` takes, but no answer from a machine
-  with a fix has been observed to confirm the shape.
+  the `{LAT},{LON}` its own `get_weather` takes.

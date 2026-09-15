@@ -9,9 +9,8 @@
 #
 # Those three later sources are all asked for a point, and the point is
 # wherever the Mac is: BTT reports the machine's location, nothing here is
-# configured or guessed. A Mac that has not granted BTT a location answers
-# without one, and then those sources are skipped rather than asked about a
-# city nobody chose.
+# configured or guessed. If BTT has no live fix, those sources are skipped
+# rather than asked about a city nobody chose.
 #
 # Two instances, chosen by the mode flag:
 #   --text   "77°F" over "41%"      (the Weather widget)
@@ -219,7 +218,7 @@ fetch_shortcut_weather() {
 #
 system_coordinates() {
     local raw
-    raw="$(btt_osascript 'get_location')" || return 1
+    raw="$(btt_osascript 'tell application "BetterTouchTool" to get_location')" || return 1
 
     printf '%s' "${raw//,/ }" | /usr/bin/awk '
         { for (i = 1; i <= NF; i++) if ($i ~ /^-?[0-9]+(\.[0-9]+)?$/) value[++count] = $i + 0 }

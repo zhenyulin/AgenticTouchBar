@@ -24,8 +24,9 @@ Verified: legacy CMA endpoints are gone (`www.weather.com.cn/data/sk/…` and
 
 - The three point-based providers (QWeather, Open-Meteo, WeatherKit via BTT
   `get_weather`) are all asked about the Mac's own location, which BTT's
-  `get_location` reports; it is not a configured pair, and without Location
-  Services for BTT there is no point to ask about, so they are skipped.
+  `get_location` reports. It is not a configured pair or a public-IP estimate;
+  public-IP geolocation is unreliable here because this machine usually uses
+  a VPN. If BTT has no current fix, the providers are skipped.
 - QWeather API host is per-project (`*.qweatherapi.com`, shown in
   console.qweather.com); `devapi.qweather.com` serves legacy hosts only.
   Widget reads `BTT_WEATHER_QW_HOST` / `BTT_WEATHER_QW_KEY`.
