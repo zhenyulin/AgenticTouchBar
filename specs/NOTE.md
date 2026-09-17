@@ -77,3 +77,14 @@ sizes) one small numeric change at a time, verified visually in the bar.
 When asked for a layout adjustment, change exactly the requested number —
 do not re-derive neighbouring constants or introduce estimation machinery
 beyond what is asked.
+
+## Apple Weather Shortcut bridge parked (2026-09-18)
+
+The Apple Weather Shortcut route in `widgets/weather.sh`
+(`BTT_WEATHER_SHORTCUT`) was **removed**, not switched off by default: a
+`shortcuts run` that fails raises a Shortcuts alert, and every refresh of the
+row runs it, so a Mac with no location fix (the 2026-09-16 wedge) turns the
+screen into an alert queue while QWeather answers normally underneath. A
+Shortcut cannot fail quietly for this caller, so do not re-enable the route
+without a fix for the alert behaviour. Git history has the removed
+`fetch_shortcut_weather`, `shortcut_icon` and the JSON contract.

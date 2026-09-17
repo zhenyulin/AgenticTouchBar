@@ -2,15 +2,18 @@
 #
 # BetterTouchTool weather widgets.
 #
-# The refresh asks a no-prompt Shortcut backed by Apple Weather first. QWeather
-# (和风天气) is the reliable domestic fallback when Clash's VPN node has timed
-# out. Open-Meteo and BTT's own get_weather AppleScript command (Apple
-# WeatherKit) remain later fallbacks.
+# The refresh asks QWeather (和风天气) first -- the reliable domestic route when
+# Clash's VPN node has timed out. Open-Meteo and BTT's own get_weather
+# AppleScript command (Apple WeatherKit) remain later fallbacks.
 #
-# Those three later sources are all asked for a point, and the point is
-# wherever the Mac is: BTT reports the machine's location, nothing here is
-# configured or guessed. If BTT has no live fix, those sources are skipped
-# rather than asked about a city nobody chose.
+# Every source is asked for a point, and the point is wherever the Mac is:
+# BTT reports the machine's location, nothing here is configured or guessed.
+# If BTT has no live fix, the sources are skipped rather than asked about a
+# city nobody chose.
+#
+# An Apple Weather Shortcut bridge used to lead this ladder; it was parked on
+# 2026-09-18 because a run that fails raises a Shortcuts alert, and the Mac's
+# location wedge made every run fail. Git history has the implementation.
 #
 # Two instances, chosen by the mode flag:
 #   --text   "77°F" over "41%"      (the Weather widget)
@@ -66,8 +69,8 @@ BTT_WIDGET_NAME="weather"
 # One entry, drawn two ways.
 BTT_WIDGET_VALUE_NAME="weather.data"
 # A refresh is one fetch; a lock older than this is dead. The sources bound
-# themselves at 12 s + 12 s + 5 s + 5 s + 12 s (Shortcut, location, QWeather,
-# Open-Meteo, BTT weather), so the lock has to outlast 50 s to stay honest.
+# themselves at 12 s + 5 s + 5 s + 12 s (location, QWeather, Open-Meteo, BTT
+# weather), so the lock has to outlast the 34 s worst case to stay honest.
 BTT_WIDGET_REFRESH_MAX_RUN=90
 BTT_WIDGET_RENDER=render_conditions
 BTT_WIDGET_REFRESH_DETAIL=describe_conditions
@@ -82,9 +85,6 @@ BTT_WIDGET_REFRESH_DETAIL=describe_conditions
 WEATHER_TTL="${BTT_WEATHER_TTL:-300}"
 # All sources return Celsius, so the render converts when needed.
 UNIT="${BTT_WEATHER_UNIT:-celsius}"
-# Shortcut name used for the Apple Weather bridge. It resolves the current
-# location itself, so it needs no query point.
-WEATHER_SHORTCUT="${BTT_WEATHER_SHORTCUT:-BTT Weather}"
 # QWeather: domestic endpoints survive a timed-out VPN node. Both the key
 # and the project's API host come from console.qweather.com (50k req/month
 # free); unset either to skip QWeather and fall back to the foreign sources.
@@ -136,74 +136,11 @@ qweather_icon() {
     esac
 }
 
-shortcut_icon() {
-    local condition="${1:l}"
-    case "$condition" in
-        clear-day|clear-night|partly-cloudy-day|partly-cloudy-night|cloudy|fog|rain|sleet|snow|wind|thunderstorm|hail)
-            printf '%s' "$condition"
-            ;;
-        *mostly*sun*|*partly*cloud*) printf 'partly-cloudy-day' ;;
-        *sunny*|*clear*) printf 'clear-day' ;;
-        *thunder*|*storm*) printf 'thunderstorm' ;;
-        *hail*) printf 'hail' ;;
-        *freezing*rain*|*freezing*drizzle*|*sleet*) printf 'sleet' ;;
-        *snow*|*flurr*) printf 'snow' ;;
-        *rain*|*shower*|*drizzle*) printf 'rain' ;;
-        *fog*|*mist*|*haze*) printf 'fog' ;;
-        *wind*) printf 'wind' ;;
-        *cloud*|*overcast*) printf 'cloudy' ;;
-        *) printf 'cloudy' ;;
-    esac
-}
-
-# Apple Weather via a no-prompt Shortcut that outputs the documented JSON
-# contract. A Shortcut can wait for user input, so keep it off the widget path
-# and bound the detached provider call like the BTT AppleScript call.
+# The failure marker compute_value leaves when every source came up empty;
+# the shared refresh loop reads it to back off from a cache that stays stale.
 weather_mark_refresh_failed() {
     mkdir -p "$BTT_WIDGET_CACHE_DIR" 2>/dev/null &&
         : >"$WEATHER_REFRESH_FAILURE_FILE"
-}
-
-fetch_shortcut_weather() {
-    local tmp pid i
-    tmp="$(mktemp)" || return 1
-    (
-        /usr/bin/shortcuts run "$WEATHER_SHORTCUT" --output-type public.json >"$tmp" 2>/dev/null &
-        pid=$!
-        for i in {1..24}; do
-            kill -0 "$pid" 2>/dev/null || break
-            /bin/sleep 0.5
-        done
-        kill "$pid" 2>/dev/null
-        wait "$pid" 2>/dev/null
-    )
-    local raw_icon normalized_icon
-    raw_icon="$(jq -e -r '
-        select((.icon | type) == "string" and (.icon | length) > 0) | .icon
-    ' <"$tmp" 2>/dev/null)" || {
-        rm -f "$tmp"
-        return 1
-    }
-    normalized_icon="$(shortcut_icon "$raw_icon")"
-
-    jq -e -c --arg icon "$normalized_icon" '
-        select(
-            (.temperature | type) == "number"
-            and (.humidity | type) == "number"
-            and (.humidity >= 0 and .humidity <= 100)
-        )
-        | {
-            currently: {
-                temperature: .temperature,
-                humidity: (.humidity / 100),
-                icon: $icon
-            },
-            source: "shortcuts"
-        }
-    ' <"$tmp" 2>/dev/null
-    local result=$?
-    rm -f "$tmp"
-    return "$result"
 }
 
 # The query point, as "lat,lon" -- the shape get_weather takes -- or
@@ -352,12 +289,7 @@ fetch_btt_weather() {
 }
 
 compute_value() {
-    local json
-    # Apple Weather first: the Shortcut is the supported bridge and resolves
-    # the current location on its own. The domestic QWeather source below
-    # remains the reliable network fallback for the point-based sources.
-    json="$(fetch_shortcut_weather)"
-    [[ -n "$json" ]] || json="$(fetch_location_weather)"
+    local json="$(fetch_location_weather)"
     # Only a payload the render path can read is worth caching; anything else
     # leaves the previous conditions in place for the next tick to draw.
     if [[ -n "$json" ]] && jq -e . >/dev/null 2>&1 <<<"$json"; then

@@ -14,8 +14,8 @@ Verified: legacy CMA endpoints are gone (`www.weather.com.cn/data/sk/…` and
 
 | Provider | Domestic | Auth | Free tier | Status |
 | --- | --- | --- | --- | --- |
-| Apple Weather via Shortcuts | No | macOS Shortcut permissions | — | **Primary** |
-| QWeather (和风天气) | Yes | API key (`?key=`) or JWT (Ed25519, ≤ 24 h `exp`) | 50k req/month (¥0 tier, Weather group) | Fallback |
+| Apple Weather via Shortcuts | No | macOS Shortcut permissions | — | Opt-in, off by default |
+| QWeather (和风天气) | Yes | API key (`?key=`) or JWT (Ed25519, ≤ 24 h `exp`) | 50k req/month (¥0 tier, Weather group) | **Default** |
 | Open-Meteo | No | none | no key | Fallback |
 | Apple WeatherKit (BTT `get_weather`) | No | none | — | Last resort |
 | CMA `weather.com.cn` | Yes | none | — | Rejected: endpoints dead |
@@ -30,10 +30,13 @@ Verified: legacy CMA endpoints are gone (`www.weather.com.cn/data/sk/…` and
 - QWeather API host is per-project (`*.qweatherapi.com`, shown in
   console.qweather.com); `devapi.qweather.com` serves legacy hosts only.
   Widget reads `BTT_WEATHER_QW_HOST` / `BTT_WEATHER_QW_KEY`.
-- The default `BTT Weather` Shortcut is the Apple Weather bridge. It must end
-  with a JSON object containing numeric Celsius `temperature`, numeric relative
-  humidity percentage `humidity`, and a non-empty canonical weather `icon` name
-  or Apple condition label such as `Mostly Sunny`; the widget normalises labels.
+- The `BTT Weather` Shortcut is the Apple Weather bridge; the widget parked
+  its route on 2026-09-18 because a failed run raises a Shortcuts alert on
+  every refresh (see [design/WEATHER.md](../design/WEATHER.md); the removed
+  implementation and contract are in git history). It must end with a JSON
+  object containing numeric Celsius `temperature`, numeric relative humidity
+  percentage `humidity`, and a non-empty canonical weather `icon` name or
+  Apple condition label such as `Mostly Sunny`; the widget normalises labels.
 - Widget usage: 600 s refresh ≈ 4.4k req/month — ~11× inside the free tier.
 - v7 `GET /v7/weather/now` returns `now.temp` / `now.humidity` as strings
   (°C, 0–100 %) and `now.icon` as a 100–515 code with **no day/night

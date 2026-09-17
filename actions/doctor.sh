@@ -250,10 +250,11 @@ fi
 
 # The weather widgets ask BTT where the Mac is instead of carrying a query
 # point of their own, so a machine that has not granted BTT Location Services
-# has no point at all: QWeather, Open-Meteo and get_weather are skipped and
-# only the Apple Weather Shortcut keeps answering. Nothing on the bar shows
-# that -- a scaled-back row looks like a working one -- so it is worth
-# catching here, and the widget answers the same question the same way.
+# has no point at all: QWeather, Open-Meteo and get_weather are skipped and no
+# source is left (the Shortcut bridge, which needed no point, was parked
+# 2026-09-18). Nothing on the bar shows that -- a row that keeps its last
+# reading looks like a working one -- so it is worth catching here, and the
+# widget answers the same question the same way.
 if weather_location="$("$REPO_DIR/widgets/weather.sh" --location 2>/dev/null)" \
         && [[ -n "$weather_location" ]]; then
     ok 'weather location' "$weather_location from BTT"
