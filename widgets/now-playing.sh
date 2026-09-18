@@ -197,11 +197,16 @@ def strip_long_feat(text):
     ).strip()
 
 
+def strip_parentheticals(text):
+    return re.sub(r"\s+", " ", re.sub(r"\([^()]*\)", "", text)).strip()
+
+
 def display_album(text):
     # Multi-work albums carry the second work after a semicolon, e.g.
     # "Mozart: Piano Concerto No. 23 K. 488; Piano Sonata K. 333" -- the
-    # Touch Bar is too short for both, so only the first work is shown.
-    return strip_long_feat(text).split(";")[0].strip()
+    # Touch Bar is too short for both, so only the first work is shown. The
+    # parenthetical edition/source qualifier is not useful in this row.
+    return strip_parentheticals(strip_long_feat(text)).split(";")[0].strip()
 
 
 def display_width(text):
@@ -219,6 +224,19 @@ def display_width(text):
         else 1
         for ch in text
     )
+
+
+# The existing cell calibration is about 7 px per cell (400 px / 57 cells).
+# Keep the pressure threshold in pixels even though the cheap width model is
+# cell-based.
+LAYOUT_CELL_PIXELS = 7.0
+PARENTHETICAL_BALANCE_PX = 30.0
+
+
+def layout_gap_px(rows):
+    return (
+        max(display_width(row) for row in rows) - display_width(rows[1])
+    ) * LAYOUT_CELL_PIXELS
 
 
 # How wide "{artist} ‣ {album}" may get before the album is allowed to move
@@ -798,6 +816,24 @@ fields = {"title": title, "artist": artist, "album": album}
 # album kept swapping rows between tracks of one record.
 layout_a = [title, join_parts(artist, album)]
 layout_b = [join_parts(album, title), artist]
+gap_before = layout_gap_px(layout_a)
+if gap_before > PARENTHETICAL_BALANCE_PX:
+    stripped_layout_a = [
+        strip_parentheticals(title),
+        join_parts(
+            strip_parentheticals(artist),
+            strip_parentheticals(album),
+        ),
+    ]
+    gap_after = layout_gap_px(stripped_layout_a)
+    if gap_after < gap_before and gap_after <= PARENTHETICAL_BALANCE_PX:
+        title, artist, album = (
+            strip_parentheticals(title),
+            strip_parentheticals(artist),
+            strip_parentheticals(album),
+        )
+        layout_a = stripped_layout_a
+        layout_b = [join_parts(album, title), artist]
 if display_width(layout_a[1]) < ALBUM_SECOND_ROW_MAX_CELLS:
     rows = layout_a
 elif max(display_width(row) for row in layout_a) <= max(

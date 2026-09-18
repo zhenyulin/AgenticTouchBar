@@ -57,6 +57,7 @@ ignore = [
     # entries that used to sit here were dead. Narrow this to those three codes
     # when the legacy modules are ready to document their public API.
     "D",     # pydocstyle: migrated legacy modules do not consistently use public API docstrings yet
+    "EM102",  # f-string in exception: binding a message first adds no runtime value
     "G004",  # Logging statement uses f-string
     "PD003", # pandas-use-of-dot-is-null [false alarm on xarray]
     "PD011", # pandas-use-of-dot-values [false alarm on xarray]
@@ -66,6 +67,7 @@ ignore = [
     "S607",  # start-process-with-partial-path
     "TD002", # missing-todo-author
     "TD003", # missing-todo-link
+    "TRY003", # long exception messages belong to domain-specific exception classes
 ]
 
 [lint.per-file-ignores]

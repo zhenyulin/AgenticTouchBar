@@ -72,6 +72,7 @@ Now Playing widget
 │   ├── Drop a `(feat. ...)` / `[feat. ...]` credit from the title,
 │   │   artist or album once its content exceeds 20 characters
 │   ├── Keep only the first work of a multi-work album
+│   ├── Drop parenthetical content when it makes the row imbalance exceed 30 px
 │   ├── Keep the album on the second row while it fits there
 │   ├── Otherwise place it by the minimax rule (narrower widest row wins)
 │   └── Drop the second row when artist and album are both empty
@@ -197,8 +198,8 @@ sampler, which is why the helper exists at all.
   dropped only while its content (the `feat.` prefix included) is longer
   than `FEAT_MAX_CHARS` (20): a short credit (`Song (feat. Jay-Z)`) names
   who is on the track and stays, a long one is mostly names a 22 px row
-  cannot render anyway. All other parentheticals are left alone, and
-  whitespace collapses.
+  cannot render anyway. In the album, parenthetical edition/source
+  qualifiers are dropped, and whitespace collapses.
 2. `album` — the feat treatment above, then only the text before the first
   `;`.
    Multi-work albums (`Mozart: Piano Concerto No. 23 K. 488; Piano Sonata
@@ -208,8 +209,12 @@ sampler, which is why the helper exists at all.
   kept outright while `{artist} - {album}` measures under 50 layout cells
   (`ALBUM_SECOND_ROW_MAX_CELLS`) — a pair that fits belongs under the title,
   and without the floor a merely long pair flipped the album onto row 1, so
-  one record's album kept swapping rows between its tracks. Past that width
-  a minimax rule decides: whichever layout has the narrower widest row wins.
+  one record's album kept swapping rows between its tracks. When the widest
+  row is more than 30 px wider than the current second row, parenthetical
+  content is removed and the difference is measured again; the stripped
+  values are kept only when that brings the difference back within 30 px.
+  Past that width a minimax rule decides: whichever layout has the narrower
+  widest row wins.
   Row widths are estimated in layout cells (narrow glyph 1, CJK/wide 2, the
   same model as the Lyrics widget); the first row renders at the widget's
   configured font size (13 px), the second at the remainder of BTT's fixed

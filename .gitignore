@@ -73,6 +73,8 @@ _*
 /tmp/
 
 # .agents symlinks
+/.github/copilot-instructions.md
+/.github/hooks
 /AGENTS.md
 harnesses/claude/skills/
 
@@ -85,10 +87,8 @@ harnesses/claude/skills/
 !__*.*
 
 # allow common Git metadata files
-# > explicit names only: !.git* would also re-include .git and the .github symlink
-!.gitattributes
-!.gitignore
-!.gitkeep
+# > !.git* also matches .git, but git hard-codes skipping the .git dir
+!.git*
 
 # allow ci required config folders
 !/.ci/
@@ -104,9 +104,17 @@ harnesses/claude/skills/
 !/.agents/
 !/.vscode/
 
-# allowed agent tooling config
-!/.qmd/index.yml
-!/.serena/project.yml
+#
+#   Exceptions
+#
+
+# Serena defect workaround: `gather_source_files` (`followlinks=True`, pathspec not git) loops
+# on the `!/.agents/` self-link to ELOOP unless this rule matches last (porter recreates it).
+.agents/.agents
+
+# File-walker workaround: `!.git*` (keeps `.gitignore` trackable under `.*`) also un-hides
+# real `.git` for walkers reading gitignore files (ripgrep, VS Code, fd); keep this rule last.
+.git/
 
 #
 #   Repo-specific Entries

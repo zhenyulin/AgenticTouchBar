@@ -1,19 +1,11 @@
 {
-  // "$schema": "https://raw.githubusercontent.com/microsoft/pyright/main/packages/vscode-pyright/schemas/pyrightconfig.schema.json",
-
   "typeCheckingMode": "standard",
   "exclude": [
-    // default excludes
+    // hidden files and directories
     "**/__*cache__",
-    "**/__pycache__",
     "**/.*",
     "**/node_modules",
     // tooling
-    ".venv",
-    "**/.benchmarks",
-    "**/.codebase-memory",
-    "**/.coverage",
-    "**/.serena",
     "**/*_log*",
     "**/*.egg-info",
     "**/*.log*",
@@ -29,7 +21,9 @@
     "dist",
     // selected folders
     "notebook",
-    "tests"
+    "tests",
+    "**/__pycache__",
+    ".venv"
   ],
 
   // Deliberately an error, not "none". Pyright resolves third-party types from
@@ -43,10 +37,4 @@
   "reportUnnecessaryCast": "warning",
   "reportUnnecessaryTypeIgnoreComment": "warning",
   "reportUnreachable": "warning"
-
-  // "reportUnknownParameterType": "warning",
-  // "reportUnknownArgumentType": "warning",
-  // "reportUnknownVariableType": "warning",
-  // "reportUnknownMemberType": "warning",
-  // "reportUnknownLambdaType": "warning"
 }
