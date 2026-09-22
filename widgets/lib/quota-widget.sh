@@ -25,6 +25,12 @@
 #   QUOTA_ROWS               the jq expression producing the widget text, with
 #                            $window (and $secondary) bound. The default is one
 #                            window's used percentage over its time to reset.
+#   QUOTA_FETCH              the function that prints the usage JSON, for a
+#                            provider whose truth codexbar cannot see. It
+#                            prints one codexbar-shaped record (records whose
+#                            .provider is QUOTA_PROVIDER are kept) or an error
+#                            token and a non-zero status. The default asks
+#                            codexbar.
 #
 # Why the refresh is detached at all: codexbar's Claude lookup takes the best
 # part of a minute, and BTT runs every shell widget through one XPC service,
@@ -35,6 +41,7 @@
 QUOTA_PROVIDER="${QUOTA_PROVIDER:-}"
 QUOTA_WINDOW="${QUOTA_WINDOW:-.usage.primary}"
 QUOTA_SECONDARY_WINDOW="${QUOTA_SECONDARY_WINDOW:-null}"
+QUOTA_FETCH="${QUOTA_FETCH:-quota__codexbar_usage}"
 
 # The default row layout: "12%" over "3h".
 QUOTA_ROWS="${QUOTA_ROWS:-used(\$window.usedPercent) + \"\\n\" + until_reset(\$window.resetsAt)}"
@@ -71,18 +78,44 @@ def records:
     if type == "array" then . else [.] end;
 '
 
-# Resolved once per refresh, so the three lookups below share them.
-QUOTA_CODEXBAR=""
+# jq renders every widget's rows, so the shell resolves it once per refresh.
 QUOTA_JQ=""
 
-quota__resolve_tools() {
-    QUOTA_CODEXBAR="$(command -v codexbar)"
+# codexbar belongs to the default fetch alone: a widget that fetches its own
+# usage must not report NO CODEXBAR for a dependency it never calls.
+quota__resolve_jq() {
     QUOTA_JQ="$(command -v jq)"
 
     mkdir -p "$QUOTA_LOG_DIR" 2>/dev/null
 
-    [[ -n "$QUOTA_CODEXBAR" && -x "$QUOTA_CODEXBAR" ]] || { printf 'NO CODEXBAR'; return 1; }
     [[ -n "$QUOTA_JQ" && -x "$QUOTA_JQ" ]] || { printf 'NO JQ'; return 1; }
+}
+
+# The default fetch: ask codexbar for the provider's usage.
+quota__codexbar_usage() {
+    local codexbar
+    codexbar="$(command -v codexbar)"
+
+    [[ -n "$codexbar" && -x "$codexbar" ]] || {
+        printf 'NO CODEXBAR'
+        return 1
+    }
+
+    local json
+    json="$(
+        "$codexbar" usage \
+            --provider "$QUOTA_PROVIDER" \
+            --source auto \
+            --format json \
+            2>>"$QUOTA_LOG"
+    )"
+
+    if [[ -z "$json" ]]; then
+        printf 'EMPTY JSON'
+        return 1
+    fi
+
+    printf '%s' "$json"
 }
 
 # One jq run over the fetched JSON, with the prelude in scope.
@@ -120,19 +153,17 @@ quota_compute_value() {
         return 0
     }
 
-    quota__resolve_tools || return 0
+    quota__resolve_jq || return 0
 
+    # A fetch reports its own broken dependency in the row: it prints the token
+    # on stdout and a non-zero status, so a failed fetch is never mistaken for
+    # a usage record.
     local json
-    json="$(
-        "$QUOTA_CODEXBAR" usage \
-            --provider "$QUOTA_PROVIDER" \
-            --source auto \
-            --format json \
-            2>>"$QUOTA_LOG"
-    )"
+    json="$("$QUOTA_FETCH")"
+    local fetch_status=$?
 
-    if [[ -z "$json" ]]; then
-        printf 'EMPTY JSON'
+    if (( fetch_status != 0 )); then
+        printf '%s' "$json"
         return 0
     fi
 

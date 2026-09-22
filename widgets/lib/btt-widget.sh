@@ -418,11 +418,12 @@ btt_cached_widget_main() {
         [[ -n "$refreshed" ]] && btt_cache_put "$value_name" "$refreshed"
 
         local refresh_outcome
-        # "NO CODEXBAR" from the quota widgets, "No curl" from the Clash ones.
+        # "NO CODEXBAR" and "NO KEY" from the quota widgets, "No curl" from
+        # the Clash ones, "EMPTY JSON" when the fetch answered nothing.
         case "$refreshed" in
-            "")                     refresh_outcome=empty ;;
-            *ERR*|NO\ *|No\ *)      refresh_outcome=error ;;
-            *)                      refresh_outcome=ok ;;
+            "")                                refresh_outcome=empty ;;
+            *ERR*|NO\ *|No\ *|EMPTY\ JSON)    refresh_outcome=error ;;
+            *)                                 refresh_outcome=ok ;;
         esac
         # The value is the useful trace detail for a widget that caches its
         # own label. One that caches source data says so itself, rather than

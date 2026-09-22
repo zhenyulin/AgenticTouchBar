@@ -56,7 +56,7 @@ while you work, listen, or move between networks.
 | Now Playing | Title, artist, album, and a cover or player icon; browsers ignored | `widgets/now-playing.sh` | 1 s | Play or pause the active player, then refresh Lyrics |
 | Codex | Codex quota at a glance | `widgets/codex-quota.sh` | 300 s | Refresh |
 | Claude | Claude 5 h / 7 d quota | `widgets/claude-quota.sh` | 600 s | Refresh |
-| OpenCode | OpenCode Go weekly quota | `widgets/opencode-quota.sh` | 300 s | Refresh |
+| OpenCode | OpenCode Go 5 h / 7 d quota | `widgets/opencode-quota.sh` | 300 s | Refresh |
 | 🌐 | Selected Clash node's region | `widgets/clash-region.sh` | 300 s | Refresh region and latency |
 | Latency | Selected Clash node's latency | `widgets/clash-latency.sh` | 300 s | Refresh region and latency |
 | Star | Apple Music favourite state | Preset AppleScript + `actions/now-playing-app.sh` | 10 s | Toggle favourite |

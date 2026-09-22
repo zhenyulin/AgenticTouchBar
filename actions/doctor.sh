@@ -125,8 +125,9 @@ check_command jq 'jq' yes 'brew install jq'
 check_command curl 'curl' yes 'ships with macOS; check /usr/bin'
 check_command nowplaying-cli 'nowplaying-cli' yes 'brew install nowplaying-cli'
 
-# codexbar only feeds the three quota widgets. A machine without it still
-# runs everything else, so its absence is a warning rather than a failure.
+# codexbar feeds the Claude and Codex quota widgets; the OpenCode one reads
+# its plan's usage API instead. A machine without it still runs everything
+# else, so its absence is a warning rather than a failure.
 check_command codexbar 'codexbar' no 'brew install codexbar (quota widgets only)'
 
 section 'MediaRemote helper'

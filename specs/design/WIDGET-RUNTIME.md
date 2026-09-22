@@ -124,7 +124,7 @@ first would paint the new value grey and leave it grey until the next tick.
 | `widget` | `stale` | Too old; a refresh was started and the old value published anyway. |
 | `widget` | `forced` | A tap's flag was consumed; a refresh was started regardless of age. |
 | `widget` | `empty` | Nothing stored yet; `BTT_WIDGET_EMPTY_TEXT` was published. |
-| `refresh` | `ok` / `empty` / `error` | Classified from the computed value: empty, matching `*ERR*`/`NO *`/`No *`, or otherwise fine. |
+| `refresh` | `ok` / `empty` / `error` | Classified from the computed value: empty, matching `*ERR*`/`NO *`/`No *`/`EMPTY JSON`, or otherwise fine. |
 
 `forced` overrides `stale`, which overrides `cached`; `empty` overrides all
 three.
