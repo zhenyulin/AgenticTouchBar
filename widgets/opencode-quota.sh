@@ -107,8 +107,8 @@ quota_opencodego_usage() {
 QUOTA_FETCH="quota_opencodego_usage"
 QUOTA_PROVIDER="opencodego"
 QUOTA_WINDOW='.usage.primary // .usage.secondary'
-QUOTA_SECONDARY_WINDOW='.usage.secondary'
-# Five-hour quota on the first row, weekly on the second.
+QUOTA_SECONDARY_WINDOW='.usage | if ((.tertiary.usedPercent // -1) > (.secondary.usedPercent // -1)) then .tertiary else .secondary end'
+# Five-hour quota on the first row; show monthly on the second only when it has less remaining than weekly.
 QUOTA_ROWS='
     used($window.usedPercent) + " " + until_reset($window.resetsAt)
     + "\n" + used($secondary.usedPercent) + " " + until_reset($secondary.resetsAt)
