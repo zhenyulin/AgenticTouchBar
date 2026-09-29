@@ -12,9 +12,9 @@ where each one's usage record comes from, how that record becomes two short
 rows, which window is shown when a quota is exhausted, and how the label
 colour tracks usage and the wait for a reset.
 
-Each external source is an external boundary: `codexbar`'s provider protocol,
-authentication, and JSON schema beyond the fields read below, and the
-OpenCode Go usage API's own response shape.
+Each external source is an external boundary: Codex CLI's app-server protocol
+and authentication, `codexbar`'s Claude provider protocol, and the OpenCode Go
+usage API's response shape.
 
 ## Entry Points
 
@@ -30,6 +30,7 @@ OpenCode Go usage API's own response shape.
 | Variable | Default | Meaning |
 | --- | --- | --- |
 | `CLAUDE_QUOTA_MAX_AGE`, `CODEX_QUOTA_MAX_AGE`, `OPENCODE_QUOTA_MAX_AGE` | `300` | How old a stored value may be before a refresh is started. |
+| `CODEX_QUOTA_TIMEOUT` | `30` | Seconds each Codex app-server request may take. |
 | `OPENCODE_QUOTA_API_KEY` | the key `opencode auth login` stored | Credential for the OpenCode Go usage API. |
 | `OPENCODE_QUOTA_AUTH_FILE` | `~/.local/share/opencode/auth.json` | Where that key is read from when the variable is unset. |
 | `OPENCODE_QUOTA_TIMEOUT` | `15` | Seconds the usage request may take. |
@@ -44,14 +45,16 @@ tick every 300 s and still publish a value it decides is fresh.
 ```text
 Quota widgets
 ├── Fetch one usage record, off the widget path
-│   ├── claude, codex: codexbar, in codexbar's own record shape
-│   │   ├── claude: codexbar --provider claude --source auto --format json
-│   │   └── codex:  codexbar usage --provider codex --source auto --format json
+│   ├── claude: codexbar --provider claude --source auto --format json
+│   ├── codex: Codex CLI app-server, normalised to the shared record shape
+│   │   ├── start `codex -s read-only -a never app-server`
+│   │   ├── initialize, send initialized, then account/rateLimits/read
+│   │   └── keep the stdio session open through the matching RPC response
 │   ├── opencode: the plan's own authenticated usage API
 │   │   ├── GET https://opencode.ai/zen/go/v1/usage, bearer key from
 │   │   │   OPENCODE_QUOTA_API_KEY or ~/.local/share/opencode/auth.json
-│   │   └── Normalise {usage: {rolling, weekly, monthly}} into codexbar's
-│   │       record shape, so the rows and reset persistence below are shared
+│   │   └── Normalise {usage: {rolling, weekly, monthly}} into the shared record
+│   │       shape, so the rows and reset persistence below are shared
 │   └── Append the fetch's stderr to logs/btt-codexbar.log
 ├── Reduce one usage record to two rows
 │   ├── Round usedPercent, or "—" when absent
@@ -64,7 +67,7 @@ Quota widgets
 │   ├── Below 100%: brighter the more quota remains
 │   └── At 100%: brighter the closer the reset is
 └── Report a broken dependency in the row itself
-    ├── NO CODEXBAR / NO JQ / HOME ERR
+    ├── NO CODEX CLI / NO CODEXBAR / NO JQ / HOME ERR
     └── EMPTY JSON / ERR
 ```
 
@@ -107,6 +110,8 @@ something, and the runtime traces the outcome as `error`.
 | --- | --- |
 | `cd "$HOME"` fails | `HOME ERR` |
 | `jq` missing or not executable | `NO JQ` |
+| Codex CLI missing or not executable | `NO CODEX CLI` |
+| Codex app-server request fails, times out, or returns no rate limits | `ERR` |
 | `codexbar` missing or not executable | `NO CODEXBAR` |
 | `codexbar`, or the usage endpoint, answered with nothing | `EMPTY JSON` |
 | No OpenCode Go key: neither `OPENCODE_QUOTA_API_KEY` nor a key in the auth file | `NO KEY` |
@@ -120,7 +125,8 @@ failed fetch can never be read as a usage record. `NO KEY`, `AUTH ERR`, and
 row itself says which link of key, endpoint, or parse broke.
 
 `codexbar` is resolved through `command -v` by the default fetch alone, so a
-widget that fetches its own usage never reports `NO CODEXBAR`.
+widget that fetches its own usage never reports `NO CODEXBAR`. The Codex widget
+resolves `codex` through `command -v` and uses the CLI's own credential store.
 
 ### Colour By Usage And Reset Progress
 
@@ -199,7 +205,7 @@ for its own JSON shape.
 
 | Behaviour to verify | Focused evidence |
 | --- | --- |
-| Row shape | Run `widgets/codex-quota.sh --refresh` and confirm `cache/codex-quota.value` holds two rows, the 5-hour window over the 7-day one. |
+| Codex RPC and row shape | Run `widgets/codex-quota.sh --refresh`; confirm `cache/codex-quota.value` holds two rows from `account/rateLimits/read`, the 5-hour window over the 7-day one. |
 | OpenCode rows against the plan | Run `widgets/opencode-quota.sh --refresh` and confirm `cache/opencode-quota.value` matches the percentages and windows the usage API reports, `curl -sS -H "Authorization: Bearer <key>" https://opencode.ai/zen/go/v1/usage`. |
 | OpenCode reset epochs | Confirm `cache/opencode-quota.quota-reset` and `cache/opencode-quota-secondary.quota-reset` hold epochs matching the API's `rolling.resetsAt` and `weekly.resetsAt` (fractional seconds dropped, or jq's `fromdateiso8601` rejects them). |
 | OpenCode key failures | Run `--refresh` with `OPENCODE_QUOTA_AUTH_FILE=/nonexistent` (row `NO KEY`) and with `OPENCODE_QUOTA_API_KEY=go_bogus` (`AUTH ERR`); confirm the trace records `error` for both. |
@@ -207,13 +213,16 @@ for its own JSON shape.
 | Colour at a full secondary | Feed `jq` a record with `secondary.usedPercent = 100` and confirm the colour is computed from the secondary reset and the 10080-minute cycle. |
 | Missing figures | Feed `usedPercent: null` and confirm the row reads `—`. |
 | Duration bands | Feed `resetsAt` at +90000 s, +5000 s, +100 s, +10 s and confirm `1d`, `1h`, `1m`, `<1m`. |
-| Dependency failures | Run with `PATH` stripped of `codexbar` and of `jq`; confirm `NO CODEXBAR` and `NO JQ` reach the row. |
+| Dependency failures | Run with `PATH` stripped of `codex` and of `jq`; confirm `NO CODEX CLI` and `NO JQ` reach the Codex row. Confirm Claude reports `NO CODEXBAR` when `codexbar` is absent. |
 | Reset persistence | Confirm `cache/<name>.quota-reset` holds an integer epoch after a refresh, and is removed when `resetsAt` is null. |
 | Colour at 100% | Publish `100% 2h` with the stored epoch two hours out and confirm the colour sits between the dim and normal colours, not at either end. |
 | Colour fallback | Remove the reset file and confirm the label suffix alone still produces the same band. |
 
 ## Known Gaps
 
+- Codex CLI's app-server protocol may change between CLI releases; a changed
+  RPC method or response shape reads as `ERR` in the row and is logged to
+  `logs/btt-codexbar.log`.
 - `codexbar`'s JSON schema is unversioned here: a renamed field silently
   becomes `ERR` in the row with no other signal than
   `logs/btt-codexbar.log`.
@@ -227,9 +236,6 @@ for its own JSON shape.
   `percent` is not a number becomes null) but nothing pins its schema either:
   a renamed window degrades to the weekly repeat in row one, and a renamed
   `percent` to `—`.
-- Claude uses `codexbar --provider …` while Codex uses `codexbar usage
-  --provider …`. Whether the bare form is an alias or a different code path in
-  `codexbar` is unverified.
 - Codex falls back through primary, secondary, and tertiary without saying
   which window it ended up showing, and OpenCode repeats the weekly window
   in the first row when its five-hour one is absent: both draw a different

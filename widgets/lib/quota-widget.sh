@@ -1,14 +1,12 @@
 #!/usr/bin/env zsh
 
 #
-# Shared codexbar quota widget support.
+# Shared quota widget support.
 #
-# The three quota widgets ask codexbar for one provider's usage and draw one
-# or two of its rolling windows. That is the only thing they differ in: the
-# provider name, which window each row reads, and how the rows are ordered.
-# Everything else -- the refresh split, resolving codexbar and jq, the error
-# tokens, persisting the exact reset time so btt_quota_color can shade the
-# label by progress toward it -- was copied three times, and is here instead.
+# The quota widgets draw one or two rolling windows from their usage source.
+# Claude uses codexbar by default; Codex and OpenCode provide custom fetchers.
+# The refresh split, resolving jq, error tokens, and reset persistence are
+# shared so btt_quota_color can shade the label by progress toward the reset.
 #
 # A quota widget states its identity and its windows, then calls
 # quota_widget_main:
@@ -25,12 +23,10 @@
 #   QUOTA_ROWS               the jq expression producing the widget text, with
 #                            $window (and $secondary) bound. The default is one
 #                            window's used percentage over its time to reset.
-#   QUOTA_FETCH              the function that prints the usage JSON, for a
-#                            provider whose truth codexbar cannot see. It
-#                            prints one codexbar-shaped record (records whose
-#                            .provider is QUOTA_PROVIDER are kept) or an error
-#                            token and a non-zero status. The default asks
-#                            codexbar.
+#   QUOTA_FETCH              a custom source function. It prints one
+#                            codexbar-shaped record (records whose .provider
+#                            is QUOTA_PROVIDER are kept) or an error token and
+#                            a non-zero status. The default asks codexbar.
 #
 # Why the refresh is detached at all: codexbar's Claude lookup takes the best
 # part of a minute, and BTT runs every shell widget through one XPC service,

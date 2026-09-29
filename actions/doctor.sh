@@ -8,13 +8,13 @@
 # Every widget here fails soft: a missing dependency prints a short label in
 # the Touch Bar and the trace records why. That is the right behaviour on a
 # running bar, but it is a poor way to find out what a fresh checkout still
-# needs -- the failure shows up as a widget that quietly says "NO CODEXBAR",
-# three layers away from the cause. This script asks the same questions in
+# needs -- the failure shows up as a widget that quietly says "NO CODEX CLI"
+# or "NO CODEXBAR", three layers away from the cause. This script asks the same questions in
 # one pass and prints the fix beside each answer.
 #
 # Exit status is 0 when nothing required is missing, 1 when something is.
 # Warnings never affect the exit status: they cover optional integrations
-# (codexbar, Clash, Apple Music) that a given machine may simply not have.
+# (Codex CLI, codexbar, Clash, Apple Music) that a given machine may simply not have.
 #
 # Nothing here writes to BTT: the AppleScript probes it makes below are
 # read-only, so it is safe to run at any time.
@@ -125,10 +125,10 @@ check_command jq 'jq' yes 'brew install jq'
 check_command curl 'curl' yes 'ships with macOS; check /usr/bin'
 check_command nowplaying-cli 'nowplaying-cli' yes 'brew install nowplaying-cli'
 
-# codexbar feeds the Claude and Codex quota widgets; the OpenCode one reads
-# its plan's usage API instead. A machine without it still runs everything
-# else, so its absence is a warning rather than a failure.
-check_command codexbar 'codexbar' no 'brew install codexbar (quota widgets only)'
+# Codex CLI and codexbar feed their respective quota widgets; OpenCode reads
+# its plan's usage API. Missing optional quota tools are warnings.
+check_command codex 'Codex CLI' no 'install and sign in to Codex CLI (Codex quota widget)'
+check_command codexbar 'codexbar' no 'brew install codexbar (Claude quota widget)'
 
 section 'MediaRemote helper'
 

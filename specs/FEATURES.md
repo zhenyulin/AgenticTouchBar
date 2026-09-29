@@ -99,7 +99,7 @@ These hold for every widget and are not repeated in the designs.
 | **Empty text hides.** BTT removes a script widget whose output is empty. | Hiding is not a mode; it is what printing nothing means. Now Playing, Lyrics, Star, Weather Icon, and OpenCode all use it. |
 | **Detach into a session.** Background work uses `btt_spawn_detached`, never a bare `nohup … &`. | A stuck child cannot wedge future runs of its own widget. |
 | **Atomic writes.** Every file another process reads is written aside and renamed. | No reader ever sees a half-written value, marker, or state file. |
-| **Failures are values.** A missing dependency prints a short label (`NO CODEXBAR`, `No curl`, `Controller`, `--`, `🌐`). | The bar always shows something, and the trace records the outcome. |
+| **Failures are values.** A missing dependency prints a short label (`NO CODEX CLI`, `NO CODEXBAR`, `No curl`, `Controller`, `--`, `🌐`). | The bar always shows something, and the trace records the outcome. |
 | **UUIDs come from variables.** The preset interpolates `{BTT_WIDGET_*_UUID}`. | `actions/set-widget-variables.sh` must run before any tap can address a widget. |
 | **Terminal mode is read-only.** Without a UUID a widget prints plain text. | Any widget can be run and diffed from a shell without touching BTT state. |
 | **The scrollable zone paints under the pinned zone.** | A widget whose frame reaches the right-pinned zone is drawn under it — a BTT layout rule, not a bug. |
@@ -112,7 +112,7 @@ These hold for every widget and are not repeated in the designs.
 | [`design/LYRICS.md`](design/LYRICS.md) | Track sampling, lyric lookup across six sources, matching, and the one-second render state machine. |
 | [`design/STAR.md`](design/STAR.md) | The favourite toggle and the holder lookup shared with Open Player. |
 | [`design/WIDGET-RUNTIME.md`](design/WIDGET-RUNTIME.md) | Cache, refresh lock, force flag, colour, publish, and the shared trace. |
-| [`design/QUOTA.md`](design/QUOTA.md) | The three `codexbar` widgets and the reset-progress colouring. |
+| [`design/QUOTA.md`](design/QUOTA.md) | Codex CLI, Claude codexbar, and OpenCode Go quota sources and reset-progress colouring. |
 | [`design/CLASH.md`](design/CLASH.md) | Node resolution, region glyphs, latency measurement and history. |
 | [`design/WEATHER.md`](design/WEATHER.md) | Two widgets over one observation, a provider ladder led by QWeather (the Shortcut bridge is opt-in), and the disabled hide-while-playing rule. |
 | [`design/BTT-CONTROL.md`](design/BTT-CONTROL.md) | Widget variables, the recorded restart, and the quit that sticks. |

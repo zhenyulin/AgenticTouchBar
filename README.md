@@ -32,8 +32,8 @@ documented in [Widgets](#widgets) and [Configuration](#configuration).
 - Works with BetterTouchTool on macOS, with either a physical Touch Bar or the
   Control Strip. BTT needs Automation permission to drive itself.
 - The core scripts use macOS `zsh`, `curl`, and Python 3.9+. Optional widgets
-  can use `jq`, `nowplaying-cli`, `codexbar`, Apple Music, and a Clash/Mihomo
-  controller, as described in [Get started](#get-started).
+  can use `jq`, `nowplaying-cli`, Codex CLI, `codexbar`, Apple Music, and a
+  Clash/Mihomo controller, as described in [Get started](#get-started).
 - No project build, plugin installation, or background service is required.
   An optional native MediaRemote helper improves the paused-state icon; the
   preset and the script widgets remain usable without it.
@@ -87,15 +87,18 @@ Then:
    brew install jq nowplaying-cli
    ```
 
-   For the Codex, Claude, and OpenCode quota rows, also install:
+    The Codex quota row uses Codex CLI's app-server and its own credentials.
+    Install and sign in to Codex CLI to use that row. The Claude quota row
+    uses `codexbar`; install it with:
 
    ```sh
    brew install codexbar
    ```
 
-   The quota rows are the only part that needs `codexbar`; the rest of the bar
-   works without it. Apple Music powers the Lyrics and Star widgets, and a
-   running Clash/Mihomo controller powers the network widgets.
+    Only the Claude quota row needs `codexbar`; Codex CLI powers the Codex row,
+    and OpenCode Go reads its own usage API. The rest of the bar works without
+    these quota tools. Apple Music powers the Lyrics and Star widgets, and a
+    running Clash/Mihomo controller powers the network widgets.
 
 2. **Back up your current BTT setup**, then import
    `bttpreset/Default.bttpreset` in BetterTouchTool. The preset is named
@@ -330,7 +333,7 @@ fix beside each failure.
 | Symptom | Cause and fix |
 | --- | --- |
 | Every widget is blank or never appears | BTT lacks Automation permission to script itself. Re-enable it under System Settings → Privacy & Security → **Automation** → BetterTouchTool. macOS only prompts once, so the checkbox may need ticking by hand. |
-| A widget shows a short label instead of a value | That label is the failure: `NO CODEXBAR`, `No curl`, `Controller`, `--`, or `🌐`. Install what it names, or leave it; a missing dependency never breaks the other widgets. |
+| A widget shows a short label instead of a value | That label is the failure: `NO CODEX CLI`, `NO CODEXBAR`, `No curl`, `Controller`, `--`, or `🌐`. Install what it names, or leave it; a missing dependency never breaks the other widgets. |
 | Now Playing shows the album cover while paused | The MediaRemote helper is not built. Run the optional `clang` command in [Get started](#get-started); without it the playback rate can leave the cover where the play icon belongs. |
 | Weather shows the wrong city | The row follows the Mac, so BTT reported a wrong or stale location. Check `widgets/weather.sh --location`, then BTT's location under System Settings → Privacy & Security → Location Services. |
 | Tapping a widget does nothing | The BTT persistent variables are unset, so the tap cannot address the widget. Re-run `actions/set-widget-variables.sh`, especially after importing a preset edited by hand. |
