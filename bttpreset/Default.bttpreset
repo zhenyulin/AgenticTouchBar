@@ -1011,7 +1011,7 @@
             "BTTTouchBarButtonHoverColor" : "248.880000, 146.115000, 128.010000, 181.050000",
             "BTTTouchBarButtonHeight" : 15,
             "BTTTouchBarButtonWidth" : 100,
-            "BTTTouchBarScriptUpdateInterval" : 1,
+            "BTTTouchBarScriptUpdateInterval" : 5,
             "BTTTouchBarItemIconHeight" : 30,
             "BTTTouchBarButtonTextAlignment" : 0,
             "BTTTouchBarAlternateBackgroundColor" : "75.323769, 75.323769, 75.323769, 255.000000",
@@ -1055,6 +1055,46 @@
               "BTTOrder" : 7
             }
           ]
+        },
+        {
+          "BTTLastUpdatedAt" : 1789761134.0494499,
+          "BTTTriggerType" : 642,
+          "BTTTriggerTypeDescriptionReadOnly" : "Shell Script / Task Widget",
+          "BTTTriggerTypeDescription" : "ClinePass",
+          "BTTTriggerClass" : "BTTTriggerTypeTouchBar",
+          "BTTUUID" : "54C43241-04F7-4CF1-83A4-47A92439790D",
+          "BTTShellScriptWidgetGestureConfig" : "/bin/zsh:::-c:::-:::1",
+          "BTTOrder" : 17,
+          "BTTMergeIntoTouchBarGroups" : 0,
+          "BTTActionsToExecute" : [
+            {
+              "BTTTriggerParentUUID" : "54C43241-04F7-4CF1-83A4-47A92439790D",
+              "BTTIsPureAction" : true,
+              "BTTUUID" : "146C3CC4-9B94-483F-91B8-1558A2B73821",
+              "BTTPredefinedActionType" : 206,
+              "BTTPredefinedActionName" : "Execute Shell Script  or  Task",
+              "BTTShellTaskActionScript" : "exec \"$HOME/Documents/BTT/actions/tap-refresh.sh\" \\\n\"{BTT_WIDGET_CLINE_UUID}\"",
+              "BTTShellTaskActionConfig" : "/bin/zsh:::-c:::-:::"
+            }
+          ],
+          "BTTIconData" : "iVBORw0KGgoAAAANSUhEUgAAAEYAAABGCAYAAABxLuKEAAAH1UlEQVR4nOxcaWxUVRQ+902ZoXabmTeNgRgoEVyAalSMEmRRCEvFKBI3DJhUQaMxxh9uxGCicU38ww9CMCYYE4FICRoWQ6gB5IeJVRMoIiYiiIrYefNmoYW2M+_6XVp05i29b2b0ta+ZL2nezLn3XO753t3OOXdQqAJbKFSBLSrEOKCKhhHpdFrNZvkizmkG58bVEHHGlJ8Zow7GjL2RSCRJwwRGwwBdP3+jYWTX4eP9kqqfcq6si8XqfySP4TkxmpZ8CI+tbutzzi8oirI8Gm3YSx7CU2ISidQSGLqHSgKbqaoNX5NH8IwYXdebcjnqZIzV2BRrWGeOYHwoKG_G96i5Asq7gkHl+vr6eo08gGe7kmGwDTakwEjeimnSFIuF74rFIvPweSLkq_Gn51fEgtzY32+8RR7BkxGjaZmpRLlj+TJMqR7Gqm5V1bof7HSSyeQtGGEdZvmYMUrMi1HjyYjBVmzZfTACnnUiRSAcDn+LOi+Z5X19tJQ8gEdTybjWLIlGw5_ItEKhMR+bZYzxG8gDeEIM1hbVJDoF2UWZXk1NzVksun8VSvlE8gAln3yxBkzKZtndeINiF5mANaN6iOrN+V9g7FhyD_M6OC8e1w84VmasF49TnLMjgUBwVyRSfZpKQNGLbyKRnmUYxhuY_3dSGcDucwWMuDBUHU3j9USpFJWH_YEAvYI1q6MYpaKmUjyeWoWF9HC5pAhoWtrFWpGZTuVjAXa3bzDKZO5HAVwTg1PrI5g2H9F_hxmyCpie0jpugdHZpmmpxW7ru1pjEonMdM5zDrsIP4L5LA5qRY0+kByS1VEUHjIMfnBQgwvnm1wAIxonZ9ZslmO07+jq6p7c2Fjzh7QNcgE4ftvweNAkPgn1R730X4oB1sI78DK3oI9XFZbw9aoaeU6mLyWmu7t73MWL_QUMY4ifDQYDzV75LaVC03pASt9RfAxflqHv51U13Cg7LkiHf29vdpmNeO1IJ0VAVa_4DdOqwL8CIbXJZGaRTNfFusDHmyWhUNVu8gk4D1jCHIaRmyzTc0NMvVlSV1fXRT4B_LFjVqkyXqYnJcYwrHUwT30TREdfA2YZ4slBmV4lS+CACjEOqBDjgAoxDqgQ44CSiMEhySCfAH3NmWWIB0n7PyQxqVRqChpeQWUA2yUT7SAgPs1u6yyinYBoQ7RFZYOtlLXjSEwmk2lEXnkfPkaoRCA3fQ1c_RNo5ydkCTrhjJ7R9cwcKhJCR+iKNkRbmqZ3lklQRNgmbHSqYEuMCFP29ubEUbrJXIak+2xyCeSBXoevMuVfXTYOOev1VCSEjtDN68U0tP2aW3302e5lNAkbnUKydqdahqDUdhg0w1rEl0Wj9YfJNfjtVhkTU8p1rBl1a6FjE8ljroNY6PNXou+WFmCjsFXYbC6zEIOKG_FosWnkZWQKd1JxsCOgKh6nanKJROJSH22O9byGioDoOxbdtTZFLYM2F0Ap7ETyBTzW2ChvQh7oPfI5kAZ+G2PQLjy7BuvW8_mCf4hBsPg+MPqujdIeRPSfolECvOBWPPZbS9j74jbG5W+XiEH0_zYsbiJ8WTDXQNR3IGU5yjiNEogzGGy6F9YdNRchLdSm6_pN4osyUJkjNkomV5yfDoUCi91kDP0G2NQzdmwQUTx+xiSvNgzWJj4rOB8sxHOSVb2qxU8BqWIh0r+wEVOHp01Fk8S5SUGWLmGniAj7ShrlgI2rME4sEcpAgJ9TBlKX1pVabM9YqVtplAI78JOw8UWbog8Q6D9xaY3BSv0EyDlkrcM2xePJ+TTKMHAXkDZYS_ghLMxPi0+Diy_LGkZ4KSqbr43iYMU_E5lIGiUQu47Yfch0hhO2Cw4EF5Rf2NjIMpyPmY8K5_IVxL05pBv2I7UpjayPdCQSPROw6+wTu0++XNgsbBccXJYVsCZyuooSWADfoTtfjrl4JWP97V1dvI58CoyUsGH0teNjLF8ubBU2m_PZFl8pGq3rBBU4ABUGc0DOdYqS3FWMAwjErSKeyn8zMqgqSwsdawn7nVxC9BkjZS9sMCfacsLWAZsLYRt2gE_RjkaesZYwERdpI_fYbNOG61vhQ+mgf5vJJdDnHXjYePp8tbDVTmfIpD52pHfsbk4iKe7qloRw53U9vcIweAvaCeLvy0ik4UPM8T4qAmgnqOupx7EWiGl+Afo7sXu0uXVVQIylHvryJnbjV510pAYOsl0Qy0CnAn6J+4qQKLbnrEm8DS_34aH0pMFwNGy5ZOP3YDisOifTKylL4P_ctdzuSl7JARViHFAhxgEVYhxQIcYBLohh5giXSGnUkk+AjGW9Vcqk1_Dl25ZCv1ql6ZnkE+BkMccqo1MyPRd38AIHrQ1zz36CVy4QMrH0FeHcdpmelJhYrO44HsfzZTgg3Sxui4_kMIT4sTv6uBu9nZovx2jpQDj3F5m+K2cwHk8_Bi9gs1ku3AUcubcgaX4AJ+_zNAKAgy5eVm4h_FdxfSVqU+UB+EnbZe24_r0SAuNI5rNZ5G98AVKWuKnoertGPFQEkL8n34IfRlRgmdvarokZiAk3zCXbvO+Ix1ZVjcwuJqta0u+ukambm8tlW_EP3UNl3Lj6P4HR_Sc2ic8VhW+MRCJFj_Syf5AusgeKkmvCn_QauhfA8aI3FFJO1tbWSmMuQ2FY_psUP6DiKzmgQowD_gYAAP__FfQYpwAAAAZJREFUAwAOpCHIkey2gAAAAABJRU5ErkJggg==",
+          "BTTWidgetName" : "ClinePass",
+          "BTTTriggerConfig" : {
+            "BTTTouchBarButtonColor" : "0.000000, 0.000000, 0.000000, 255.000000",
+            "BTTTouchBarIconInvert" : false,
+            "BTTTouchBarItemPlacement" : 2,
+            "BTTTouchBarAlwaysShowButton" : false,
+            "BTTTouchBarButtonWidth" : 100,
+            "BTTTouchBarScriptUpdateInterval" : 300,
+            "BTTTouchBarItemIconHeight" : 22,
+            "BTTTouchBarItemIconType" : 1,
+            "BTTTouchBarItemIconWidth" : 22,
+            "BTTTBWidgetWidth" : 400,
+            "BTTTouchBarShellScriptString" : "exec \"$HOME/Documents/BTT/widgets/cline-quota.sh\" \\\n\"{BTT_WIDGET_CLINE_UUID}\"",
+            "BTTTouchBarButtonFontSize" : 14,
+            "BTTTouchBarIconTextOffset" : 5,
+            "BTTTouchBarOnlyShowIcon" : false
+          }
         },
         {
           "BTTLastUpdatedAt" : 1789761134.0494499,

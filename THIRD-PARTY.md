@@ -14,6 +14,7 @@ here for identification only, with no affiliation or endorsement implied:
 | Mark | Owner |
 | --- | --- |
 | Claude | Anthropic PBC |
+| Cline | Cline Bot Inc. |
 | Codex | OpenAI |
 | OpenCode | the OpenCode project |
 
@@ -60,5 +61,5 @@ None of these are bundled, and each carries its own license:
 
 This is an independent, personal configuration. It is not affiliated with,
 endorsed by, or supported by Folivora (BetterTouchTool), Apple, Anthropic,
-OpenAI, OpenCode, QWeather, NetEase, Tencent, or the LRCLIB and LrcAPI
+Cline, OpenAI, OpenCode, QWeather, NetEase, Tencent, or the LRCLIB and LrcAPI
 maintainers.

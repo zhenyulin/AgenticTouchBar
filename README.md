@@ -57,6 +57,7 @@ while you work, listen, or move between networks.
 | Codex | Codex quota at a glance | `widgets/codex-quota.sh` | 300 s | Refresh |
 | Claude | Claude 5 h / 7 d quota | `widgets/claude-quota.sh` | 600 s | Refresh |
 | OpenCode | OpenCode Go 5 h / 7 d quota | `widgets/opencode-quota.sh` | 300 s | Refresh |
+| ClinePass | ClinePass 5 h / weekly / monthly quota | `widgets/cline-quota.sh` | 300 s | Refresh |
 | 🌐 | Selected Clash node's region | `widgets/clash-region.sh` | 300 s | Refresh region and latency |
 | Latency | Selected Clash node's latency | `widgets/clash-latency.sh` | 300 s | Refresh region and latency |
 | Star | Apple Music favourite state | Preset AppleScript + `actions/now-playing-app.sh` | 10 s | Toggle favourite |
@@ -96,9 +97,12 @@ Then:
    ```
 
     Only the Claude quota row needs `codexbar`; Codex CLI powers the Codex row,
-    and OpenCode Go reads its own usage API. The rest of the bar works without
-    these quota tools. Apple Music powers the Lyrics and Star widgets, and a
-    running Clash/Mihomo controller powers the network widgets.
+    OpenCode Go reads its own usage API, and ClinePass reads Cline's existing
+    sign-in from `~/.cline/data/settings/providers.json`. Alternatively, set
+    `CLINE_API_KEY` or `CLINEPASS_API_KEY` — in the environment or in the repo
+    `.env`, alongside the other repo-local secrets. The rest of the bar works
+    without these quota tools. Apple Music powers the Lyrics and Star widgets,
+    and a running Clash/Mihomo controller powers the network widgets.
 
 2. **Back up your current BTT setup**, then import
    `bttpreset/Default.bttpreset` in BetterTouchTool. The preset is named
@@ -245,10 +249,11 @@ QWeather offers 50k requests per month on its free plan; provider facts live in
 
 ## Agent quotas at a glance
 
-The Codex, Claude, and OpenCode rows turn quota data into an at-a-glance status
-signal. They remain independent from the music and weather rows, so a missing
-quota provider does not take down the rest of the bar. Tap a quota row to force
-an immediate refresh instead of waiting for its normal interval.
+The Codex, Claude, OpenCode, and ClinePass rows turn quota data into an
+at-a-glance status signal. These rows remain independent from the music and
+weather rows, so a missing quota provider does not take down the rest of the
+bar. Tap a quota row to force an immediate refresh instead of waiting for its
+normal interval.
 
 ## Actions
 
@@ -276,7 +281,10 @@ weather widgets only, `$BTT_REPO_DIR/.env`.
 | `CLASH_API`, `CLASH_SECRET`, `CLASH_SOCKET`, `CLASH_GROUP` | `http://127.0.0.1:9097`, `""`, `/tmp/verge/verge-mihomo.sock`, `PROXY` | Clash widgets (`widgets/lib/clash.sh`) |
 | `CLASH_ICON`, `CLASH_FONT_COLOR` | — | Icon and colour for the Clash widgets |
 | `CLASH_LATENCY_MIN_MS`, `CLASH_LATENCY_MAX_MS` | `150`, `500` | Latency colour bands |
-| `CLAUDE_QUOTA_MAX_AGE`, `CODEX_QUOTA_MAX_AGE`, `OPENCODE_QUOTA_MAX_AGE` | `300` | Quota cache freshness, in seconds |
+| `CLAUDE_QUOTA_MAX_AGE`, `CLINE_QUOTA_MAX_AGE`, `CODEX_QUOTA_MAX_AGE`, `OPENCODE_QUOTA_MAX_AGE` | `300` | Quota cache freshness, in seconds |
+| `CLINE_API_KEY`, `CLINEPASS_API_KEY` | — | Optional ClinePass API credentials; otherwise use Cline's saved sign-in |
+| `CLINE_PROVIDER_SETTINGS_PATH`, `CLINE_DATA_DIR`, `CLINE_DIR` | `~/.cline/data/settings/providers.json` | Cline saved credential lookup; explicit settings path takes precedence |
+| `CLINE_QUOTA_USAGE_URL`, `CLINE_QUOTA_TIMEOUT` | `https://api.cline.bot/api/v1/users/me/plan/usage-limits`, `15` | ClinePass quota API endpoint and timeout |
 | `BTT_LYRICS_*` | — | Lyrics tunables; see [`specs/design/LYRICS.md`](specs/design/LYRICS.md) |
 | `BTT_NOW_PLAYING_ALLOWED` | `com.apple.Music com.tencent.QQMusicMac` | Space-separated bundle ids allowed to hold the Now Playing row and drive the Lyrics sampler's MediaRemote fallback |
 | `BTT_NOW_PLAYING_STATE_BIN`, `BTT_NOW_PLAYING_CLI` | The helper in BTT's support directory, `nowplaying-cli` on `PATH` | The two MediaRemote sources (`widgets/lib/media-remote.sh`) |
